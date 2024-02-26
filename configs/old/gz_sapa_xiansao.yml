@@ -1,0 +1,87 @@
+#Project params-------------------------------------------------------------------------------------------------------
+task_type: multitask
+project_path: project/gz_sapa_xiansao
+cls_data_path: /home/seeking/llf/dataset/gzsapa_dataset/cls
+seg_data_path: /home/seeking/llf/dataset/gzsapa_dataset/seg
+
+wh: [ 416,416 ]
+mean: [ 0.485,0.456,0.406 ]
+std: [ 0.229,0.224,0.225 ]
+
+#Model params-------------------------------------------------------------------------------------------------------
+model_args:
+  model_name: multi_task_shufflenetplus_v2_x1_0
+  pretrained: false
+  num_classes: 6
+  mask_classes: 4
+  resume:
+    model_path: '' 
+    strict: true
+    map_location: cpu
+
+#Trainging params-------------------------------------------------------------------------------------------------------
+DDP_args:
+  flag: false
+  backend: nccl
+  init_method: env://
+  gpu: 0
+  device: null 
+  batch_size: 64 #gpu_batch_size*num_gpu
+  rank: 0
+  local_rank: 0
+  world_size: 1
+  cuda_visible_device: [ 0,1 ]
+
+seed: 0
+benchmark: true
+deterministic: false
+num_workers: 8
+gpu: 1
+epochs: 1000
+start_epoch: 0
+
+batch_size: 32
+cls_n_classes: 6
+cls_n_samples: 20
+
+losses_args:
+  classification:
+    CrossEntropyLoss: { }
+
+  segmentation:
+    PeriodLoss: { }
+    DiceLoss:
+      model: MULTICLASS_MODE
+      log_loss: false
+      from_logits: true
+      smooth: 1
+      ignore_index: null
+      eps: 1.e-7
+
+optimizer_args:
+  name: AdamW
+  params:
+    lr: 0.01
+
+lr_scheduler_args:
+  name: LambdaLR
+  params:
+    lr_lambda: 'lambda epoch: 1 / (epoch / 4 + 1)' #impl this code
+
+letterbox: true #just working on classification task
+
+print_freq: 10
+save_batch_checkpoint_flag: false
+
+#Val params-------------------------------------------------------------------------------------------------------
+top_k: 2
+is_validate: true
+
+#Test params-------------------------------------------------------------------------------------------------------
+test:
+  test_dir: ''
+  need_classify_of_bad: true
+  need_segment: true
+  sum_method: true
+  cls_threshold: [ ]
+  seg_threshold: [ 0,0 ]

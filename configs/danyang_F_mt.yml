@@ -1,0 +1,124 @@
+project_config:
+  task: multitask
+  work_dir: project/danyang_F_mt
+  topk: 2
+  print_freq: 20
+
+train_config:
+  seed: 0
+  epoch: 0
+  max_epoch: 100
+  print_freq: 10
+  workflow: [ [ train, 1 ], [ val, 1 ] ]
+  # workflow: [[val, 1]]
+  deterministic: true
+  scheduler_step_batch: false
+
+model_config:
+  model_name: multi_task_shufflenetplus_v2_x1_0
+  num_classes: 3
+  mask_classes: 2
+  pretrained: False
+  model_path: project/danyang_F_mt/weights/checkpoint.pth
+  gpu: 0 # -1==cpu
+  strict: True
+  map_location: cpu
+
+classification_data_config:
+  train:
+    dataset_params:
+      root: D:\data\danyang\F_train\cls\train
+      wh: [ 256,256 ]
+      letterbox: true
+    dataloader_params:
+      batch_size: 75
+      shuffle: False
+      num_workers: 2
+      pin_memory: True
+      batch_sampler: BalancedBatchSampler #default:None
+
+  val:
+    dataset_params:
+      root: D:\data\danyang\F_train\cls\train
+      wh: [ 256,256 ]
+      letterbox: true
+    dataloader_params:
+      batch_size: 32
+      shuffle: false
+      num_workers: 1
+      pin_memory: True
+segmentation_data_config:
+  train:
+    dataset_params:
+      root: D:\data\danyang\F_train\seg\train
+      wh: [ 256,256 ]
+    dataloader_params:
+      batch_size: 8
+      shuffle: True
+      num_workers: 0
+      pin_memory: True
+
+  val:
+    dataset_params:
+      root: D:\data\danyang\F_train\seg\train
+      wh: [ 256,256 ]
+    dataloader_params:
+      batch_size: 8
+      shuffle: false
+      num_workers: 0
+      pin_memory: True
+optimizer_config:
+  name: AdamW
+  params:
+    lr: 0.001
+
+lr_config:
+  name: LambdaLR
+  params:
+    lr_lambda: "lambda epoch: 1 / (epoch / 4 + 1)" #hook call
+  # name: CosineAnnealingWarmRestarts
+  # params:
+  #   T_0: 10
+  #   T_mult: 2
+
+loss_config:
+  loss_weights: [ 1,1, 0.5 ]
+
+  classification:
+    CrossEntropyLoss: { }
+
+  segmentation:
+    PeriodLoss:
+      top_k: 0.5
+      weight: [ 1, 1 ]
+
+    DiceLoss:
+      model: MULTICLASS_MODE
+      log_loss: false
+      from_logits: true
+      smooth: 1
+      ignore_index: null
+      eps: 1.e-7
+
+ddp_config:
+  flag: false
+  batch_size: 128
+  num_workers: 8
+  backend: nccl
+  init_method: env://
+  rank: 0
+  local_rank: 0
+  world_size: 1
+  # cuda_visible_device: [ 0,1 ]
+  sync_bn: false
+
+test_config:
+  test_dir: C:\Users\Lee Linfeng\Desktop\000
+  weight: project/danyang_F_mt/weights/checkpoint.pth
+  # batch_size: 1
+  good_idx: 0
+  sum_method: true
+  need_segment: true
+  cls_threshold: [ 0.3 , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  seg_threshold: [ 0, 36, 50, 36 ]
+

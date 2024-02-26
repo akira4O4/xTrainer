@@ -1,0 +1,102 @@
+project_config:
+  task: segmentation
+  work_dir: project/danyang_x_seg_exp1
+  topk: 2
+  # print_freq: 10
+
+train_config:
+  seed: 0
+  epoch: 0
+  max_epoch: 50
+  print_freq: 10
+  workflow: [ [ train, 1 ], [ val, 1 ] ]
+  # workflow: [[val, 1]]
+  deterministic: true
+  scheduler_step_batch: false
+
+model_config:
+  model_name: segmentation_shufflenetplus_v2_x1_0
+  mask_classes: 2
+  pretrained: False
+  model_path: ''
+  gpu: 0 # -1==cpu
+  strict: True
+  map_location: cpu
+
+segmentation_data_config:
+  train:
+    dataset_params:
+      root: /home/main/llf/data/x_exp1/train
+      wh: [ 256,256 ]
+    dataloader_params:
+      batch_size: 4
+      shuffle: True
+      num_workers: 1
+      pin_memory: True
+
+  val:
+    dataset_params:
+      root: /home/main/llf/data/x_exp1/train
+      wh: [ 256,256 ]
+    dataloader_params:
+      batch_size: 4
+      shuffle: false
+      num_workers: 1
+      pin_memory: True
+optimizer_config:
+  name: AdamW
+  params:
+    lr: 0.001
+
+optimizer_config:
+  name: AdamW
+  params:
+    lr: 0.001
+
+lr_config:
+  name: LambdaLR
+  params:
+    lr_lambda: "lambda epoch: 1 / (epoch / 4 + 1)" #hook call
+  # name: CosineAnnealingWarmRestarts
+  # params:
+  #   T_0: 10
+  #   T_mult: 2
+
+loss_config:
+  loss_weights: [ 1, 0.5 ]
+
+  segmentation:
+    PeriodLoss:
+      top_k: 0.5
+      weight: [ 1, 1 ]
+
+    DiceLoss:
+      model: MULTICLASS_MODE
+      log_loss: false
+      from_logits: true
+      smooth: 1
+      ignore_index: null
+      eps: 1.e-7
+
+ddp_config:
+  flag: false
+  batch_size: 128
+  num_workers: 8
+  backend: nccl
+  init_method: env://
+  rank: 0
+  local_rank: 0
+  world_size: 1
+  # cuda_visible_device: [ 0,1 ]
+  sync_bn: false
+
+test_config:
+  test_dir: D:\data\0danyang\20240122\crop3_bad
+  weight: D:\code\DLFv2\project\danyang_x_seg_exp1\20240123_001933_Epoch99_MIoU0.9423_lr3.9e-05_BestModel.pth
+  # batch_size: 1
+  good_idx: 0
+  sum_method: true
+  need_segment: false
+  #  cls_threshold: [ 0.3 , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  seg_threshold: [ 0,0 ]
+

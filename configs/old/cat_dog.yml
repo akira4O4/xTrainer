@@ -1,0 +1,87 @@
+#Project params-------------------------------------------------------------------------------------------------------
+task_type: classification
+project_path: project/cat_dog
+cls_data_path: /home/seeking/llf/dataset/cat_dog
+seg_data_path: ''
+
+wh: [ 320,320 ]
+mean: [ 0.485,0.456,0.406 ]
+std: [ 0.229,0.224,0.225 ]
+
+#Model params-------------------------------------------------------------------------------------------------------
+model_args:
+  model_name: shufflenet_v2_x1_0
+  pretrained: false
+  num_classes: 2
+  mask_classes: 0
+  resume:
+    model_path: '/home/seeking/llf/code/deep_learning_framework/project/cat_dog/weights/2023-04-28-(04:22:07)_best_top1:98.352_best_model.pth'
+    strict: true
+    map_location: cpu
+
+#Trainging params-------------------------------------------------------------------------------------------------------
+DDP_args:
+  flag: false
+  backend: nccl
+  init_method: env://
+  gpu: 0
+  device: null
+  batch_size: 128 #gpu_batch_size*num_gpu
+  rank: 0
+  local_rank: 0
+  world_size: 1
+  cuda_visible_device: [ 0,1 ]
+
+letterbox: true
+
+seed: 0
+benchmark: true
+deterministic: false
+num_workers: 4
+gpu: 0
+epochs: 1000
+start_epoch: 0
+
+batch_size: 256
+cls_n_classes: 2
+cls_n_samples: 64
+
+losses_args:
+  classification:
+    CrossEntropyLoss: { }
+
+  segmentation:
+    PeriodLoss: { }
+    DiceLoss:
+      model: MULTICLASS_MODE
+      log_loss: false
+      from_logits: true
+      smooth: 1
+      ignore_index: null
+      eps: 1.e-7
+
+optimizer_args:
+  name: AdamW
+  params:
+    lr: 0.01
+
+lr_scheduler_args:
+  name: LambdaLR
+  params:
+    lr_lambda: 'lambda epoch: 1 / (epoch / 4 + 1)' #impl this code
+
+print_freq: 10
+save_batch_checkpoint_flag: false
+
+#Val params-------------------------------------------------------------------------------------------------------
+top_k: 2
+is_validate: true
+
+#Test params-------------------------------------------------------------------------------------------------------
+test:
+  test_dir: ''
+  need_classify_of_bad: true
+  need_segment: false
+  sum_method: true
+  cls_threshold: [ 0.5,0.5]
+  seg_threshold: [ 0,0 ]

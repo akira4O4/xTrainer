@@ -1,0 +1,125 @@
+project_config:
+  task: multitask
+  work_dir: project/gz_sapa
+  topk: 2
+  print_freq: 50
+
+train_config:
+  seed: 0
+  epoch: 0
+  max_epoch: 100
+  print_freq: 10
+  # workflow: [ [ val,1 ] ]
+  workflow: [[train, 1], [val, 1]]
+  deterministic: true
+  scheduler_step_batch: true
+
+model_config:
+  model_name: multi_task_shufflenetplus_v2_x1_0
+  num_classes: 6
+  mask_classes: 4
+  pretrained: False
+  model_path: project/gz_sapa/weights/20230614(165010)_Epoch16_BestAcc99.0377_BestMIoU0.9134_BestModel.pth
+  gpu: 1 # -1==cpu
+  strict: True
+  map_location: cpu
+
+classification_data_config:
+  train:
+    dataset_params:
+      root: /media/seeking/data/llf/gzsapa_dataset/classification/train
+      wh: [416, 416]
+      letterbox: true
+    dataloader_params:
+      batch_size: 96
+      shuffle: False
+      num_workers: 4
+      pin_memory: True
+      batch_sampler: BalancedBatchSampler #default:None
+
+  val:
+    dataset_params:
+      root: /media/seeking/data/llf/gzsapa_dataset/classification/val
+      wh: [416, 416]
+      letterbox: true
+    dataloader_params:
+      batch_size: 8
+      shuffle: false
+      num_workers: 4
+      pin_memory: True
+
+segmentation_data_config:
+  train:
+    dataset_params:
+      root: /media/seeking/data/llf/gzsapa_dataset/segmentation/train
+      wh: [416, 416]
+    dataloader_params:
+      batch_size: 64
+      shuffle: True
+      num_workers: 4
+      pin_memory: True
+
+  val:
+    dataset_params:
+      root: /media/seeking/data/llf/gzsapa_dataset/segmentation/val
+      wh: [416, 416]
+    dataloader_params:
+      batch_size: 8
+      shuffle: false
+      num_workers: 4
+      pin_memory: True
+
+optimizer_config:
+  name: AdamW
+  params:
+    lr: 0.0001
+
+lr_config:
+  # name: LambdaLR
+  # params:
+  # lr_lambda: "lambda epoch: 1 / (epoch / 4 + 1)" #hook call
+  name: CosineAnnealingWarmRestarts
+  params:
+    T_0: 10
+    T_mult: 2
+
+loss_config:
+  loss_weights: [1, 1, 0.5]
+  classification:
+    CrossEntropyLoss: {}
+
+  segmentation:
+    PeriodLoss:
+      top_k: 0.5
+      weight: [1, 1, 1, 1]
+
+    DiceLoss:
+      model: MULTICLASS_MODE
+      log_loss: false
+      from_logits: true
+      smooth: 1
+      ignore_index: null
+      eps: 1.e-7
+
+ddp_config:
+  flag: false
+  batch_size: 64
+  num_workers: 8
+  backend: nccl
+  init_method: env://
+  rank: 0
+  local_rank: 0
+  world_size: 1
+  # cuda_visible_device: [ 0,1 ]
+  sync_bn: false
+
+test_config:
+  test_dir: /media/seeking/data/llf/gzsapa_dataset/classification/val/5_others
+  # test_dir: /media/seeking/data/llf/gzsapa_dataset/segmentation/val
+  weight: /home/seeking/llf/code/deep_learning_framework/project/gz_sapa/weights/20230614(165010)_Epoch16_BestAcc99.0377_BestMIoU0.9134_BestModel.pth
+  # batch_size: 1
+  good_idx: 0
+  sum_method: true
+  need_segment: true
+  cls_threshold: [0.05, 0, 0, 0, 0, 0]
+  seg_threshold: [0, 36, 50, 36]
