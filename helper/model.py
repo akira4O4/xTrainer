@@ -25,7 +25,6 @@ class Model:
             strict: Optional[bool] = True,
             map_location: Optional[str] = 'cpu',
             input_channels: Optional[str] = 1,
-            **kwargs
     ):
         self._model_name = model_name
         self._pretrained = pretrained

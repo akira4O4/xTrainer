@@ -21,12 +21,11 @@ class Model:
             mask_classes: Optional[int] = 0,
             pretrained: Optional[bool] = False,
             model_path: Optional[str] = None,
-            gpu: Optional[int] = -1,  # default (-1)==cpu
+            gpu: Optional[int] = 0,  # -1==cpu
             strict: Optional[bool] = True,
             map_location: Optional[str] = 'cpu',
             input_channels: Optional[str] = 3,
             use_ddp: bool = False,
-            **kwargs
     ):
         self._model_name = model_name
         self._pretrained = pretrained
@@ -48,12 +47,6 @@ class Model:
 
     def __call__(self, images: torch.Tensor) -> torch.Tensor:
         return self.net(images)
-
-    def set_gpu(self, gpu: int) -> None:
-        self._gpu = gpu
-        self._device = f'cuda:{gpu}'
-        logger.info(f'Change gpu to {self._gpu}')
-        logger.info(f'Change device to {self._device}')
 
     @property
     def model_name(self) -> str:
@@ -79,6 +72,13 @@ class Model:
     def gpu(self) -> int:
         return self._gpu
 
+    @gpu.setter
+    def gpu(self, gpu: int) -> None:
+        self._gpu = gpu
+        self._device = f'cuda:{gpu}'
+        logger.info(f'Change gpu to {self._gpu}')
+        logger.info(f'Change device to {self._device}')
+
     @property
     def parameters(self):
         return self.net.parameters()
@@ -93,30 +93,9 @@ class Model:
         self.net.to(self._device)
         logger.info(f'Move model.to: {self._device}.')
 
-    def setting_weight(self, path: str):
-        self._model_path = path
-
-    def init_model(self) -> None:
-        """
-        1.create model
-        2.load or not weight
-        3.return model
-        """
-        self.net = self.create_model(
-            self._model_name,
-            num_classes=self._num_classes,
-            mask_classes=self._mask_classes,
-            pretrained=self._pretrained,
-
-        )
-
-        if osp.exists(self._model_path) is True:
-            self.load_model(self._model_path, self._strict, self._map_location)
-        else:
-            logger.warning(f'model path:{self._model_path} is not found.')
-
-        logger.info(f'Build model done.')
-        logger.info(f'Current model.net device is: {self._device}.')
+    # @model_path.setter
+    # def model_path(self, path: str):
+    #     self._model_path = path
 
     @staticmethod
     def create_model(
@@ -124,12 +103,11 @@ class Model:
             num_classes: Optional[int] = 0,
             mask_classes: Optional[int] = 0,
             pretrained: Optional[bool] = False,
-            input_channels: Optional[int] = 1,
+            input_channels: Optional[int] = 3,  # default RGB
             **kwargs
     ):
         if num_classes == 0 and mask_classes == 0:
-            logger.error(
-                f'Cannot [equal 0] num_classes and mask_classes at the same time')
+            logger.error(f'Cannot [equal 0] num_classes and mask_classes at the same time')
             raise
 
         net = network.__dict__.get(model_name)
@@ -137,18 +115,19 @@ class Model:
             logger.error(f'Don`t get the model:{model_name}.')
             exit()
 
-        return net(num_classes=num_classes,
-                   mask_classes=mask_classes,
-                   pretrained=pretrained,
-                   input_channels=input_channels,
-                   **kwargs)
+        return net(
+            num_classes=num_classes,
+            mask_classes=mask_classes,
+            pretrained=pretrained,
+            input_channels=input_channels,
+            **kwargs
+        )
 
     def load_model(
             self,
             model_path: str,
             strict: Optional[bool] = True,
             map_location: Optional[str] = 'cpu',
-            **kwargs
     ) -> None:
 
         if not osp.exists(model_path):
@@ -182,13 +161,29 @@ class Model:
         logger.info(f'Loading :{model_path} .')
         logger.info(f'Loading [{loading_itme}/{total_item}] item to model.')
 
+    def init_model(self) -> None:
+
+        self.net = self.create_model(
+            self._model_name,
+            num_classes=self._num_classes,
+            mask_classes=self._mask_classes,
+            pretrained=self._pretrained,
+        )
+
+        if osp.exists(self._model_path) is True:
+            self.load_model(self._model_path, self._strict, self._map_location)
+            logger.success('Load model done.')
+        else:
+            logger.warning(f'Model path:{self._model_path} is not found.')
+
+        logger.info(f'Build model done.')
+        logger.info(f'Current model.net device is: {self._device}.')
+
     def save_checkpoint(
             self,
             save_path: str,
             epoch: Optional[int] = 0,
-            is_best: Optional[bool] = False,
-            output_name: Optional[str] = "checkpoint.pth",
-            **kwargs
+            model_info: Optional[dict] = None
     ) -> None:
 
         if not osp.exists(save_path):
@@ -204,19 +199,18 @@ class Model:
 
         save_dict = {
             "epoch": epoch,
-            # "state_dict": self.state_dict if self._use_ddp is False else self.remove_ddp_key(),
             "state_dict": state_dict,
-            # 'optimize_state_dict': optimize_state_dict
         }
 
-        curr_time = get_time()
-        model_info = ''
-        for k, v in kwargs.items():
-            model_info += f'_{k}{v}'
+        model_info_str = ''
+        if model_info is not None:
+            for k, v in model_info.items():
+                model_info_str += f'_{k}{v}'
 
-        model_save_path = os.path.join(save_path, f"{curr_time}_Epoch{epoch}{model_info}.pth")
+        curr_time = get_time()
+        model_save_path = os.path.join(save_path, f"{curr_time}_Epoch{epoch}{model_info_str}.pth")
         torch.save(save_dict, model_save_path)
-        logger.success(f'👍 Epoch:{epoch}: Save the [Weight] to :{save_path}')
+        logger.success(f'👍 Epoch:{epoch}: Save the Weight to :{save_path}')
 
     def remove_ddp_key(self) -> dict:
         del_count = 0

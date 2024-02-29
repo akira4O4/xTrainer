@@ -22,15 +22,18 @@ __all__ = [
 
 
 class BaseDataset(Dataset, ABC):
-    def __init__(self, loader_type: str = 'pil', img_type: Optional[str] = 'RGB'):
-        self.IMG_EXTENSIONS = [
-            '.jpg', '.jpeg', '.png',
-        ]
-        self.loader_type = loader_type
-        self.loader = self.get_image_loader(loader_type)
+    def __init__(
+            self,
+            img_loader_type: str = 'pil',
+            img_type: Optional[str] = 'RGB'
+    ) -> None:
+
+        self.IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png')
+        self.img_loader_type = img_loader_type
+        self.image_loader = self.get_image_loader(img_loader_type)
 
         self._support_img_types = ['RGB', 'GRAY']
-        assert img_type in self._support_img_types, logger.error('Img mode is not support.')
+        assert img_type in self._support_img_types, logger.error('Image type is not support.')
         self.img_type = img_type
 
     @staticmethod
@@ -50,7 +53,7 @@ class BaseDataset(Dataset, ABC):
     def is_valid_image(self, filename: str) -> bool:
         return self.has_file_allowed_extension(filename, self.IMG_EXTENSIONS)
 
-    # image loader e.g. PIL or OpenCV or IPP(inter)
+    # image loader e.g. PIL or OpenCV
     def pil_loader(self, path: str) -> Image.Image:
         img = Image.open(path)
 
@@ -64,13 +67,7 @@ class BaseDataset(Dataset, ABC):
 
         return img
 
-    def get_image_loader(self, loader_type: str) -> Callable:
-        if loader_type == 'opencv':
-            return self.opencv_loader
-        elif loader_type == 'pil':
-            return self.pil_loader
-
-    def opencv_loader(self, path: str, rgb2bgr: bool = False) -> np.ndarray:
+    def opencv_loader(self, path: str) -> np.ndarray:
         im = cv2.imread(path)
 
         if self.img_type == 'RGB':
@@ -80,21 +77,27 @@ class BaseDataset(Dataset, ABC):
 
         return im
 
+    def get_image_loader(self, loader_type: str) -> Callable:
+        if loader_type == 'opencv':
+            return self.opencv_loader
+        elif loader_type == 'pil':
+            return self.pil_loader
+
     @staticmethod
-    def save_class_to_id_map(save_path: str, class_to_idx: dict) -> None:
+    def save_label_to_id_map(save_path: str, label_to_idx: dict) -> None:
         with open(save_path, 'w') as f:
             # classes_to_idx=classes1:0,classes1:1,...
             # classes_id_map = 0:classes1,1:classes2,...
-            f.writelines([f'{idx}:{cls}\n' for cls, idx in class_to_idx.items()])
+            f.writelines([f'{idx}:{cls}\n' for cls, idx in label_to_idx.items()])
 
     @staticmethod
-    def load_class_to_id_map(class_to_id_map_path: str) -> dict:
+    def load_label_to_id_map(label_to_id_map_path: str) -> dict:
 
-        if not os.path.exists(class_to_id_map_path):
+        if not os.path.exists(label_to_id_map_path):
             return {}
 
         class_id_map = {}
-        with open(class_to_id_map_path, "r") as f:
+        with open(label_to_id_map_path, "r") as f:
             for line in f.readlines():
                 line = line.strip()
                 # k=0,1,2,...
@@ -104,29 +107,29 @@ class BaseDataset(Dataset, ABC):
                 class_id_map.update({int(idx): cls})
         return class_id_map
 
-    def get_classes(self, path: str) -> list:
-        return self.get_dirs(path)
+    # def get_labels(self, path: str) -> list:
+    #     return self.get_dirs(path)
 
     @staticmethod
     def get_dirs(path: str) -> list:
-        classes = []
+        dir_names = []
         for d in os.scandir(path):
             if d.is_dir():
-                classes.append(d.name)
-        classes.sort()
-        return classes
+                dir_names.append(d.name)
+        dir_names.sort()
+        return dir_names
 
     @staticmethod
-    def gen_classes_to_idx_map(classes: list) -> dict:
-        # class_to_idx={classes0:0,classes1:1,...}
-        class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
-        return class_to_idx
+    def gen_labels_to_idx_map(classes: list) -> dict:
+        # label_to_idx={classes0:0,classes1:1,...}
+        label_to_idx = {label: idx for idx, label in enumerate(classes)}
+        return label_to_idx
 
     @staticmethod
-    def gen_idx_to_classes_map(classes: list) -> dict:
+    def gen_idx_to_labels_map(classes: list) -> dict:
         # idx_to_cls={0:cls0,1:cls1,...}
-        idx_to_cls = {idx: cls for idx, cls in enumerate(classes)}
-        return idx_to_cls
+        idx_to_label = {idx: label for idx, label in enumerate(classes)}
+        return idx_to_label
 
     @staticmethod
     def get_all_file(path: str) -> list:
@@ -136,14 +139,14 @@ class BaseDataset(Dataset, ABC):
                 all_data.append(os.path.join(root, file))
         return all_data
 
-    def get_file_by_subfix(self, path: str, subfix: Union[str, list]) -> list:
+    def get_file_by_subfix(self, path: str, subfix: Union[str, list, tuple]) -> list:
         all_data = self.get_all_file(path)
         data = []
         for file in all_data:
             file_basename = os.path.basename(file)
             name, ext = os.path.splitext(file_basename)
 
-            if isinstance(subfix, list):
+            if isinstance(subfix, list|tuple):
                 if ext in subfix:
                     data.append(file)
             elif isinstance(subfix, str):
@@ -188,14 +191,18 @@ class ClassificationDataset(BaseDataset):
             self,
             root: str,
             wh: Optional[Union[list, tuple]] = None,
-            loader_type: str = 'pil',
+            img_loader_type: str = 'pil',
             transform: Optional[Callable] = None,
             target_transform: Optional[Callable] = None,
             expanding_rate: Optional[int] = 0,
             letterbox: Optional[bool] = False,
             img_type: Optional[str] = 'RGB',
     ):
-        super(ClassificationDataset, self).__init__(loader_type=loader_type, img_type=img_type)
+        super(ClassificationDataset, self).__init__(
+            img_loader_type=img_loader_type,
+            img_type=img_type
+        )
+
         self.root = root
         self.wh = wh
 
@@ -203,15 +210,12 @@ class ClassificationDataset(BaseDataset):
         self.letterbox_color = (114, 114, 114)
 
         self._labels = self.get_dirs(root)
-        self._classes_to_idx = self.gen_classes_to_idx_map(self._labels)
-
-        # self.loader_type = loader_type
-        # self.loader = self.get_image_loader(loader_type)
+        self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
 
         self.transform = transform
         self.target_transform = target_transform
 
-        self.samples = self.get_samples(root, class_to_idx=self._classes_to_idx)
+        self.samples = self.get_samples(root, class_to_idx=self._labels_to_idx)
 
         if expanding_rate != 0:
             self.samples += self.expanding_data(self.samples, expanding_rate)
@@ -221,12 +225,18 @@ class ClassificationDataset(BaseDataset):
             logger.warning(f"Found 0 files in sub folders of: {self.root}\n")
 
     @property
-    def get_labels(self) -> list:
+    def labels(self) -> list:
         return self._labels
 
     @property
-    def get_classes_to_idx(self) -> dict:
-        return self._classes_to_idx
+    def labels_to_idx(self) -> dict:
+        return self._labels_to_idx
+
+    def set_transform(self, val):
+        self.transform = val
+
+    def set_target_transform(self, val):
+        self.target_transform = val
 
     def get_samples(self, path: str, class_to_idx: dict) -> list:
         # class_to_idx = kwargs.get('class_to_idx')
@@ -254,16 +264,17 @@ class ClassificationDataset(BaseDataset):
 
     def __getitem__(self, index: int) -> Any:
         path, label = self.samples[index]
-        image: Union[Image.Image, np.ndarray] = self.loader(path)
+        image: Union[Image.Image, np.ndarray] = self.image_loader(path)
 
         if (self.letterbox_flag is True) and (self.wh is not None):
             sw: int = -1
             sh: int = -1
 
-            if self.loader_type == 'pil':
+            if self.img_loader_type == 'pil':
                 sw, sh = image.size
-            if self.loader == 'opencv':
+            elif self.img_loader_type == 'opencv':
                 sh, sw = image.shape
+
             assert sw > 0 and sh > 0, f'Error: sw or sh <0'
 
             if sh != self.wh[1] or sw != self.wh[0]:
@@ -288,24 +299,26 @@ class SegmentationDataSet(BaseDataset):
     def __init__(
             self,
             root: str,
-            loader_type: str = 'pil',
+            img_loader_type: str = 'pil',
             add_background: bool = True,
             transform: Optional[Callable] = None,  # to samples
             target_transform: Optional[Callable] = None,  # to target
             is_training: Optional[bool] = False,
             expanding_rate: Optional[int] = 0,
             img_type: Optional[str] = 'RGB',
+            **kwargs
     ) -> None:
-        super(SegmentationDataSet, self).__init__(loader_type=loader_type, img_type=img_type)
+        super(SegmentationDataSet, self).__init__(
+            img_loader_type=img_loader_type,
+            img_type=img_type
+        )
         self.root = root
         self.is_training = is_training
-        self.train_transform = transform
+        self.transform = transform
         self.target_transform = target_transform
 
-        self._labels = self.find_seg_classes(self.root, add_background)
-        self._classes_to_idx = self.gen_classes_to_idx_map(self._labels)
-        # self.loader_type = loader_type
-        # self.loader = self.get_image_loader(loader_type)
+        self._labels = self.find_labels(self.root, add_background)
+        self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
         self.samples = self.get_file_by_subfix(self.root, self.IMG_EXTENSIONS)
 
         if expanding_rate != 0:
@@ -319,8 +332,14 @@ class SegmentationDataSet(BaseDataset):
         return self._labels
 
     @property
-    def class_to_idx(self) -> dict:
-        return self._classes_to_idx
+    def labels_to_idx(self) -> dict:
+        return self._labels_to_idx
+
+    def set_transform(self, val):
+        self.transform = val
+
+    def set_target_transform(self, val):
+        self.target_transform = val
 
     # check json file
     @staticmethod
@@ -329,7 +348,7 @@ class SegmentationDataSet(BaseDataset):
             data = json.load(f)
         return data
 
-    def find_seg_classes(self, root: str, add_background: bool = True) -> list:
+    def find_labels(self, root: str, add_background: bool = True) -> list:
 
         classes = ['0_background_'] if add_background else []
         json_files = self.get_file_by_subfix(root, '.json')
@@ -380,7 +399,7 @@ class SegmentationDataSet(BaseDataset):
 
                     key_points_data.append(polygon_key_points)
 
-                    cur_idx = self._classes_to_idx.get(key_point["label"])
+                    cur_idx = self._labels_to_idx.get(key_point["label"])
 
                     key_points_cls.append(cur_idx)
 
@@ -410,13 +429,13 @@ class SegmentationDataSet(BaseDataset):
 
     def __getitem__(self, index: int):
         path = self.samples[index]
-        image: Union[Image.Image, np.ndarray] = self.loader(path)
+        image: Union[Image.Image, np.ndarray] = self.image_loader(path)
 
         curr_sample_info = self.samples_info.get(path)
         iw, ih = 0, 0
-        if self.loader_type == 'pil':
+        if self.img_loader_type == 'pil':
             iw, ih = image.size
-        if self.loader_type == 'opencv':
+        elif self.img_loader_type == 'opencv':
             ih, iw = image.shape
         assert iw > 0 and ih > 0, f'iw<=0 or ih<=0'
 
@@ -464,8 +483,8 @@ class SegmentationDataSet(BaseDataset):
                             # cv2.resize() params:dst.shape=(w,h)
                             landmark = cv2.resize(landmark, (image.width, image.height))
 
-        if self.train_transform is not None:
-            image = self.train_transform(image)
+        if self.transform is not None:
+            image = self.transform(image)
             # image.shape=[3,h,w]
             # landmark.shape=[h,w]
             if image.shape[1] != landmark.shape[0] or image.shape[2] != landmark.shape[1]:

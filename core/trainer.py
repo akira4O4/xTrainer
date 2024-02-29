@@ -19,7 +19,9 @@ import loss
 import hooks
 from helper.model import Model
 from helper.DDP import DDPWrapper
+
 from helper.dataloader import DataLoaderWrapper, BalancedBatchSampler
+
 from helper.optim_wrapper import AmpOptimWrapper
 from helper.dataset import ClassificationDataset, SegmentationDataSet
 from helper.precision import data_precision
@@ -132,10 +134,15 @@ class Trainer:
         self.build_lr_scheduler()
 
         self.train_logger = Logger(
-            task=self.task, total_step=self.step, prefix=f"🚀 [Train:{self.task.value}]")
-        self.val_logger = Logger(task=self.task, prefix="🚀 [Val]")
-        self.is_master_device: bool = (
-                                              self.model.gpu == 0) or (not self.use_ddp_mode)
+            task=self.task,
+            total_step=self.step,
+            prefix=f"🚀 [Train:{self.task.value}]"
+        )
+        self.val_logger = Logger(
+            task=self.task,
+            prefix="🚀 [Val]"
+        )
+        self.is_master_device: bool = (self.model.gpu == 0) or (not self.use_ddp_mode)
 
     def init_env(self):
 
@@ -174,9 +181,11 @@ class Trainer:
         self.classification_data_config['train']['dataloader_params']['batch_size'] = 1
         self.classification_data_config['train']['dataloader_params']['sampler'] = None
         self.classification_data_config['train']['dataloader_params']['drop_last'] = False
-        batch_sampler = BalancedBatchSampler(torch.tensor(self.cls_train_dataset.targets),
-                                             n_classes=n_classes,
-                                             n_samples=n_samples)
+        batch_sampler = BalancedBatchSampler(
+            torch.tensor(self.cls_train_dataset.targets),
+            n_classes=n_classes,
+            n_samples=n_samples
+        )
         return batch_sampler
 
     def _build_ddp_dataloader(self, data_config: dict, train_sampler, val_sampler):
@@ -201,9 +210,11 @@ class Trainer:
         self.classification_data_config['val']['dataset_params']['transform'] = self.cls_transforms.val_trans
 
         self.cls_val_dataset = ClassificationDataset(
-            **self.classification_data_config['val']['dataset_params'])
+            **self.classification_data_config['val']['dataset_params']
+        )
         self.cls_train_dataset = ClassificationDataset(
-            **self.classification_data_config['train']['dataset_params'])
+            **self.classification_data_config['train']['dataset_params']
+        )
 
         if self.use_ddp_mode:
             self.cls_train_sampler = self.ddp_wrapper.get_distributed_sampler(
@@ -298,10 +309,8 @@ class Trainer:
         # Calc expand rate
         if self.task == Task.MultiTask:
             cls_expanding_rate, seg_expanding_rate = self.calc_expand_rate()
-            self.classification_data_config['train']['dataset_params'][
-                'expanding_rate'] = cls_expanding_rate
-            self.segmentation_data_config['train']['dataset_params'][
-                'expanding_rate'] = seg_expanding_rate
+            self.classification_data_config['train']['dataset_params']['expanding_rate'] = cls_expanding_rate
+            self.segmentation_data_config['train']['dataset_params']['expanding_rate'] = seg_expanding_rate
             logger.info(f'cls dataset expanding rate: x{cls_expanding_rate}')
             logger.info(f"seg dataset expanding rate: x{seg_expanding_rate}")
 

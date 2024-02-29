@@ -6,11 +6,11 @@ from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 from PIL import Image
 from torchvision.transforms import Compose, ToTensor
 from imgaug import augmenters as ia
-from .iaa_augment import iaa_augment_list
+# from .iaa_augment import iaa_augment_list
 
 __all__ = [
-    'IAATransform',
-    'AugKeypoints',
+    # 'IAATransform',
+    # 'AugKeypoints',
     'ClsTransform',
     'SegTransform'
 ]
@@ -85,7 +85,7 @@ class BaseTransform:
         self._mean = [0.485, 0.456, 0.406] if mean is None else mean
         self._std = [0.229, 0.224, 0.225] if mean is None else std
         self._Normalize = Normalize(mean=self._mean, std=self._std)
-        self._Resize = Resize((wh[1],wh[0])) if wh is not None else None
+        self._Resize = Resize((wh[1], wh[0])) if wh is not None else None
         self._iaa_aug_seq = iaa_augment_list()
 
     @property
@@ -147,5 +147,3 @@ class SegTransform(BaseTransform):
             convert_float_coord=True
         )
         return seg_target_transform
-
-
