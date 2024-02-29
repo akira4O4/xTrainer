@@ -1,17 +1,19 @@
 import os
-import torch
 import math
+
+import torch
 from loguru import logger
+from dataclasses import asdict
+from torch.utils.data import DataLoader
+
+from utils.util import load_yaml, get_num_of_images
+from task import Task, task_convert
+from args import ProjectArgs, TrainArgs, ModelArgs
 from builder import build_workspace, init_seeds, init_backends_cudnn
 from builder import build_model, build_amp_optimizer_wrapper, build_lr_scheduler
-from utils.util import load_yaml
-from args import ProjectArgs, TrainArgs, ModelArgs
-from dataclasses import asdict
 from balanced_batch_sampler import BalancedBatchSampler
 from dataset import ClassificationDataset, SegmentationDataSet
-from torch.utils.data import DataLoader
 from transforms import ClassificationTransform, SegmentationTransform
-from task import Task, task_convert
 
 
 class Pipline:
@@ -48,6 +50,12 @@ class Pipline:
         self.lr_scheduler = None
         self.init_lr_scheduler()
 
+        self.cls_expanding_rate = 0
+        self.seg_expanding_rate = 0
+
+        if self.task == Task.MultiTask:
+            self.cls_expanding_rate, self.seg_expanding_rate = self.calc_expand_rate()
+
         # Init Classification Dataset And Dataloader
         if self.task in [Task.MultiTask, Task.CLS]:
             self.cls_train_dataset = None
@@ -55,6 +63,7 @@ class Pipline:
             self.cls_val_dataset = None
             self.cls_val_dataloader = None
             self.classification_data_args = self.config['classification_data_config']
+            self.classification_data_args['dataset']['train']['expanding_rate'] = self.cls_expanding_rate
             self.build_classification_dataset_and_dataloader()
             logger.success('Init Classification Dataset And Dataloader Done.')
 
@@ -65,6 +74,7 @@ class Pipline:
             self.seg_val_dataset = None
             self.seg_val_dataloader = None
             self.segmentation_data_args = self.config['segmentation_data_config']
+            self.segmentation_data_args['dataset']['train']['expanding_rate'] = self.seg_expanding_rate
             self.build_segmentation_dataset_and_dataloader()
             logger.success('Init Segmentation Dataset And Dataloader Done.')
 
@@ -85,6 +95,24 @@ class Pipline:
             'verbose': False
         })
         self.lr_scheduler = build_lr_scheduler(**self.lr_args)
+
+    def calc_expand_rate(self) -> tuple[int, int]:
+        # expanding data
+        cls_train_num_of_images = get_num_of_images(self.classification_data_args['dataset']['train']['root'])
+        seg_train_num_of_images = get_num_of_images(self.segmentation_data_args['dataset']['train']['root'])
+
+        cls_expanding_rate = 1
+        seg_expanding_rate = 1
+        if cls_train_num_of_images > seg_train_num_of_images:
+            difference = cls_train_num_of_images - seg_train_num_of_images
+            cls_expanding_rate = 0
+        else:
+            difference = seg_train_num_of_images - cls_train_num_of_images
+            seg_expanding_rate = 0
+
+        cls_expanding_rate *= math.ceil(difference / cls_train_num_of_images)
+        seg_expanding_rate *= math.ceil(difference / seg_train_num_of_images)
+        return cls_expanding_rate, seg_expanding_rate
 
     def build_classification_dataset_and_dataloader(self) -> None:
         # Add transform

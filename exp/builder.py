@@ -7,13 +7,10 @@ import torch.backends.cudnn
 import numpy as np
 from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
-from torch.utils.data import DataLoader
 
-from task import Task
 from model import Model
 from optim import AmpOptimWrapper
 import lr_scheduler.lr_adjustment as lr_adjustment
-from dataset import ClassificationDataset, SegmentationDataSet
 
 
 def build_workspace(work_dir: str) -> None:
@@ -81,19 +78,3 @@ def build_lr_scheduler(name: str, **kwargs):
     lr_scheduler = lr_scheduler(**kwargs)
     logger.info(f'Build lr scheduler: {name}')
     return lr_scheduler
-
-
-def build_classification_dataloader(dataset_args: dict, dataloader_args: dict) -> DataLoader:
-    dataset = ClassificationDataset(**dataset_args)
-    dataloader = DataLoader(dataset=dataset, **dataloader_args)
-    return dataloader
-
-
-def build_segmentation_dataloader(dataset_args: dict, dataloader_args: dict) -> DataLoader:
-    dataset = SegmentationDataSet(**dataset_args)
-    dataloader = DataLoader(dataset=dataset, **dataloader_args)
-    return dataloader
-
-
-def build_training_logger():
-    ...
