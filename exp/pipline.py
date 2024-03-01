@@ -6,7 +6,7 @@ import shutil
 import torch
 from loguru import logger
 from dataclasses import asdict
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from utils.util import load_yaml, get_num_of_images, timer
 from task import Task, task_convert
@@ -73,25 +73,35 @@ class Pipline:
         self.seg_expanding_rate = 0
         self.init_expand_rate()
 
+        self.step = 0
         # Init Classification Dataset And Dataloader
         if self.task in [Task.MultiTask, Task.CLS]:
-            self.cls_train_dataset = None
-            self.cls_train_dataloader = None
-            self.cls_val_dataset = None
-            self.cls_val_dataloader = None
+            self.cls_train_dataset: ClassificationDataset = None  # noqa
+            self.cls_val_dataset: ClassificationDataset = None  # noqa
+            self.cls_train_dataloader: DataLoader = None  # noqa
+            self.cls_val_dataloader: DataLoader = None  # noqa
+
             self.classification_data_args['dataset']['train']['expanding_rate'] = self.cls_expanding_rate
             self.build_classification_dataset_and_dataloader()
             logger.success('Init Classification Dataset And Dataloader Done.')
 
         # Init Segmentation Dataset And Dataloader
         if self.task in [Task.MultiTask, Task.SEG]:
-            self.seg_train_dataset = None
-            self.seg_train_dataloader = None
-            self.seg_val_dataset = None
-            self.seg_val_dataloader = None
+            self.seg_train_dataset: SegmentationDataSet = None  # noqa
+            self.seg_val_dataset: SegmentationDataSet = None  # noqa
+            self.seg_train_dataloader: DataLoader = None  # noqa
+            self.seg_val_dataloader: DataLoader = None  # noqa
+
             self.segmentation_data_args['dataset']['train']['expanding_rate'] = self.seg_expanding_rate
             self.build_segmentation_dataset_and_dataloader()
             logger.success('Init Segmentation Dataset And Dataloader Done.')
+
+        if self.task == Task.MultiTask:
+            self.step = min(len(self.cls_train_dataloader), len(self.seg_train_dataloader))
+        elif self.task == Task.CLS:
+            self.step = len(self.cls_train_dataloader)
+        elif self.task == Task.SEG:
+            self.step = len(self.seg_train_dataloader)
 
         self.check_num_of_classes()
         self.backup_config()
@@ -303,8 +313,17 @@ class Pipline:
             return data.cuda(self.model.device, non_blocking=True)
         return data
 
+    def loss_sum(self, loss_result: List[torch.Tensor]) -> torch.Tensor:
+
+        if len(loss_result) != len(self.losses_weights):
+            logger.error('len(loss_result)!=len(self.losses_weights)')
+
+        ret = 0
+        for loss_val, weight in zip(loss_result, self.losses_weights):
+            ret += loss_val * weight
+        return ret  # noqa
+
     def run(self):
-        curr_epoch = 0
 
         while self.train_args.epoch < self.train_args.max_epoch:
             # n*train -> k*val -> n*train->...
@@ -313,13 +332,13 @@ class Pipline:
                 run_one_epoch = getattr(self, mode)
 
                 for _ in range(epochs):
-                    if curr_epoch >= self.train_args.max_epoch:
+                    if self.train_args.epoch >= self.train_args.max_epoch:
                         break
 
                     run_one_epoch()  # train() or val()
 
                     if mode == 'train':
-                        curr_epoch += 1
+                        self.train_args.epoch += 1
                     elif mode == 'val':
                         ...
 
@@ -336,8 +355,9 @@ class Pipline:
         if self.task in [Task.SEG, Task.MultiTask]:
             dataloaders.append(self.seg_train_dataloader)
 
+        # Update lr
         if self.scheduler_step_in_batch is False:
-            self.lr_scheduler.step()  # update lr
+            self.lr_scheduler.step()
 
         datas: tuple
         for i, datas in enumerate(zip(*dataloaders)):
@@ -345,10 +365,6 @@ class Pipline:
                 cls_data, seg_data = datas
             else:
                 cls_data = seg_data = datas[0]  # cls or seg training
-
-            # Update lr
-            if self.scheduler_step_in_batch is True:
-                self.lr_scheduler.step()
 
             loss_results = []
             input_data = None
@@ -374,6 +390,14 @@ class Pipline:
                     loss.model_output = model_output
                     loss.targets = targets
                     loss_results.append(loss.forward())
+
+            # Update optimizer
+            loss_sum = self.loss_sum(loss_results)
+            self.amp_optimizer_wrapper.update_params(loss_sum)
+
+            # Update lr
+            if self.scheduler_step_in_batch is True:
+                self.lr_scheduler.step(self.train_args.epoch + i / self.step)
 
     def val(self):
         self.model.eval()

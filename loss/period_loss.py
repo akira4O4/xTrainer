@@ -5,14 +5,14 @@ import torch.nn.functional as F
 
 class PeriodLoss(nn.Module):
     def __init__(
-            self, 
-            period_thresh=0.5, 
-            period_n_min=1000, 
+            self,
+            period_thresh=0.5,
+            period_n_min=1000,
             period_ignore_lb=-255,
-            period_weights=None, 
-            *args, 
+            period_weights=None,
+            *args,
             **kwargs
-        )->None:
+    ) -> None:
         """
         Args:
             thresh: 判断困难像素的样本阈值
@@ -27,8 +27,12 @@ class PeriodLoss(nn.Module):
         # self.thresh = -torch.log(torch.tensor(period_thresh, dtype=torch.float)).cuda()
         self.n_min = period_n_min
         self.ignore_lb = period_ignore_lb
-        self.device=period_weights.device
-        self.criteria = nn.CrossEntropyLoss(ignore_index=period_ignore_lb, reduction='none',weight=period_weights)
+        self.device = period_weights.device
+        self.criteria = nn.CrossEntropyLoss(
+            ignore_index=period_ignore_lb,
+            reduction='none',
+            weight=period_weights
+        )
 
     def forward(self, logits, labels):
 
@@ -39,13 +43,14 @@ class PeriodLoss(nn.Module):
 
         loss_mean = 0
         for i in range(len(logits)):
-            if (logits[i].shape[2] != labels.shape[2]) and (logits[i].shape[2] / labels.shape[2] == logits[i].shape[3] / labels.shape[3]):
+            if (logits[i].shape[2] != labels.shape[2]) and (
+                    logits[i].shape[2] / labels.shape[2] == logits[i].shape[3] / labels.shape[3]):
                 labels_t = F.interpolate(labels, (logits[i].shape[2], logits[i].shape[3]))
             else:
                 labels_t = labels.clone().detach()
 
             # labels_t = torch.cuda.LongTensor(labels_t.cpu().numpy()).squeeze(1)
-            labels_t=labels_t.squeeze(1)
+            labels_t = labels_t.squeeze(1)
             labels_t = torch.LongTensor(labels_t.cpu().numpy()).to(self.device)
 
             loss = self.criteria(logits[i], labels_t)

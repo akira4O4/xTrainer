@@ -7,13 +7,12 @@ import torch.backends.cudnn
 import numpy as np
 from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
-import loss
 
-from loss_forward import *
 from model import Model
 from optim import AmpOptimWrapper
-import lr_scheduler.lr_adjustment as lr_adjustment
 from utils.util import get_time
+import lr_scheduler.lr_adjustment as lr_adjustment
+from loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 
 
 def build_workspace(work_dir: str) -> None:
@@ -96,7 +95,3 @@ def build_loss(name, **kwargs) -> BaseLossForward:
     loss_forward_obj = loss_forward(**kwargs)
     loss_forward_obj.build()
     return loss_forward_obj
-
-
-if __name__ == '__main__':
-    print(loss.__dict__.keys())

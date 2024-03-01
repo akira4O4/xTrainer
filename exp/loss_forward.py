@@ -1,8 +1,11 @@
 from typing import List, Union, Optional
+
 from loguru import logger
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from loss import CrossEntropyLoss, PeriodLoss, DiceLoss
+
+from loss import PeriodLoss, DiceLoss
 
 __all__ = [
     'BaseLossForward',
@@ -57,20 +60,20 @@ class CrossEntropyLossForward(BaseLossForward):
         self.kwargs = kwargs
 
     def build(self):
-        self.loss = CrossEntropyLoss(**self.kwargs)
+        self.loss = nn.CrossEntropyLoss(**self.kwargs)
         logger.success('Build CrossEntropyLoss Done.')
 
     def forward(self):
         _loss: float = 0.0
 
-        if isinstance(self.model_output, list):  # [Tensor1,Tensor2,...] or [cls_output,seg_output]
-            self.model_output = self.model_output[0]
-            for n_l in range(len(self.model_output)):
-                _loss += self.loss(self.model_output[n_l], self.targets)
-            _loss = _loss / len(self.model_output)
+        if isinstance(self._model_output, list):  # [Tensor1,Tensor2,...] or [cls_output,seg_output]
+            self._model_output = self._model_output[0]
+            for n_l in range(len(self._model_output)):
+                _loss += self.loss(self._model_output[n_l], self._targets)
+            _loss = _loss / len(self._model_output)
 
-        elif isinstance(self.model_output, torch.Tensor):
-            _loss = self.loss(self.model_output, self.targets)
+        elif isinstance(self._model_output, torch.Tensor):
+            _loss = self.loss(self._model_output, self._targets)
         return _loss
 
 
@@ -112,12 +115,12 @@ class PeriodLossForward(BaseLossForward):
         logger.success('Build PeriodLoss Done.')
 
     def forward(self) -> float:
-        if isinstance(self.model_output, list):  # [Tensor1,Tensor2,...] or [cls_output,seg_output]
-            if isinstance(self.model_output[0], list):  # [Tensor1,Tensor2,...]
-                self.model_output = self.model_output[1]
+        if isinstance(self._model_output, list):  # [Tensor1,Tensor2,...] or [cls_output,seg_output]
+            if isinstance(self._model_output[0], list):  # [Tensor1,Tensor2,...]
+                self._model_output = self._model_output[1]
 
-        _loss = self.loss([self.model_output[0], self.model_output[2]], self.targets)
-        _loss += 0.5 * self.loss([self.model_output[1], self.model_output[3]], self.targets)
+        _loss = self.loss([self._model_output[0], self._model_output[2]], self._targets)
+        _loss += 0.5 * self.loss([self._model_output[1], self._model_output[3]], self._targets)
         return _loss
 
 
@@ -153,20 +156,20 @@ class DiceLossForward(BaseLossForward):
 
     def forward(self) -> float:
         _loss = 0.0
-        if isinstance(self.model_output, list):
-            if isinstance(self.model_output[1], list):
-                self.model_output = self.model_output[1]
+        if isinstance(self._model_output, list):
+            if isinstance(self._model_output[1], list):
+                self._model_output = self._model_output[1]
 
-            for n_l in range(len(self.model_output)):
-                target_t = self.targets
-                if (self.model_output[n_l].shape[2] != target_t.shape[2]) and (
-                        self.model_output[n_l].shape[2] / target_t.shape[2] == self.model_output[n_l].shape[3] /
+            for n_l in range(len(self._model_output)):
+                target_t = self._targets
+                if (self._model_output[n_l].shape[2] != target_t.shape[2]) and (
+                        self._model_output[n_l].shape[2] / target_t.shape[2] == self._model_output[n_l].shape[3] /
                         target_t.shape[3]):
                     target_t = F.interpolate(target_t,
-                                             (self.model_output[n_l].shape[2], self.model_output[n_l].shape[3]))
+                                             (self._model_output[n_l].shape[2], self._model_output[n_l].shape[3]))
                 # target_t = torch.tensor(target_t, dtype=torch.int64)
                 target_t = torch.as_tensor(target_t, dtype=torch.int64)
-                _loss += self.layer_weights[n_l] * self.loss(self.model_output[n_l], target_t)
+                _loss += self.layer_weights[n_l] * self.loss(self._model_output[n_l], target_t)
         return _loss
 
 
