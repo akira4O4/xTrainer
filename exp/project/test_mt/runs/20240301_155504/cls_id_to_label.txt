@@ -1,0 +1,7 @@
+0:0_good
+1:1_shouzhiwen
+2:2_huahen
+3:3_liebian
+4:4_shouzhiwen_50%
+5:5_shouzhiwen_edge
+6:6_pobian

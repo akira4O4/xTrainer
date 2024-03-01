@@ -501,8 +501,7 @@ class Trainer:
 
                 model_output = self.forward_with_train(images, targets)
                 losses.extend(self.calc_loss(curr_task, model_output, targets))
-                performance: dict = self.calc_performance(
-                    curr_task, model_output, targets)
+                performance: dict = self.calc_performance(curr_task, model_output, targets)
 
                 if curr_task == Task.CLS:
                     performance_data += [performance['acc1'],

@@ -104,6 +104,7 @@ class DiceLoss(LossBaseCalc):
         self.model_output = model_output
         self.targets = targets
         self.loss_func = loss.DiceLoss(**kwargs)
+
         if layer_weights is None:
             self.layer_weights = [1, 1, 0.5, 0.5]
         else:

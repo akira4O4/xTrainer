@@ -7,10 +7,13 @@ import torch.backends.cudnn
 import numpy as np
 from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
+import loss
 
+from loss_forward import *
 from model import Model
 from optim import AmpOptimWrapper
 import lr_scheduler.lr_adjustment as lr_adjustment
+from utils.util import get_time
 
 
 def build_workspace(work_dir: str) -> None:
@@ -19,6 +22,14 @@ def build_workspace(work_dir: str) -> None:
         os.makedirs(work_dir)
 
     logger.info('Init workspace done.')
+
+
+def build_exp(project_path: str) -> str:
+    time = get_time()
+    exp_path = os.path.join(project_path, 'runs', time)
+    if os.path.exists(exp_path) is False:
+        os.makedirs(exp_path)
+    return exp_path
 
 
 def init_seeds(seed: int = 0) -> None:
@@ -53,7 +64,7 @@ def build_optimizer(name: str, **kwargs):
 
     optimizer = optim(**kwargs)
 
-    logger.info(f'Build optimizer: {name}')
+    logger.success(f'Build optimizer: {name} Done.')
     return optimizer
 
 
@@ -61,7 +72,7 @@ def build_amp_optimizer_wrapper(name: str, **kwargs) -> AmpOptimWrapper:
     optimizer = build_optimizer(name, **kwargs)
     amp_optimizer_wrapper = AmpOptimWrapper(optimizer=optimizer)
 
-    logger.info(f'Build AmpOptimWrapper: {name}')
+    logger.success(f'Build AmpOptimWrapper: {name} Done.')
     return amp_optimizer_wrapper
 
 
@@ -76,5 +87,16 @@ def build_lr_scheduler(name: str, **kwargs):
         exit()
 
     lr_scheduler = lr_scheduler(**kwargs)
-    logger.info(f'Build lr scheduler: {name}')
+    logger.success(f'Build lr scheduler: {name} Done.')
     return lr_scheduler
+
+
+def build_loss(name, **kwargs) -> BaseLossForward:
+    loss_forward = LOSS_FORWARD_TABLE.get(name)
+    loss_forward_obj = loss_forward(**kwargs)
+    loss_forward_obj.build()
+    return loss_forward_obj
+
+
+if __name__ == '__main__':
+    print(loss.__dict__.keys())

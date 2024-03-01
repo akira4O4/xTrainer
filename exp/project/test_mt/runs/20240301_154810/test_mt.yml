@@ -96,7 +96,7 @@ loss_config:
   segmentation:
     PeriodLoss:
       top_k: 0.5
-      weight: [ 1, 1 ]
+      weight: [ 1, 1 ,1,1,1,1 ]
     DiceLoss:
       model: MULTICLASS_MODE
       log_loss: false
