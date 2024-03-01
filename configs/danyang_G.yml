@@ -26,11 +26,11 @@ model_config:
 classification_data_config:
   train:
     dataset_params:
-      root: D:\data\G_train\train
+      root: D:\llf\dataset\danyang\G_train\train
       wh: [ 480,480 ]
       letterbox: true
     dataloader_params:
-      batch_size: 64
+      batch_size: 32
       shuffle: False
       num_workers: 2
       pin_memory: True
@@ -38,11 +38,11 @@ classification_data_config:
 
   val:
     dataset_params:
-      root: D:\data\G_train\train
+      root: D:\llf\dataset\danyang\G_train\train
       wh: [ 480,480 ]
       letterbox: true
     dataloader_params:
-      batch_size: 128
+      batch_size: 32
       shuffle: false
       num_workers: 1
       pin_memory: True

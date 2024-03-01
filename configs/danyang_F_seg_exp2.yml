@@ -27,7 +27,7 @@ model_config:
 segmentation_data_config:
   train:
     dataset_params:
-      root: D:\data\F_train
+      root: D:\llf\dataset\danyang\F_train\seg\train
       wh: [ 256,256 ]
     dataloader_params:
       batch_size: 100
@@ -37,7 +37,7 @@ segmentation_data_config:
 
   val:
     dataset_params:
-      root: D:\data\F_train
+      root: D:\llf\dataset\danyang\F_train\seg\train
       wh: [ 256,256 ]
     dataloader_params:
       batch_size: 8
