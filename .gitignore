@@ -28,3 +28,4 @@ utils/__pycache__
 *.tfrecords
 /export/
 /.vscode
+/exp/project/
