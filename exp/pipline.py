@@ -289,8 +289,8 @@ class Pipline:
         if images is None or targets is None:
             logger.error('train_data is None')
             raise
-        with self.amp_optimizer_wrapper.optim_context():
-            model_output = self.model(images)
+        # with self.amp_optimizer_wrapper.optim_context():
+        model_output = self.model(images)
 
         return model_output
 
@@ -381,15 +381,16 @@ class Pipline:
                 images = self.move_to_device(images)
                 targets = self.move_to_device(targets)
 
-                # Model Infer
-                model_output = self.forward_with_train(images, targets)
+                with self.amp_optimizer_wrapper.optim_context():
+                    # Model Infer
+                    model_output = self.forward_with_train(images, targets)
 
-                # Loss forward
-                loss: BaseLossForward
-                for loss in self.losses[curr_task.value]:
-                    loss.model_output = model_output
-                    loss.targets = targets
-                    loss_results.append(loss.forward())
+                    # Loss forward
+                    loss: BaseLossForward
+                    for loss in self.losses[curr_task.value]:
+                        loss.model_output = model_output
+                        loss.targets = targets
+                        loss_results.append(loss.forward())
 
             # Update optimizer
             loss_sum = self.loss_sum(loss_results)
