@@ -1,5 +1,5 @@
 project_config:
-  task: segmentation
+  task: multitask
   work_dir: project/test_mt
 
 train_config:
@@ -90,7 +90,9 @@ lr_config:
   # T_mult: 2
 
 loss_config:
-  losses_weights: [ 1,0.5 ]
+  losses_weights: [ 1,1, 0.5 ]
+  classification:
+    CrossEntropyLoss: { }
   segmentation:
     PeriodLoss:
       top_k: 0.5
