@@ -8,27 +8,17 @@ import numpy as np
 from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
 
-from model import Model
-from optim import AmpOptimWrapper
+from .model import Model
+from .optim import AmpOptimWrapper
 from utils.util import get_time
 import lr_scheduler.lr_adjustment as lr_adjustment
-from loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
+from .loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 
 
-def build_workspace(work_dir: str) -> None:
-    if os.path.exists(work_dir) is False:
-        logger.info(f'Create work dir:{work_dir}')
-        os.makedirs(work_dir)
-
-    logger.info('Init workspace done.')
-
-
-def build_exp(project_path: str) -> str:
-    time = get_time()
-    exp_path = os.path.join(project_path, 'runs', time)
-    if os.path.exists(exp_path) is False:
-        os.makedirs(exp_path)
-    return exp_path
+def build_dir(path: str)->None:
+    if os.path.exists(path) is False:
+        os.makedirs(path)
+    logger.success(f'Create dir:{path}')
 
 
 def init_seeds(seed: int = 0) -> None:

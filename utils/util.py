@@ -398,7 +398,7 @@ def generate_matrix(
     return confusion_matrix
 
 
-def accl_miou(hist):
+def accl_miou(hist) -> tuple:
     iou = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
     miou = np.nanmean(iou)
     return iou, miou

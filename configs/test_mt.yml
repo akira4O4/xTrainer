@@ -3,6 +3,7 @@ project_config:
   work_dir: project/test_mt
 
 train_config:
+  topk: 2
   seed: 114514
   deterministic: true
   epoch: 0

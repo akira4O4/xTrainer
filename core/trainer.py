@@ -510,8 +510,7 @@ class Trainer:
                     performance_data += [performance['miou']]
 
             # Backward
-            loss_sum = self.loss_sum(
-                losses, self.loss_config.get('loss_weights'))
+            loss_sum = self.loss_sum(losses, self.loss_config.get('loss_weights'))
             self.optimizer_wrapper.update_params(loss_sum)
 
             if self.train_config['scheduler_step_batch'] is True:

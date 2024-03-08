@@ -10,6 +10,7 @@ class ProjectArgs:
 
 @dataclass
 class TrainArgs:
+    topk: Optional[int] = 2
     seed: Optional[int] = 0
     deterministic: Optional[bool] = False
     epoch: Optional[int] = 0

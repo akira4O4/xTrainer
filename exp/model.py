@@ -49,6 +49,10 @@ class Model:
         return self.net(images)
 
     @property
+    def training(self) -> bool:
+        return self.net.training
+
+    @property
     def model_name(self) -> str:
         return self._model_name
 
