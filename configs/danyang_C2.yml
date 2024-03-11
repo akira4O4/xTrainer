@@ -1,5 +1,5 @@
 project_config:
-  task: classification
+  task: classification 
   work_dir: project/danyang_C2
   topk: 2
   # print_freq: 10
@@ -7,9 +7,9 @@ project_config:
 train_config:
   seed: 0
   epoch: 0
-  max_epoch: 30
+  max_epoch: 50
   print_freq: 10
-  workflow: [ [ train, 1 ], [ val, 1 ] ]
+  workflow: [[train, 1], [val, 1]]
   # workflow: [[val, 1]]
   deterministic: true
   scheduler_step_batch: false
@@ -18,7 +18,7 @@ model_config:
   model_name: shufflenet_v2_x1_0
   num_classes: 3
   pretrained: False
-  model_path: project/danyang_C2/weights/checkpoint.pth
+  model_path: /home/main/llf/code/DLFv2/project/danyang_C2/weights/20240119_170113_Epoch36_Acc99.4905_lr1e-05_BestModel.pth
   gpu: 0 # -1==cpu
   strict: True
   map_location: cpu
@@ -26,11 +26,11 @@ model_config:
 classification_data_config:
   train:
     dataset_params:
-      root: D:\llf\dataset\danyang\C2_train
-      wh: [ 480,480 ]
+      root: /home/main/llf/data/C2_train/train
+      wh: [480,480]
       letterbox: true
     dataloader_params:
-      batch_size: 96
+      batch_size: 256
 
       shuffle: False
       num_workers: 2
@@ -39,11 +39,11 @@ classification_data_config:
 
   val:
     dataset_params:
-      root: D:\llf\dataset\danyang\C2_train
-      wh: [ 480,480 ]
+      root: /home/main/llf/data/C2_train/train
+      wh: [480,480]
       letterbox: true
     dataloader_params:
-      batch_size: 32
+      batch_size: 64
       shuffle: false
       num_workers: 1
       pin_memory: True
@@ -51,7 +51,7 @@ classification_data_config:
 optimizer_config:
   name: AdamW
   params:
-    lr: 0.0002
+    lr: 0.0001
 
 lr_config:
   name: LambdaLR
@@ -66,7 +66,7 @@ loss_config:
   loss_weights: null
 
   classification:
-    CrossEntropyLoss: { }
+    CrossEntropyLoss: {}
 
 ddp_config:
   flag: false
@@ -81,13 +81,12 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\data\0danyang\20240120\A\good
-  weight: D:\code\DLFv2\project\danyang_C2\weights\20240120_233733_Epoch40_Acc99.8601_lr9e-06_BestModel.pth
-  # batch_size: 1
+  test_dir: D:\llf\dataset\danyang\2024_dataset\20240306A\images
+  weight: project/danyang_C2/weights/20240121_000636_Epoch44_Acc99.7782_lr9e-06_BestModel.pth
   good_idx: 0
-  sum_method: true
+  sum_method: false 
   need_segment: false
-#  cls_threshold: [ 0.9 , 0.1,0.1 ]
-  cls_threshold: [ 0.1 , 0.9,0.9 ]
-#  seg_threshold: [ 0, 36, 50, 36 ]
+  cls_threshold: [ 0.9 , 0.1,0.1 ]
+
+  seg_threshold: [ 0,]
 

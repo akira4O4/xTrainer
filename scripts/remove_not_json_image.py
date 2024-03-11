@@ -4,8 +4,8 @@ import shutil
 from utils.util import get_images
 
 if __name__ == '__main__':
-    target_dir = r'D:\data\0danyang\20240124\B\bad\E\20240124_seg_已完成'
-    output_dir = r'D:\data\0danyang\20240124\nojson'
+    target_dir = r'D:\llf\dataset\danyang\2024_dataset\20240306B-已完成\PNG-13-星期三good\F工位\real_bad'
+    output_dir = r'D:\llf\dataset\danyang\2024_dataset\20240306B-已完成\PNG-13-星期三good\F工位\nojson'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 

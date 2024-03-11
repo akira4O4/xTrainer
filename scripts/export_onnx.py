@@ -49,14 +49,14 @@ def export_onnx(model,
 if __name__ == '__main__':
     curr_time = get_time()
     # E
-    model_path = r"/\project\danyang_E_mt\weights\20240122_233416_Epoch21_Acc99.8881_MIoU0.7611_lr1.3e-05_BestModel.pth"
-    bs = 1
-    wh = [576, 576]
-    cls = 4
-    seg_cls = 6
-    onnx_name = f'{curr_time}_danyang_E_mt_bs{bs}_cls{cls}_seg{seg_cls}.onnx'
-    output_names = ['output1', 'output2']
-    model = multi_task_shufflenet_v2_x1_0(num_classes=cls, mask_classes=seg_cls)
+    # model_path = r"/\project\danyang_E_mt\weights\20240122_233416_Epoch21_Acc99.8881_MIoU0.7611_lr1.3e-05_BestModel.pth"
+    # bs = 1
+    # wh = [576, 576]
+    # cls = 4
+    # seg_cls = 6
+    # onnx_name = f'{curr_time}_danyang_E_mt_bs{bs}_cls{cls}_seg{seg_cls}.onnx'
+    # output_names = ['output1', 'output2']
+    # model = multi_task_shufflenet_v2_x1_0(num_classes=cls, mask_classes=seg_cls)
 
     # G
     # model_path = r"D:\code\DLFv2\project\danyang_G\weights\20240121_151542_Epoch20_Acc99.9925_lr5e-05_BestModel.pth"
@@ -87,13 +87,14 @@ if __name__ == '__main__':
     # model = seg_shufflenet_v2_x1_0(mask_classes=seg_cls)
 
     # C2
-    # model_path = r"D:\code\DLFv2\project\danyang_G\weights\20240119_181748_Epoch17_Acc99.8_lr7.3e-05_BestModel.pth"
-    # bs = 1
-    # wh = [480, 480]
-    # seg_cls = 3
-    # onnx_name = f'{curr_time}_danyang_C2_cls_bs{bs}.onnx'
-    # output_names = ['output1']
-    # model = seg_shufflenet_v2_x1_0(mask_classes=seg_cls)
+    model_path = r"D:\llf\code\pytorch-lab\project\danyang_C2\20240121_000636_Epoch44_Acc99.7782_lr9e-06_BestModel.pth"
+    bs = 1
+    wh = [480, 480]
+    cls = 3
+    onnx_name = f'{curr_time}_danyang_C2_cls_bs{bs}.onnx'
+    # onnx_name = f'{curr_time}_danyang_C2_cls{cls}_bs{bs}.onnx'
+    output_names = ['output1']
+    model = shufflenet_v2_x1_0(num_classes=cls)
 
     export_args = {
         'opset_version': 12,

@@ -458,7 +458,7 @@ def get_num_of_images(path: str, ext: list = None) -> int:
 
 def get_images(path: str, ext=None) -> list:
     if ext is None:
-        ext = ['.png', '.jpg']
+        ext = ['.png', '.jpg','.bmp']
     data = []
     for root, dirs, files in os.walk(path):
         for file in files:

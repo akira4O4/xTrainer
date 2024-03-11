@@ -18,39 +18,39 @@ model_config:
   model_name: shufflenet_v2_x1_0
   num_classes: 2
   pretrained: False
-  model_path: D:\code\DLFv2\project\danyang_G\weights\20240110_215806_Epoch10_Acc99.984_lr0.0_BestModel.pth
-  gpu: 0 # -1==cpu
+  model_path: /home/main/llf/code/DLFv2/project/danyang_G/weights/20240120_182825_Epoch27_Acc99.849_lr5e-06_BestModel.pth
+  gpu: 1 # -1==cpu
   strict: True
   map_location: cpu
 
 classification_data_config:
   train:
     dataset_params:
-      root: D:\llf\dataset\danyang\G_train\train
+      root: /home/main/llf/data/G_train/train
       wh: [ 480,480 ]
       letterbox: true
     dataloader_params:
-      batch_size: 32
+      batch_size: 256
       shuffle: False
-      num_workers: 2
+      num_workers: 4
       pin_memory: True
       batch_sampler: BalancedBatchSampler #default:None
 
   val:
     dataset_params:
-      root: D:\llf\dataset\danyang\G_train\train
+      root: /home/main/llf/data/G_train/train
       wh: [ 480,480 ]
       letterbox: true
     dataloader_params:
-      batch_size: 32
+      batch_size: 128
       shuffle: false
-      num_workers: 1
+      num_workers: 4
       pin_memory: True
 
 optimizer_config:
   name: AdamW
   params:
-    lr: 0.0002
+    lr: 0.0001
 
 lr_config:
   #  name: LambdaLR
@@ -80,13 +80,13 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\data\0danyang\20240123\good-g
-  weight: D:\code\DLFv2\project\danyang_G\weights\20240121_175518_Epoch49_Acc99.7822_lr5.4e-05_BestModel.pth
+  test_dir: D:\data\danyang\20240112\1.12B\good-g
+  weight: D:\code\DLFv2\project\danyang_G\weights\20240113_044345__Epoch39_Acc100.0_lr1.9e-05_Model.pth
   # batch_size: 1
   good_idx: 0
   sum_method: true
   need_segment: false
-#  cls_threshold: [ 0.5 , 0.7]
-  cls_threshold: [ 0.9 , 0.1]
+  #  cls_threshold: [ 0.5 , 0.7]
+  cls_threshold: [ 0.3 , 0.7]
 #  seg_threshold: [ 0, 36, 50, 36 ]
 
