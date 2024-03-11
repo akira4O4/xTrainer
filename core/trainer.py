@@ -543,7 +543,7 @@ class Trainer:
             #     self.draw_loss_data['y'],
             #     save_path=join(self.project_config['work_dir'], 'loss.png')
             # )
-        time.sleep(1)
+        # time.sleep(1)
 
     @timer
     def val(self):

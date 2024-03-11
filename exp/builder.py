@@ -12,7 +12,7 @@ from .model import Model
 from .optim import AmpOptimWrapper
 from utils.util import get_time
 import lr_scheduler.lr_adjustment as lr_adjustment
-from .loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
+from .loss_forward import BaseLossRunner, LOSS_FORWARD_TABLE
 
 
 def build_dir(path: str)->None:
@@ -80,7 +80,7 @@ def build_lr_scheduler(name: str, **kwargs):
     return lr_scheduler
 
 
-def build_loss(name, **kwargs) -> BaseLossForward:
+def build_loss(name, **kwargs) -> BaseLossRunner:
     loss_forward = LOSS_FORWARD_TABLE.get(name)
     loss_forward_obj = loss_forward(**kwargs)
     loss_forward_obj.build()

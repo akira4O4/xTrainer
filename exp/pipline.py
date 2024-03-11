@@ -53,10 +53,19 @@ class Pipline:
         self.top1_log_path = ''
         self.miou_log_path = ''  # noqa
         self.weights_dir = ''
-        self.performance_log_path = ''
+
+        self.training_performance_log_path = ''
+        self.training_performance_table_name = []
+
         self.loss_log_path = ''
-        self.performance_table_name = []
         self.loss_table_name = []
+
+        self.val_miou_log_path = ''
+        self.val_miou_table_name = ['Time', 'Epoch']
+
+        self.val_top1_log_path = ''
+        self.val_top1_table_name = ['Time', 'Epoch']
+
         self.init_workspace()
 
         init_seeds(self.train_args.seed)
@@ -93,7 +102,7 @@ class Pipline:
         self.seg_expanding_rate = 0
         self.init_expand_rate()
 
-        self.step = 0
+        self.total_step = 0
         # Init Classification Dataset And Dataloader
         if self.task in [Task.MultiTask, Task.CLS]:
             self.cls_train_dataset: ClassificationDataset = None  # noqa
@@ -117,11 +126,11 @@ class Pipline:
             logger.success('Init Segmentation Dataset And Dataloader Done.')
 
         if self.task == Task.MultiTask:
-            self.step = min(len(self.cls_train_dataloader), len(self.seg_train_dataloader))
+            self.total_step = min(len(self.cls_train_dataloader), len(self.seg_train_dataloader))
         elif self.task == Task.CLS:
-            self.step = len(self.cls_train_dataloader)
+            self.total_step = len(self.cls_train_dataloader)
         elif self.task == Task.SEG:
-            self.step = len(self.seg_train_dataloader)
+            self.total_step = len(self.seg_train_dataloader)
 
         self.check_num_of_classes()
         self.backup_config()
@@ -141,8 +150,10 @@ class Pipline:
         self.logs_dir = os.path.join(self.curr_exp_path, 'logs')
 
         log_type = 'csv'
-        self.loss_log_path = os.path.join(self.logs_dir, f'loss_log.{log_type}')
-        self.performance_log_path = os.path.join(self.logs_dir, f'performance_log.{log_type}')
+        self.loss_log_path = os.path.join(self.logs_dir, f'training_loss_log.{log_type}')
+        self.training_performance_log_path = os.path.join(self.logs_dir, f'training_performance_log.{log_type}')
+        self.val_miou_log_path = os.path.join(self.logs_dir, f'Val_MIoU_log.{log_type}')
+        self.val_top1_log_path = os.path.join(self.logs_dir, f'Val_Top1_log.{log_type}')
 
         build_dir(self.project_args.work_dir)
         build_dir(self.curr_exp_path)
@@ -152,7 +163,7 @@ class Pipline:
     def init_logger(self):
         self.train_logger = Logger(
             task=self.task,
-            total_step=self.step,
+            total_step=self.total_step,
             prefix=f"🚀 [Train:{self.task.value}]"
         )
         self.val_logger = Logger(
@@ -166,14 +177,23 @@ class Pipline:
                 self.loss_table_name.append(loss_name)
         self.write_csv(self.loss_log_path, self.loss_table_name)
 
-        self.performance_table_name = []
+        self.training_performance_table_name = []
         if self.task in [Task.CLS, Task.MultiTask]:
-            self.performance_table_name.append('ACC1')
-            self.performance_table_name.append(f'ACC{self.train_args.topk}')
-        if self.task in [Task.SEG, Task.MultiTask]:
-            self.performance_table_name.append('MIoU')
+            # [ACC1,ACCk]
+            self.training_performance_table_name.append('ACC1')
+            self.training_performance_table_name.append(f'ACC{self.train_args.topk}')
 
-        self.write_csv(self.performance_log_path, self.performance_table_name)
+            # [Time,Epoch,Top1]
+            self.val_top1_table_name.append(f'Top1{self.train_args.topk}')
+
+        if self.task in [Task.SEG, Task.MultiTask]:
+            # [MIoU]
+            self.training_performance_table_name.append('MIoU')
+
+            # [Time,Epoch,MIoU]
+            self.val_miou_table_name.append('MIoU')
+
+        self.write_csv(self.training_performance_log_path, self.training_performance_table_name)
 
     def init_model(self) -> None:
         self.model = build_model(asdict(self.model_args))
@@ -412,7 +432,7 @@ class Pipline:
             self.lr_scheduler.step()
 
         datas: tuple
-        for i, datas in enumerate(zip(*dataloaders)):
+        for curr_step, datas in enumerate(zip(*dataloaders)):
             if self.task == Task.MultiTask:
                 cls_data, seg_data = datas
             else:
@@ -439,21 +459,21 @@ class Pipline:
                 images = self.move_to_device(images)
                 targets = self.move_to_device(targets)
 
+                # AMP training
                 with self.amp_optimizer_wrapper.optim_context():
 
                     # Model forward
                     model_output = self.forward_with_train(images)
 
                     # Loss forward
-                    loss: BaseLossForward
-                    for loss in self.losses[curr_task.value]:  # loss1->loss2->...
-                        loss.model_output = model_output
-                        loss.targets = targets
+                    loss_runner: BaseLossRunner
+                    for loss_runner in self.losses[curr_task.value]:  # loss1->loss2->...
+                        loss_runner.model_output = model_output
+                        loss_runner.targets = targets
 
                         curr_bs = targets.shape[0]
 
-                        # self.loss_results[curr_task.value].append(loss.forward())
-                        loss_results.append(loss.forward())
+                        loss_results.append(loss_runner.forward())
 
                 curr_performance: dict = calc_performance(
                     curr_task,
@@ -466,17 +486,41 @@ class Pipline:
                     performances.append(v)
 
             loss_sum = self.loss_sum(loss_results)
+
+            # Update loss and performance
             self.update_loss_log(loss_results, curr_bs)
+            self.update_performance_log(performances, curr_bs)
 
             # Update optimizer
             self.amp_optimizer_wrapper.update_params(loss_sum)
 
             # Update lr
             if self.scheduler_step_in_batch is True:
-                self.lr_scheduler.step(self.train_args.epoch + i / self.step)
+                self.lr_scheduler.step(self.train_args.epoch + curr_step / self.total_step)
 
+            if curr_step % self.train_args.print_freq == 0:
+                self.train_logger.display(curr_step, self.train_args.epoch)
+
+    @timer
     def val(self):
         self.model.eval()
+        self.val_logger.clear()
+        for task in self.loss_args.keys():
+            task = task_convert(task)
+
+            if task == Task.SEG:
+                avg_miou = round(self.val_logger.MIoU.avg, 4)
+                print(f'Segmentation Val MIoU(Avg): {avg_miou}')
+                self.write_csv(self.val_miou_log_path, [get_time(), self.train_args.epoch, avg_miou])
+
+
+            else:  # task == Task.CLS
+                top1 = round(self.val_logger.top1.avg, 4)
+                print(
+                    f'Classification Val Top1(Avg): {top1} '
+                    f'Top{self.train_args.topk}(Avg): {round(self.val_logger.topn.avg, 4)}'
+                )
+                self.write_csv(self.val_top1_log_path, [get_time(), self.train_args.epoch, top1])
 
     def update_loss_log(
             self,
@@ -492,12 +536,24 @@ class Pipline:
         total_seg_loss = 0
 
         # losses = self.to_constant(losses)
+        # new_losses=[loss1*w1,loss2*w2,loss3*w3,...]
         new_losses = []
         for weight, loss in zip(self.losses_weights, losses):
             new_losses.append(weight * loss)
 
-        for loss_type, loss_items in self.loss_args.items():  # Classification or Segmentation
-            for i in range(len(loss_items.items())):
+        """
+        classification:
+            loss1: xxx
+            loss2: xxx
+        segmentation:
+            loss1: xxx
+            loss2: xxx   
+        """
+        for loss_type, loss_items in self.loss_args.items():
+
+            num_of_loss = len(loss_items.items())
+            for i in range(num_of_loss):
+
                 if loss_type == Task.CLS.value:
                     total_cls_loss += new_losses.pop(0)
 
@@ -515,16 +571,28 @@ class Pipline:
             performances: list,
             batch_size: Optional[int] = 1
     ) -> None:
-        for loss_type, loss_items in self.loss_args.items():
+
+        performances = list(map(lambda x: round(x, 2), performances))
+
+        tmp_performances = []
+        for task in self.loss_args.keys():
+            task = task_convert(task)
+
             if task in [Task.CLS, Task.MultiTask]:
                 self.train_logger.top1.update(performances[0], batch_size)
                 self.train_logger.topn.update(performances[1], batch_size)
+                tmp_performances.append(performances[0])
+                tmp_performances.append(performances[1])
 
             if task == Task.SEG:
                 self.train_logger.MIoU.update(performances[0], batch_size)
+                tmp_performances.append(performances[1])
 
             if task == Task.MultiTask:
                 self.train_logger.MIoU.update(performances[2], batch_size)
+                tmp_performances.append(performances[2])
+
+        self.write_csv(self.training_performance_log_path, tmp_performances)
 
     def loss_sum(self, loss_result: List[torch.Tensor]) -> torch.Tensor:
 

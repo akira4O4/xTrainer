@@ -8,15 +8,15 @@ import torch.nn.functional as F
 from loss import PeriodLoss, DiceLoss
 
 __all__ = [
-    'BaseLossForward',
-    'CrossEntropyLossForward',
-    'DiceLossForward',
-    'PeriodLossForward',
+    'BaseLossRunner',
+    'CrossEntropyLossRunner',
+    'DiceLossRunner',
+    'PeriodLossRunner',
     'LOSS_FORWARD_TABLE'
 ]
 
 
-class BaseLossForward:
+class BaseLossRunner:
     def __init__(
             self,
             model_output: Optional[torch.Tensor] = None,
@@ -49,7 +49,7 @@ class BaseLossForward:
         ...
 
 
-class CrossEntropyLossForward(BaseLossForward):
+class CrossEntropyLossRunner(BaseLossRunner):
     def __init__(
             self,
             model_output: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
@@ -77,7 +77,7 @@ class CrossEntropyLossForward(BaseLossForward):
         return _loss
 
 
-class PeriodLossForward(BaseLossForward):
+class PeriodLossRunner(BaseLossRunner):
     def __init__(
             self,
             model_output: Optional[List[torch.Tensor]] = None,
@@ -124,7 +124,7 @@ class PeriodLossForward(BaseLossForward):
         return _loss
 
 
-class DiceLossForward(BaseLossForward):
+class DiceLossRunner(BaseLossRunner):
     def __init__(
             self,
             model_output: Optional[List[torch.Tensor]] = None,
@@ -174,7 +174,7 @@ class DiceLossForward(BaseLossForward):
 
 
 LOSS_FORWARD_TABLE = {
-    'CrossEntropyLoss': CrossEntropyLossForward,
-    'PeriodLoss': PeriodLossForward,
-    'DiceLoss': DiceLossForward,
+    'CrossEntropyLoss': CrossEntropyLossRunner,
+    'PeriodLoss': PeriodLossRunner,
+    'DiceLoss': DiceLossRunner,
 }

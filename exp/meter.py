@@ -75,7 +75,7 @@ class Logger:
         self.top1 = None
         self.topn = None
         self.MIoU = None
-        self.loss_seg = None
+        self.seg_loss = None
 
         if self.task in [Task.CLS, Task.MultiTask]:
             self.cls_loss = AverageMeter('Classification Loss', f':.{8}e')  # 8e
@@ -85,8 +85,8 @@ class Logger:
 
         if self.task in [Task.SEG, Task.MultiTask]:
             self.MIoU = AverageMeter(f"MIoU", f':{6}.{2}f')  # 6.2
-            self.loss_seg = AverageMeter('Segmentation Loss', f':.{8}e')  # 8e
-            self._seg_meters += [self.loss_seg, self.MIoU]
+            self.seg_loss = AverageMeter('Segmentation Loss', f':.{8}e')  # 8e
+            self._seg_meters += [self.seg_loss, self.MIoU]
 
     def set_total_step(self, step: int) -> None:
         self._total_step = step
@@ -112,8 +112,8 @@ class Logger:
         if self.cls_loss:
             self.cls_loss.reset()
 
-        if self.loss_seg:
-            self.loss_seg.reset()
+        if self.seg_loss:
+            self.seg_loss.reset()
 
         if self.top1:
             self.top1.reset()
