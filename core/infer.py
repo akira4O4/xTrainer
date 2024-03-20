@@ -17,6 +17,8 @@ from helper.precision import data_precision
 from utils.util import get_images, recursion_bunch, check_exists, color_list, Task
 from utils.util import task_convert, join
 from augment.transforms import ClsTransform, SegTransform
+from utils.util import timer
+import time
 
 __all__ = ['Infer']
 
@@ -223,6 +225,7 @@ class Infer:
                 f'[NG_Label]:{ng_pred_label}\n'
             )
 
+    @timer
     def segmentation_postprocessing(
             self,
             image: str,

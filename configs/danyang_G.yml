@@ -19,7 +19,7 @@ model_config:
   num_classes: 2
   pretrained: False
   model_path: /home/main/llf/code/DLFv2/project/danyang_G/weights/20240120_182825_Epoch27_Acc99.849_lr5e-06_BestModel.pth
-  gpu: 1 # -1==cpu
+  gpu: 0 # -1==cpu
   strict: True
   map_location: cpu
 
@@ -80,8 +80,9 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\data\danyang\20240112\1.12B\good-g
-  weight: D:\code\DLFv2\project\danyang_G\weights\20240113_044345__Epoch39_Acc100.0_lr1.9e-05_Model.pth
+#  test_dir: D:\llf\dataset\danyang\2024_dataset\20240316-bad-dl\G
+  test_dir: D:\llf\dataset\danyang\2024_dataset\20240316-good-dl\good-g
+  weight: D:\llf\code\pytorch-lab\project\danyang_G\weights\20240316_030113_Epoch95_Acc100.0_lr4e-06_BestModel.pth
   # batch_size: 1
   good_idx: 0
   sum_method: true

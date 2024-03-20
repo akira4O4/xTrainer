@@ -59,13 +59,13 @@ if __name__ == '__main__':
     # model = multi_task_shufflenet_v2_x1_0(num_classes=cls, mask_classes=seg_cls)
 
     # G
-    # model_path = r"D:\code\DLFv2\project\danyang_G\weights\20240121_151542_Epoch20_Acc99.9925_lr5e-05_BestModel.pth"
-    # bs = 1
-    # wh = [480, 480]
-    # cls = 2
-    # onnx_name = f'{curr_time}_danyang_G_bs{bs}.onnx'
-    # output_names = ['output1']
-    # model = shufflenet_v2_x1_0(num_classes=cls)
+    model_path = r"D:\llf\code\pytorch-lab\project\danyang_G\weights\20240316_030113_Epoch95_Acc100.0_lr4e-06_BestModel.pth"
+    bs = 1
+    wh = [480, 480]
+    cls = 2
+    onnx_name = f'{curr_time}_danyang_G_cls{cls}_bs{bs}.onnx'
+    output_names = ['output1']
+    model = shufflenet_v2_x1_0(num_classes=cls)
 
     # gz sapa xiansao
     # model_path = r"D:\code\DLFv2\project\gz_sapa_xiansao\weights\checkpoint.pth"
@@ -87,14 +87,14 @@ if __name__ == '__main__':
     # model = seg_shufflenet_v2_x1_0(mask_classes=seg_cls)
 
     # C2
-    model_path = r"D:\llf\code\pytorch-lab\project\danyang_C2\20240121_000636_Epoch44_Acc99.7782_lr9e-06_BestModel.pth"
-    bs = 1
-    wh = [480, 480]
-    cls = 3
-    onnx_name = f'{curr_time}_danyang_C2_cls_bs{bs}.onnx'
+    # model_path = r"D:\llf\code\pytorch-lab\project\danyang_C2\20240121_000636_Epoch44_Acc99.7782_lr9e-06_BestModel.pth"
+    # bs = 1
+    # wh = [480, 480]
+    # cls = 3
+    # onnx_name = f'{curr_time}_danyang_C2_cls_bs{bs}.onnx'
     # onnx_name = f'{curr_time}_danyang_C2_cls{cls}_bs{bs}.onnx'
-    output_names = ['output1']
-    model = shufflenet_v2_x1_0(num_classes=cls)
+    # output_names = ['output1']
+    # model = shufflenet_v2_x1_0(num_classes=cls)
 
     export_args = {
         'opset_version': 12,

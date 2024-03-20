@@ -116,8 +116,8 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\data\0danyang\2040116\B\good-e
-  weight: D:\code\DLFv2\project\danyang_E_mt_exp2\20240117_101939_Epoch95_Acc99.9864_MIoU0.9786_lr8e-06_BestModel.pth
+  test_dir: C:\Users\Lee Linfeng\Desktop\tmp-w480h480
+  weight: D:\llf\code\pytorch-lab\project\danyang_F_seg_exp2\weights\20240124_170013_Epoch99_MIoU0.9455_lr4e-06_BestModel.pth
   good_idx: 0
   sum_method: true
   need_segment: true

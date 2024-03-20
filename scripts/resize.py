@@ -4,9 +4,9 @@ from utils.util import get_images
 from tqdm import tqdm
 
 if __name__ == '__main__':
-    root = r'C:\Users\Lee Linfeng\Desktop\tmp'
+    root = r'D:\llf\dataset\danyang\2024_dataset\20240311_bad_E-done\e\cls'
 
-    wh = (1408, 1024)
+    wh = (576, 576)
     output = root + f'-w{wh[0]}h{wh[1]}'
 
     if not os.path.exists(output):
