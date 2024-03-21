@@ -25,7 +25,12 @@ class BaseLossRunner:
         self._model_output = model_output
         self._targets = targets
         self.loss = None
+        self._loss_val: float = -1.0
         self._loss_name = ''
+
+    @property
+    def loss_val(self) -> float:
+        return round(self._loss_val, 6)
 
     @property
     def loss_name(self) -> str:

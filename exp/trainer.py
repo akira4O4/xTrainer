@@ -23,6 +23,7 @@ from .optim import AmpOptimWrapper
 from .loss_forward import *
 # from .meter import Logger
 from .performance import calc_performance
+from .data_logger import DataLogger
 from mlflow import log_metric, log_param, set_experiment
 
 
@@ -138,9 +139,18 @@ class Trainer:
 
         self.train_logger = None
         self.val_logger = None
-        # self.init_logger()
+
+        self.training_top1_data_logger: DataLogger
+        self.training_topk_data_logger: DataLogger
+        self.training_miou_data_logger: DataLogger
+
+        self.val_top1_data_logger: DataLogger
+        self.val_topk_data_logger: DataLogger
+        self.val_miou_data_logger: DataLogger
+
+        self.init_logger()
+
         self.init_mlflow()
-        logger.info('Training...')
         logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
 
     def backup_config(self) -> None:
@@ -168,40 +178,17 @@ class Trainer:
         build_dir(self.logs_dir)
         build_dir(self.weights_dir)
 
-    # def init_logger(self):
-    #     self.train_logger = Logger(
-    #         task=self.task,
-    #         total_step=self.total_step,
-    #         prefix=f"🚀 [Train:{self.task.value}]"
-    #     )
-    #     self.val_logger = Logger(
-    #         task=self.task,
-    #         prefix="🚀 [Val]"
-    #     )
-    #
-    #     self.loss_table_name = []
-    #     for loss_type, loss_item in self.loss_args.items():
-    #         for loss_name in loss_item.keys():
-    #             self.loss_table_name.append(loss_name)
-    #     self.write_csv(self.loss_log_path, self.loss_table_name)
-    #
-    #     self.training_performance_table_name = []
-    #     if self.task in [Task.CLS, Task.MultiTask]:
-    #         # [ACC1,ACCk]
-    #         self.training_performance_table_name.append('ACC1')
-    #         self.training_performance_table_name.append(f'ACC{self.train_args.topk}')
-    #
-    #         # [Time,Epoch,Top1]
-    #         self.val_top1_table_name.append(f'Top1{self.train_args.topk}')
-    #
-    #     if self.task in [Task.SEG, Task.MultiTask]:
-    #         # [MIoU]
-    #         self.training_performance_table_name.append('MIoU')
-    #
-    #         # [Time,Epoch,MIoU]
-    #         self.val_miou_table_name.append('MIoU')
-    #
-    #     self.write_csv(self.training_performance_log_path, self.training_performance_table_name)
+    def init_logger(self):
+        self.training_top1_data_logger = DataLogger('Training Top1')
+        self.training_topk_data_logger = DataLogger(f'Training Top{self.train_args.topk}')
+        self.training_miou_data_logger = DataLogger('Training MIoU')
+
+        self.val_top1_data_logger = DataLogger('Val Top1')
+        self.val_topk_data_logger = DataLogger(f'Val Top{self.train_args.topk}')
+        self.val_miou_data_logger = DataLogger('Val MIoU')
+
+        self.classification_loss_data_logger = DataLogger('Classification Loss')
+        self.segmentation_loss_data_logger = DataLogger('Segmentation Loss')
 
     def init_model(self) -> None:
         self.model = build_model(asdict(self.model_args))
@@ -360,13 +347,13 @@ class Trainer:
         if self.task in [Task.MultiTask, Task.CLS]:
             self.losses.update({'classification': []})  # noqa
 
-            for loss_name, loss_params in self.loss_args['classification'].items():
-                log_metric(loss_name, 0)
+            # for loss_name, loss_params in self.loss_args['classification'].items():
+            #     log_metric(loss_name, 0)
 
         if self.task in [Task.MultiTask, Task.SEG]:
             self.losses.update({'segmentation': []})  # noqa
-            for loss_name, loss_params in self.loss_args['segmentation']:
-                log_metric(loss_name, 0)
+            # for loss_name, loss_params in self.loss_args['segmentation']:
+            #     log_metric(loss_name, 0)
 
         self.losses_weights = self.loss_args.pop('losses_weights')
 
@@ -464,9 +451,6 @@ class Trainer:
 
             input_data = None
             loss_results = {}  # [loss_res1,loss_res2,...]
-            # performances = []  # {acc1:a,accn:b,miou:c}
-            curr_bs: int = 1
-
             # curr_task=classification or segmentation
             for loss_type in self.loss_args.keys():
 
@@ -488,37 +472,56 @@ class Trainer:
                     model_output = self.forward_with_train(images)
 
                 # Loss forward
+                # loss1->loss2->...
                 loss_runner: BaseLossRunner
-                for loss_runner in self.losses[loss_type.value]:  # loss1->loss2->...
+                for loss_runner in self.losses[loss_type.value]:
                     loss_runner.model_output = model_output
                     loss_runner.targets = targets
 
-                    curr_bs = targets.shape[0]
-
                     with self.amp_optimizer_wrapper.optim_context():
-                        loss_ret = loss_runner.forward()  # noqa
-                        loss_results.update({loss_runner.loss_name: loss_ret})
+                        loss_val = loss_runner.forward()  # noqa
 
-                curr_performance: dict = calc_performance(
+                    assert not torch.any(torch.isnan(loss_val))
+                    loss_results.update({loss_runner.loss_name: loss_val})
+
+                training_performance: dict = calc_performance(
                     loss_type,
                     self.train_args.topk,
                     self.model_args.mask_classes,
                     model_output,
                     targets
                 )
-                self.update_performance_log(curr_performance, curr_bs)
+                if loss_type == Task.CLS:
+                    self.training_top1_data_logger.update(training_performance['acc1'])
+                    self.training_topk_data_logger.update(training_performance['accn'])
+                if loss_type == Task.SEG:
+                    self.training_miou_data_logger.update(training_performance['miou'])
 
-            loss_sum = self.loss_sum(loss_results)
-            log_metric('Sum Of Loss', self.to_constant(loss_sum))
+            self.update_training_performance_to_mlflow('batch_size')
 
             # Update optimizer
+            loss_sum = self.loss_sum(loss_results)
             self.amp_optimizer_wrapper.update_params(loss_sum)
+
+            self.update_training_loss_to_mlflow(loss_results, 'batch_size')
+            log_metric('Sum of Loss', self.to_constant(loss_sum))
 
             # Update lr
             if self.scheduler_step_in_batch is True:
                 self.lr_scheduler.step(self.train_args.epoch + curr_step / self.total_step)
 
-            self.update_loss_log(loss_results, curr_bs)
+            # Easy info display
+            if curr_step % self.train_args.print_freq == 0:
+                print(
+                    f'🚀[Training] Epoch:[{self.train_args.epoch}/{self.train_args.max_epoch}] '
+                    f'Step:[{curr_step}/{self.total_step}]...'
+                )
+
+        self.update_training_performance_to_mlflow('epoch')
+        self.update_training_loss_to_mlflow(batch_or_epoch='epoch')
+        self.training_top1_data_logger.reset()
+        self.training_topk_data_logger.reset()
+        self.training_miou_data_logger.reset()
 
     # @timer
     def val(self):
@@ -567,51 +570,48 @@ class Trainer:
     def segmentation_val(self):
         ...
 
-    def update_loss_log(
+    def update_training_loss_to_mlflow(
             self,
-            loss_results: dict,
-            batch_size: Optional[int] = 1
+            loss_results: Optional[dict] = None,
+            batch_or_epoch: Optional[str] = None
     ) -> None:
+        if batch_or_epoch == 'batch_size':
 
-        for k, v in loss_results.items():
-            loss_results[k] = round(self.to_constant(v), 8)
-        """
-        classification:
-            loss1: xxx
-            loss2: xxx
-        segmentation:
-            loss1: xxx
-            loss2: xxx   
-        """
-        for loss_type, loss_item in self.loss_args.items():
-            for loss_name, loss_params in self.loss_args[loss_type].items():
-                log_metric(loss_name, loss_results[loss_name] / batch_size)
-                logger.debug(f'{loss_name}: {loss_results[loss_name] / batch_size}')
+            for k, v in loss_results.items():
+                loss_results[k] = round(self.to_constant(v), 8)
 
-    def update_performance_log(
-            self,
-            performance: dict,
-            batch_size: Optional[int] = 1
-    ) -> None:
+            for kv, weight in zip(loss_results.items(), self.losses_weights):
+                loss_name, loss_val = kv
+                loss_results[loss_name] = loss_val * weight
 
-        for k, v in performance.items():
-            performance[k] = round(v, 2)
+            for loss_type, loss_item in self.loss_args.items():
+                for loss_name, loss_params in self.loss_args[loss_type].items():
 
-        for loss_type in self.loss_args.keys():
-            loss_type = task_convert(loss_type)
+                    if task_convert(loss_type) == Task.CLS:
+                        self.classification_loss_data_logger.update(loss_results[loss_name])
+                    elif task_convert(loss_type) == Task.SEG:
+                        self.segmentation_loss_data_logger.update(loss_results[loss_name])
 
-            if loss_type in [Task.CLS, Task.MultiTask]:
-                logger.debug(performance['acc1'])
-                log_metric('Training Top1', performance['acc1'] / batch_size)
-                log_metric(f'Training Top{self.train_args.topk}', performance['accn'])
-                log_metric('Training MIoU', 0)
+                    log_metric(f'One Batch {loss_name}', loss_results[loss_name])
 
-            if loss_type == Task.SEG:
-                log_metric('Training MIoU', performance['miou'])
+        elif batch_or_epoch == 'epoch':
+            log_metric('Classification Total Loss', self.classification_loss_data_logger.avg)
+            log_metric('Segmentation Total Loss', self.segmentation_loss_data_logger.avg)
 
-            if loss_type == Task.MultiTask:
-                log_metric('Training Top1', performance['acc1'] / batch_size)
-                log_metric(f'Training Top{self.train_args.topk}', performance['accn'] / batch_size)
+    def update_val_performance_to_mlflow(self) -> None:
+        log_metric('Val Top1', self.val_top1_data_logger.avg)
+        log_metric(f'Val Top{self.train_args.topk}', self.val_topk_data_logger.avg)
+        log_metric('Val MIoU', self.val_miou_data_logger.avg)
+
+    def update_training_performance_to_mlflow(self, batch_size_or_epoch: str = 'batch_size') -> None:
+        if batch_size_or_epoch == 'batch_size':
+            log_metric('One Batch Training Top1', self.training_top1_data_logger.curr_val)
+            log_metric(f'One Batch Training Top{self.train_args.topk}', self.training_topk_data_logger.curr_val)
+            log_metric('One Batch Training MIoU', self.training_miou_data_logger.curr_val)
+        else:
+            log_metric('One Epoch Training Top1', self.training_top1_data_logger.avg)
+            log_metric(f'One Epoch Training Top{self.train_args.topk}', self.training_topk_data_logger.avg)
+            log_metric('One Epoch Training MIoU', self.training_miou_data_logger.avg)
 
     def loss_sum(self, loss_results: dict) -> torch.Tensor:
 
