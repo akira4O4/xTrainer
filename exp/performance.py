@@ -47,23 +47,25 @@ def calc_miou(
 
 def calc_performance(
         task: Task,
-        topk: Optional[int],
-        mask_classes: Optional[int],
-        model_output,
-        targets: torch.Tensor
+        topk: Optional[int] = 2,
+        mask_classes: Optional[int] = 0,
+        model_output=None,
+        targets: torch.Tensor = None
 ) -> dict:
-    performance = {}
+    performance = {
+        'acc1': -1,
+        'accn': -1,
+        'miou': -1
+    }
 
     if task == Task.SEG:
         miou = calc_miou(mask_classes, model_output, targets)
-        performance.update({'miou': miou.item()})
+        performance['miou'] = miou.item()
 
     elif task == Task.CLS:
         acc1, accn = calc_accuracy(topk, model_output, targets)
 
-        performance.update({
-            'acc1': acc1.item(),
-            'accn': accn.item()
-        })
+        performance['acc1'] = acc1.item()
+        performance['accn'] = accn.item()
 
     return performance

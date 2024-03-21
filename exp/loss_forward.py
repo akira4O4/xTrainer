@@ -25,6 +25,11 @@ class BaseLossRunner:
         self._model_output = model_output
         self._targets = targets
         self.loss = None
+        self._loss_name = ''
+
+    @property
+    def loss_name(self) -> str:
+        return self._loss_name
 
     @property
     def model_output(self):
@@ -58,6 +63,7 @@ class CrossEntropyLossRunner(BaseLossRunner):
     ):
         super().__init__(model_output, targets)
         self.kwargs = kwargs
+        self._loss_name = 'CrossEntropyLoss'
 
     def build(self):
         self.loss = nn.CrossEntropyLoss(**self.kwargs)
@@ -90,6 +96,7 @@ class PeriodLossRunner(BaseLossRunner):
         self.kwargs = kwargs
         self._weight = weight
         self._device = device
+        self._loss_name = 'PeriodLoss'
 
     @property
     def weight(self):
@@ -132,9 +139,10 @@ class DiceLossRunner(BaseLossRunner):
             layer_weights: Optional[List] = None,
             **kwargs
     ):
+        super().__init__(model_output, targets)
         self._layer_weights = layer_weights
         self.kwargs = kwargs
-        super().__init__(model_output, targets)
+        self._loss_name = 'DiceLoss'
 
     @property
     def layer_weights(self):

@@ -9,7 +9,7 @@ import torch
 from loguru import logger
 from dataclasses import asdict
 from torch.utils.data import DataLoader, Dataset
-
+from tqdm import tqdm
 from utils.util import load_yaml, get_num_of_images, timer, get_time
 from .task import Task, task_convert
 from .args import ProjectArgs, TrainArgs, ModelArgs
@@ -21,11 +21,12 @@ from .transforms import ClassificationTransform, SegmentationTransform
 from .model import Model
 from .optim import AmpOptimWrapper
 from .loss_forward import *
-from .meter import Logger
+# from .meter import Logger
 from .performance import calc_performance
+from mlflow import log_metric, log_param, set_experiment
 
 
-class Pipline:
+class Trainer:
     def __init__(self, config_path: str):
 
         # Check config path
@@ -137,10 +138,17 @@ class Pipline:
 
         self.train_logger = None
         self.val_logger = None
-        self.init_logger()
+        # self.init_logger()
+        self.init_mlflow()
+        logger.info('Training...')
+        logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
 
     def backup_config(self) -> None:
         shutil.copy(self.config_path, self.curr_exp_path)
+
+    def init_mlflow(self) -> None:
+        set_experiment(self.project_args.experiment_name)
+        logger.info(f'MLFlow Experiment Name:{self.project_args.experiment_name}')
 
     def init_workspace(self) -> None:
         time = get_time()
@@ -160,40 +168,40 @@ class Pipline:
         build_dir(self.logs_dir)
         build_dir(self.weights_dir)
 
-    def init_logger(self):
-        self.train_logger = Logger(
-            task=self.task,
-            total_step=self.total_step,
-            prefix=f"🚀 [Train:{self.task.value}]"
-        )
-        self.val_logger = Logger(
-            task=self.task,
-            prefix="🚀 [Val]"
-        )
-
-        self.loss_table_name = []
-        for loss_type, loss_item in self.loss_args.items():
-            for loss_name in loss_item.keys():
-                self.loss_table_name.append(loss_name)
-        self.write_csv(self.loss_log_path, self.loss_table_name)
-
-        self.training_performance_table_name = []
-        if self.task in [Task.CLS, Task.MultiTask]:
-            # [ACC1,ACCk]
-            self.training_performance_table_name.append('ACC1')
-            self.training_performance_table_name.append(f'ACC{self.train_args.topk}')
-
-            # [Time,Epoch,Top1]
-            self.val_top1_table_name.append(f'Top1{self.train_args.topk}')
-
-        if self.task in [Task.SEG, Task.MultiTask]:
-            # [MIoU]
-            self.training_performance_table_name.append('MIoU')
-
-            # [Time,Epoch,MIoU]
-            self.val_miou_table_name.append('MIoU')
-
-        self.write_csv(self.training_performance_log_path, self.training_performance_table_name)
+    # def init_logger(self):
+    #     self.train_logger = Logger(
+    #         task=self.task,
+    #         total_step=self.total_step,
+    #         prefix=f"🚀 [Train:{self.task.value}]"
+    #     )
+    #     self.val_logger = Logger(
+    #         task=self.task,
+    #         prefix="🚀 [Val]"
+    #     )
+    #
+    #     self.loss_table_name = []
+    #     for loss_type, loss_item in self.loss_args.items():
+    #         for loss_name in loss_item.keys():
+    #             self.loss_table_name.append(loss_name)
+    #     self.write_csv(self.loss_log_path, self.loss_table_name)
+    #
+    #     self.training_performance_table_name = []
+    #     if self.task in [Task.CLS, Task.MultiTask]:
+    #         # [ACC1,ACCk]
+    #         self.training_performance_table_name.append('ACC1')
+    #         self.training_performance_table_name.append(f'ACC{self.train_args.topk}')
+    #
+    #         # [Time,Epoch,Top1]
+    #         self.val_top1_table_name.append(f'Top1{self.train_args.topk}')
+    #
+    #     if self.task in [Task.SEG, Task.MultiTask]:
+    #         # [MIoU]
+    #         self.training_performance_table_name.append('MIoU')
+    #
+    #         # [Time,Epoch,MIoU]
+    #         self.val_miou_table_name.append('MIoU')
+    #
+    #     self.write_csv(self.training_performance_log_path, self.training_performance_table_name)
 
     def init_model(self) -> None:
         self.model = build_model(asdict(self.model_args))
@@ -241,6 +249,10 @@ class Pipline:
 
         cls_expanding_rate *= math.ceil(difference / cls_train_num_of_images)
         seg_expanding_rate *= math.ceil(difference / seg_train_num_of_images)
+
+        log_param('cls data expanding rate', cls_expanding_rate)
+        log_param('seg data expanding rate', seg_expanding_rate)
+
         return cls_expanding_rate, seg_expanding_rate
 
     def build_classification_dataset_and_dataloader(self) -> None:
@@ -348,8 +360,13 @@ class Pipline:
         if self.task in [Task.MultiTask, Task.CLS]:
             self.losses.update({'classification': []})  # noqa
 
+            for loss_name, loss_params in self.loss_args['classification'].items():
+                log_metric(loss_name, 0)
+
         if self.task in [Task.MultiTask, Task.SEG]:
             self.losses.update({'segmentation': []})  # noqa
+            for loss_name, loss_params in self.loss_args['segmentation']:
+                log_metric(loss_name, 0)
 
         self.losses_weights = self.loss_args.pop('losses_weights')
 
@@ -362,7 +379,11 @@ class Pipline:
                     })
                 self.losses[loss_type].append(build_loss(name, **args))
 
-    def forward_with_train(self, images: torch.Tensor, ) -> Union[torch.Tensor, List[torch.Tensor]]:
+        if not self.losses:
+            logger.error('Loss is empty.')
+            return
+
+    def forward_with_train(self, images: torch.Tensor) -> Union[torch.Tensor, List[torch.Tensor]]:
 
         if images is None:
             logger.error('Images is None')
@@ -375,7 +396,7 @@ class Pipline:
 
         return model_output
 
-    def forward_with_val(self, images: torch.Tensor, ) -> Union[torch.Tensor, List[torch.Tensor]]:
+    def forward_with_val(self, images: torch.Tensor) -> Union[torch.Tensor, List[torch.Tensor]]:
 
         if images is None:
             logger.error('Images is None')
@@ -410,16 +431,19 @@ class Pipline:
 
                     if mode == 'train':
                         self.train_args.epoch += 1
+                        log_metric('Training Epoch', self.train_args.epoch)
                     elif mode == 'val':
                         ...
 
-    @timer
+    # @timer
     def train(self):
 
         self.model.train()
 
         self.amp_optimizer_wrapper.step()
-        self.amp_optimizer_wrapper.show_lr()
+        # self.amp_optimizer_wrapper.show_lr()
+
+        log_metric('Lr', self.amp_optimizer_wrapper.lr[0])
 
         dataloaders = []
         if self.task in [Task.CLS, Task.MultiTask]:
@@ -439,20 +463,20 @@ class Pipline:
                 cls_data = seg_data = datas[0]  # cls or seg training
 
             input_data = None
-            loss_results = []  # [loss_res1,loss_res2,...]
-            performances = []  # {acc1:a,accn:b,miou:c}
+            loss_results = {}  # [loss_res1,loss_res2,...]
+            # performances = []  # {acc1:a,accn:b,miou:c}
             curr_bs: int = 1
 
             # curr_task=classification or segmentation
-            for curr_task in self.loss_args.keys():
+            for loss_type in self.loss_args.keys():
 
                 # Get the classification data or segmentation data
-                if curr_task == Task.CLS.value:
+                if loss_type == Task.CLS.value:
                     input_data = cls_data
-                elif curr_task == Task.SEG.value:
+                elif loss_type == Task.SEG.value:
                     input_data = seg_data
 
-                curr_task = task_convert(curr_task)
+                loss_type = task_convert(loss_type)
 
                 # Move to device
                 images, targets = input_data
@@ -461,35 +485,31 @@ class Pipline:
 
                 # AMP training
                 with self.amp_optimizer_wrapper.optim_context():
-
-                    # Model forward
                     model_output = self.forward_with_train(images)
 
-                    # Loss forward
-                    loss_runner: BaseLossRunner
-                    for loss_runner in self.losses[curr_task.value]:  # loss1->loss2->...
-                        loss_runner.model_output = model_output
-                        loss_runner.targets = targets
+                # Loss forward
+                loss_runner: BaseLossRunner
+                for loss_runner in self.losses[loss_type.value]:  # loss1->loss2->...
+                    loss_runner.model_output = model_output
+                    loss_runner.targets = targets
 
-                        curr_bs = targets.shape[0]
+                    curr_bs = targets.shape[0]
 
-                        loss_results.append(loss_runner.forward())
+                    with self.amp_optimizer_wrapper.optim_context():
+                        loss_ret = loss_runner.forward()  # noqa
+                        loss_results.update({loss_runner.loss_name: loss_ret})
 
                 curr_performance: dict = calc_performance(
-                    curr_task,
+                    loss_type,
                     self.train_args.topk,
                     self.model_args.mask_classes,
                     model_output,
                     targets
                 )
-                for k, v in curr_performance.items():
-                    performances.append(v)
+                self.update_performance_log(curr_performance, curr_bs)
 
             loss_sum = self.loss_sum(loss_results)
-
-            # Update loss and performance
-            self.update_loss_log(loss_results, curr_bs)
-            self.update_performance_log(performances, curr_bs)
+            log_metric('Sum Of Loss', self.to_constant(loss_sum))
 
             # Update optimizer
             self.amp_optimizer_wrapper.update_params(loss_sum)
@@ -498,49 +518,63 @@ class Pipline:
             if self.scheduler_step_in_batch is True:
                 self.lr_scheduler.step(self.train_args.epoch + curr_step / self.total_step)
 
-            if curr_step % self.train_args.print_freq == 0:
-                self.train_logger.display(curr_step, self.train_args.epoch)
+            self.update_loss_log(loss_results, curr_bs)
 
-    @timer
+    # @timer
     def val(self):
         self.model.eval()
-        self.val_logger.clear()
-        for task in self.loss_args.keys():
-            task = task_convert(task)
+        # self.val_logger.clear()
+        # for task in self.loss_args.keys():
+        #     task = task_convert(task)
+        #
+        #     if task == Task.SEG:
+        #         avg_miou = round(self.val_logger.MIoU.avg, 4)
+        #         print(f'Segmentation Val MIoU(Avg): {avg_miou}')
+        #         # self.write_csv(self.val_miou_log_path, [get_time(), self.train_args.epoch, avg_miou])
+        #
+        #     # task == Task.CLS
+        #     else:
+        #         top1 = round(self.val_logger.top1.avg, 4)
+        #         print(
+        #             f'Classification Val Top1(Avg): {top1} '
+        #             f'Top{self.train_args.topk}(Avg): {round(self.val_logger.topn.avg, 4)}'
+        #         )
+        # self.write_csv(self.val_top1_log_path, [get_time(), self.train_args.epoch, top1])
 
-            if task == Task.SEG:
-                avg_miou = round(self.val_logger.MIoU.avg, 4)
-                print(f'Segmentation Val MIoU(Avg): {avg_miou}')
-                self.write_csv(self.val_miou_log_path, [get_time(), self.train_args.epoch, avg_miou])
+    def classification_val(self):
+        confusion_matrix = np.zeros((self.model_args.num_classes, self.model_args.num_classes))
 
+        val_performance_data = {
+            'acc1': 0,
+            'accn': 0,
+        }
+        for data in tqdm(self.cls_val_dataloader):
+            images, targets = data
+            # print(targets)
+            images = self.move_to_device(images)
+            targets = self.move_to_device(targets)
 
-            else:  # task == Task.CLS
-                top1 = round(self.val_logger.top1.avg, 4)
-                print(
-                    f'Classification Val Top1(Avg): {top1} '
-                    f'Top{self.train_args.topk}(Avg): {round(self.val_logger.topn.avg, 4)}'
-                )
-                self.write_csv(self.val_top1_log_path, [get_time(), self.train_args.epoch, top1])
+            model_output = self.forward_with_val(images)
+            performance: dict = calc_performance(
+                task=Task.CLS,
+                topk=self.train_args.topk,
+                model_output=model_output,
+                targets=targets
+            )
+            val_performance_data['acc1'] += performance['acc1']
+            val_performance_data['accn'] += performance['accn']
+
+    def segmentation_val(self):
+        ...
 
     def update_loss_log(
             self,
-            losses: Union[np.ndarray, List[torch.Tensor]],
+            loss_results: dict,
             batch_size: Optional[int] = 1
     ) -> None:
 
-        losses = [round(self.to_constant(item), 8) for item in losses]
-
-        self.write_csv(self.loss_log_path, losses)
-
-        total_cls_loss = 0
-        total_seg_loss = 0
-
-        # losses = self.to_constant(losses)
-        # new_losses=[loss1*w1,loss2*w2,loss3*w3,...]
-        new_losses = []
-        for weight, loss in zip(self.losses_weights, losses):
-            new_losses.append(weight * loss)
-
+        for k, v in loss_results.items():
+            loss_results[k] = round(self.to_constant(v), 8)
         """
         classification:
             loss1: xxx
@@ -549,59 +583,46 @@ class Pipline:
             loss1: xxx
             loss2: xxx   
         """
-        for loss_type, loss_items in self.loss_args.items():
-
-            num_of_loss = len(loss_items.items())
-            for i in range(num_of_loss):
-
-                if loss_type == Task.CLS.value:
-                    total_cls_loss += new_losses.pop(0)
-
-                elif loss_type == Task.SEG.value:
-                    total_seg_loss += new_losses.pop(0)
-
-        if self.task in [Task.CLS, Task.MultiTask]:
-            self.train_logger.cls_loss.update(total_cls_loss, batch_size)
-
-        if self.task in [Task.SEG, Task.MultiTask]:
-            self.train_logger.seg_loss.update(total_seg_loss, batch_size)
+        for loss_type, loss_item in self.loss_args.items():
+            for loss_name, loss_params in self.loss_args[loss_type].items():
+                log_metric(loss_name, loss_results[loss_name] / batch_size)
+                logger.debug(f'{loss_name}: {loss_results[loss_name] / batch_size}')
 
     def update_performance_log(
             self,
-            performances: list,
+            performance: dict,
             batch_size: Optional[int] = 1
     ) -> None:
 
-        performances = list(map(lambda x: round(x, 2), performances))
+        for k, v in performance.items():
+            performance[k] = round(v, 2)
 
-        tmp_performances = []
-        for task in self.loss_args.keys():
-            task = task_convert(task)
+        for loss_type in self.loss_args.keys():
+            loss_type = task_convert(loss_type)
 
-            if task in [Task.CLS, Task.MultiTask]:
-                self.train_logger.top1.update(performances[0], batch_size)
-                self.train_logger.topn.update(performances[1], batch_size)
-                tmp_performances.append(performances[0])
-                tmp_performances.append(performances[1])
+            if loss_type in [Task.CLS, Task.MultiTask]:
+                logger.debug(performance['acc1'])
+                log_metric('Training Top1', performance['acc1'] / batch_size)
+                log_metric(f'Training Top{self.train_args.topk}', performance['accn'])
+                log_metric('Training MIoU', 0)
 
-            if task == Task.SEG:
-                self.train_logger.MIoU.update(performances[0], batch_size)
-                tmp_performances.append(performances[1])
+            if loss_type == Task.SEG:
+                log_metric('Training MIoU', performance['miou'])
 
-            if task == Task.MultiTask:
-                self.train_logger.MIoU.update(performances[2], batch_size)
-                tmp_performances.append(performances[2])
+            if loss_type == Task.MultiTask:
+                log_metric('Training Top1', performance['acc1'] / batch_size)
+                log_metric(f'Training Top{self.train_args.topk}', performance['accn'] / batch_size)
 
-        self.write_csv(self.training_performance_log_path, tmp_performances)
+    def loss_sum(self, loss_results: dict) -> torch.Tensor:
 
-    def loss_sum(self, loss_result: List[torch.Tensor]) -> torch.Tensor:
-
-        if len(loss_result) != len(self.losses_weights):
+        if len(loss_results) != len(self.losses_weights):
             logger.error('len(loss_result)!=len(self.losses_weights)')
 
         ret = 0
-        for loss_val, weight in zip(loss_result, self.losses_weights):
+        for kv, weight in zip(loss_results.items(), self.losses_weights):
+            loss_name, loss_val = kv
             ret += loss_val * weight
+
         return ret  # noqa
 
     @staticmethod

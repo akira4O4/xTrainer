@@ -1,23 +1,25 @@
 project_config:
-  task: multitask
-  work_dir: project/test_mt
+  task: classification
+  work_dir: project/test_cls
+  mlflow_uri: "localhost"
+  mlflow_port: 5000
+  experiment_name: "Demo"
 
 train_config:
   topk: 2
   seed: 114514
   deterministic: true
   epoch: 0
-  max_epoch: 100
-  print_freq: 10
+  max_epoch: 1000
+  print_freq: 2
   workflow: [ [ train, 1 ], [ val, 1 ] ]
 #  scheduler_step_batch: false
 
 model_config:
-  model_name: multi_task_shufflenetplus_v2_x1_0
+  model_name: shufflenet_v2_x1_0
   num_classes: 2
-  mask_classes: 2
   pretrained: False
-  model_path: D:\code\DLFv2\project\danyang_E_mt\weights\20240109_181429_Epoch12_Acc98.2616_MIoU0.8076_lr1.6e-05_BestModel.pth
+  model_path: ""
   gpu: 0 # -1==cpu
   strict: True
   map_location: cpu
@@ -36,7 +38,7 @@ classification_data_config:
   #---------------------------------------
   dataloader:
     train:
-      batch_size: 32
+      batch_size: 16
       shuffle: False
       num_workers: 1
       pin_memory: True
@@ -48,34 +50,10 @@ classification_data_config:
       pin_memory: True
   #---------------------------------------
 
-segmentation_data_config:
-  #---------------------------------------
-  dataset:
-    train:
-      root: D:\llf\dataset\danyang\F_train\seg\128\train
-      wh: [ 256,256 ]
-    val:
-      root: D:\llf\dataset\danyang\F_train\seg\128\train
-      wh: [ 256,256 ]
-  #---------------------------------------
-  dataloader:
-    train:
-      batch_size: 32
-      shuffle: True
-      num_workers: 1
-      pin_memory: True
-    val:
-      batch_size: 2
-      shuffle: false
-      num_workers: 0
-      pin_memory: True
-  #---------------------------------------
-
-
 optimizer_config:
   name: AdamW
   params: null
-  lr: 0.001
+  lr: 0.0003
 
 lr_config:
   scheduler_step_in_batch: false
@@ -91,45 +69,9 @@ lr_config:
   # T_mult: 2
 
 loss_config:
-  losses_weights: [ 1,1, 0.5 ]
+  losses_weights: [ 1 ]
   classification:
     CrossEntropyLoss: { }
-  segmentation:
-    PeriodLoss:
-      top_k: 0.5
-      weight: [ 1, 1 ]
-    DiceLoss:
-      model: MULTICLASS_MODE
-      log_loss: false
-      from_logits: true
-      smooth: 1
-      ignore_index: null
-      eps: 1.e-7
-
-
-differential_learning_rates:
-  used: false
-  learning_rate: [ 0.001, 0.01, 0.1 ]
-
-K_fold_cross_validation:
-  used: false
-  k: 5
-
-weight_init:
-  used: false
-  func: kaiming_normal
-
-ddp_config:
-  flag: false
-  batch_size: 128
-  num_workers: 8
-  backend: nccl
-  init_method: env://
-  rank: 0
-  local_rank: 0
-  world_size: 1
-  # cuda_visible_device: [ 0,1 ]
-  sync_bn: false
 
 test_config:
   test_dir: D:\data\0danyang\20240123\loujian1

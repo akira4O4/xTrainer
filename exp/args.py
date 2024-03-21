@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 class ProjectArgs:
     task: str
     work_dir: str
+    mlflow_uri: Optional[str] = ''
+    mlflow_port: Optional[int] = 5000
+    experiment_name: Optional[str] = "demo"
 
 
 @dataclass
