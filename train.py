@@ -21,8 +21,9 @@ if __name__ == '__main__':
                         # default=r"configs/danyang_C2.yml",
                         # default=r"configs/danyang_E_mt.yml",
                         # default=r"configs/danyang_G.yml",
-                        default=r"configs/danyang_F_seg_exp2.yml",
+                        # default=r"configs/danyang_F_seg_exp2.yml",
                         # default=r"configs/danyang_E_mt_exp2.yml",
+                        default=r"configs/cat_dog.yml",
                         help='your project config json.')
     args = parser.parse_args()
     input_config = load_yaml(args.config)
