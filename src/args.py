@@ -8,7 +8,7 @@ class ProjectArgs:
     work_dir: str
     mlflow_uri: Optional[str] = ''
     mlflow_port: Optional[int] = 5000
-    experiment_name: Optional[str] = "demo"
+    mlflow_experiment_name: Optional[str] = "demo"
 
 
 @dataclass
@@ -34,6 +34,15 @@ class ModelArgs:
     map_location: Optional[str] = 'cpu'
     input_channels: Optional[int] = 3
 
-# if __name__ == '__main__':
-#     a = ClassificationDataArgs()
-#     print(a)
+
+@dataclass
+class TestArgs:
+    test_dir: str
+    weight: str
+    experiment_time: str
+    need_resize: bool
+    good_idx: int
+    sum_method: bool
+    need_segment: bool
+    cls_threshold: list
+    seg_threshold: list

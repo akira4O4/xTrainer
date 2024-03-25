@@ -1,16 +1,16 @@
 project_config:
   task: classification
-  work_dir: project/test_cls
-  mlflow_uri: "localhost"
+  work_dir: project/classification
+  mlflow_uri: localhost
   mlflow_port: 5000
-  experiment_name: "Demo"
+  mlflow_experiment_name: classification
 
 train_config:
   topk: 2
   seed: 114514
   deterministic: true
   epoch: 0
-  max_epoch: 1000
+  max_epoch: 100
   print_freq: 10
   workflow: [ [ train, 1 ], [ val, 1 ] ]
 #  scheduler_step_batch: false
@@ -28,17 +28,19 @@ classification_data_config:
   #---------------------------------------
   dataset:
     train:
+      #      root: D:\llf\dataset\danyang\test\256\train
       root: D:\llf\dataset\dog_cat\1280\train
-      wh: [ 416,416 ]
+      wh: [ 576,576 ]
       letterbox: true
     val:
+      #      root: D:\llf\dataset\danyang\test\256\train
       root: D:\llf\dataset\dog_cat\1280\train
-      wh: [ 416,416 ]
+      wh: [ 576,576 ]
       letterbox: true
   #---------------------------------------
   dataloader:
     train:
-      batch_size: 8
+      batch_size: 16
       shuffle: False
       num_workers: 4
       pin_memory: True
@@ -69,19 +71,17 @@ lr_config:
   # T_mult: 2
 
 loss_config:
-  losses_weights: [ 1 ]
+  loss_weights: [ 1 ]
   classification:
     CrossEntropyLoss: { }
 
 test_config:
-  test_dir: D:\data\0danyang\20240123\loujian1
-  #  test_dir: D:\data\0danyang\20240122\bad\E
-  weight: D:\code\DLFv2\project\danyang_E_mt\weights\20240122_233416_Epoch21_Acc99.8881_MIoU0.7611_lr1.3e-05_BestModel.pth
+  test_dir: D:\llf\dataset\danyang\test\256\train\0good
+  weight: D:\llf\code\pytorch-lab\project\classification\runs\20240321_160040\weights\20240321_164656_Epoch67_Epoch67_Top1#98.433.pth
+  experiment_time: '20240321_160040'
   good_idx: 0
   sum_method: true
   need_segment: true
-  cls_threshold: [ 0.2 , 0.85, 1, 0.9 ]
-  #  cls_threshold: [ 0.9 , 0.1, 0.1, 0.1 ]
-  #  seg_threshold: [ 0, 100, 40, 200 ,100,40 ]
+  cls_threshold: [ 0.2 , 0.85 ]
   seg_threshold: [ 0 ]
 

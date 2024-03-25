@@ -1,9 +1,9 @@
 project_config:
-  task: multitask
-  work_dir: project/multi_task
+  task: segmentation
+  work_dir: project/segmentation
   mlflow_uri: localhost
   mlflow_port: 5000
-  mlflow_experiment_name: multi_task
+  mlflow_experiment_name: segmentation
 
 train_config:
   topk: 2
@@ -13,42 +13,16 @@ train_config:
   max_epoch: 100
   print_freq: 10
   workflow: [ [ train, 1 ], [ val, 1 ] ]
+#  scheduler_step_batch: false
 
 model_config:
-  model_name: multi_task_shufflenetplus_v2_x1_0
-  num_classes: 2
+  model_name: segmentation_shufflenetplus_v2_x1_0
   mask_classes: 2
   pretrained: False
-  model_path: ''
+  model_path: D:\llf\code\pytorch-lab\project\segmentation\runs\20240322_140331\weights\20240322_145757_Epoch54_Epoch54_MIoU#0.9248.pth
   gpu: 0 # -1==cpu
   strict: True
   map_location: cpu
-
-classification_data_config:
-  #---------------------------------------
-  dataset:
-    train:
-      root: D:\llf\dataset\danyang\test\256\train
-      wh: [ 256,256 ]
-      letterbox: true
-    val:
-      root: D:\llf\dataset\danyang\test\256\train
-      wh: [ 256,256 ]
-      letterbox: true
-  #---------------------------------------
-  dataloader:
-    train:
-      batch_size: 32
-      shuffle: False
-      num_workers: 2
-      pin_memory: True
-      batch_sampler: BalancedBatchSampler #default:None
-    val:
-      batch_size: 2
-      shuffle: false
-      num_workers: 0
-      pin_memory: True
-  #---------------------------------------
 
 segmentation_data_config:
   #---------------------------------------
@@ -56,15 +30,17 @@ segmentation_data_config:
     train:
       root: D:\llf\dataset\danyang\F_train\seg\train
       wh: [ 256,256 ]
+      transform_resize: false
     val:
       root: D:\llf\dataset\danyang\F_train\seg\train
-      wh: [ 256,256 ] #need this if transform_resize is true
+      wh: [ 256,256 ]
+      transform_resize: false
   #---------------------------------------
   dataloader:
     train:
       batch_size: 16
       shuffle: False
-      num_workers: 2
+      num_workers: 4
       pin_memory: True
     val:
       batch_size: 2
@@ -76,7 +52,7 @@ segmentation_data_config:
 optimizer_config:
   name: AdamW
   params: null
-  lr: 0.001
+  lr: 0.0001
 
 lr_config:
   scheduler_step_in_batch: false
@@ -92,9 +68,7 @@ lr_config:
   # T_mult: 2
 
 loss_config:
-  loss_weights: [ 1,1,0.5 ]
-  classification:
-    CrossEntropyLoss: { }
+  loss_weights: [ 1,0.5 ]
   segmentation:
     PeriodLoss:
       top_k: 0.5

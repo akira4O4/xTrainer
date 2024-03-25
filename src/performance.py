@@ -53,19 +53,19 @@ def calc_performance(
         targets: torch.Tensor = None
 ) -> dict:
     performance = {
-        'acc1': -1,
-        'accn': -1,
+        'top1': -1,
+        'topk': -1,
         'miou': -1
     }
 
     if task == Task.SEG:
         miou = calc_miou(mask_classes, model_output, targets)
-        performance['miou'] = miou.item()
+        performance['miou'] = miou.item() * 100
 
     elif task == Task.CLS:
         acc1, accn = calc_accuracy(topk, model_output, targets)
 
-        performance['acc1'] = acc1.item()
-        performance['accn'] = accn.item()
+        performance['top1'] = acc1.item()
+        performance['topk'] = accn.item()
 
     return performance

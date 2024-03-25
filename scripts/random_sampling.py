@@ -5,14 +5,14 @@ import shutil
 from tqdm import tqdm
 
 if __name__ == '__main__':
-    root = r'D:\llf\dataset\dog_cat\all\train\0cat'
-    output = r'D:\llf\dataset\dog_cat\1280\train\0cat'
+    root = r'D:\llf\dataset\danyang\test\train\1bad\0'
+    output = r'D:\llf\dataset\danyang\test\256\train\1bad'
     # root = r'D:\llf\dataset\danyang\F_train\seg\train\3_pobian\1123\3_pobian'
     # output = r'D:\llf\dataset\danyang\F_train\seg\128\train'
     if not os.path.exists(output):
         os.makedirs(output, exist_ok=True)
 
-    random_rate = 1280
+    random_rate = 256
     remove_json = True
 
     images = get_images(root)

@@ -1,15 +1,16 @@
 import os
 import math
-from typing import Union, List, Optional
 import shutil
-import csv
+from typing import Union, List, Optional
 
-import numpy as np
 import torch
+import numpy as np
+from tqdm import tqdm
 from loguru import logger
 from dataclasses import asdict
-from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
+from torch.utils.data import DataLoader
+from mlflow import log_metric, log_param, set_experiment
+
 from utils.util import load_yaml, get_num_of_images, timer, get_time
 from .task import Task, task_convert
 from .args import ProjectArgs, TrainArgs, ModelArgs
@@ -21,21 +22,20 @@ from .transforms import ClassificationTransform, SegmentationTransform
 from .model import Model
 from .optim import AmpOptimWrapper
 from .loss_forward import *
-# from .meter import Logger
 from .performance import calc_performance
 from .data_logger import DataLogger
-from mlflow import log_metric, log_param, set_experiment
 
 
 class Trainer:
     def __init__(self, config_path: str):
 
-        # Check config path
-
         self.config_path = config_path
         if not os.path.exists(config_path):
             logger.error(f'Can`t found the {config_path}.')
             exit()
+
+        self.round_float_4 = lambda num: round(float(num), 4)
+        self.round_float_8 = lambda num: round(float(num), 8)
 
         # Init Args
         self.config = load_yaml(config_path)
@@ -48,25 +48,7 @@ class Trainer:
 
         # Init workspace Env
         self.curr_exp_path: str = ''
-        self.logs_dir = ''
-
-        self.cls_loss_log_path = ''
-        self.seg_loss_log_path = ''
-        self.top1_log_path = ''
-        self.miou_log_path = ''  # noqa
         self.weights_dir = ''
-
-        self.training_performance_log_path = ''
-        self.training_performance_table_name = []
-
-        self.loss_log_path = ''
-        self.loss_table_name = []
-
-        self.val_miou_log_path = ''
-        self.val_miou_table_name = ['Time', 'Epoch']
-
-        self.val_top1_log_path = ''
-        self.val_top1_table_name = ['Time', 'Epoch']
 
         self.init_workspace()
 
@@ -83,6 +65,7 @@ class Trainer:
         self.init_optimizer()
 
         # Build Lr Scheduler
+        self.curr_lr = 0
         self.lr_scheduler = None
         self.scheduler_step_in_batch = False
         self.init_lr_scheduler()
@@ -106,13 +89,15 @@ class Trainer:
 
         self.total_step = 0
         # Init Classification Dataset And Dataloader
+        if self.task == Task.MultiTask:
+            self.classification_data_args['dataset']['train']['expanding_rate'] = self.cls_expanding_rate
+            self.segmentation_data_args['dataset']['train']['expanding_rate'] = self.seg_expanding_rate
+
         if self.task in [Task.MultiTask, Task.CLS]:
             self.cls_train_dataset: ClassificationDataset = None  # noqa
             self.cls_val_dataset: ClassificationDataset = None  # noqa
             self.cls_train_dataloader: DataLoader = None  # noqa
             self.cls_val_dataloader: DataLoader = None  # noqa
-
-            self.classification_data_args['dataset']['train']['expanding_rate'] = self.cls_expanding_rate
             self.build_classification_dataset_and_dataloader()
             logger.success('Init Classification Dataset And Dataloader Done.')
 
@@ -122,8 +107,6 @@ class Trainer:
             self.seg_val_dataset: SegmentationDataSet = None  # noqa
             self.seg_train_dataloader: DataLoader = None  # noqa
             self.seg_val_dataloader: DataLoader = None  # noqa
-
-            self.segmentation_data_args['dataset']['train']['expanding_rate'] = self.seg_expanding_rate
             self.build_segmentation_dataset_and_dataloader()
             logger.success('Init Segmentation Dataset And Dataloader Done.')
 
@@ -140,13 +123,16 @@ class Trainer:
         self.train_logger = None
         self.val_logger = None
 
-        self.training_top1_data_logger: DataLogger
-        self.training_topk_data_logger: DataLogger
-        self.training_miou_data_logger: DataLogger
+        self.training_top1_data_logger: DataLogger = None  # noqa
+        self.training_topk_data_logger: DataLogger = None  # noqa
+        self.training_miou_data_logger: DataLogger = None  # noqa
 
-        self.val_top1_data_logger: DataLogger
-        self.val_topk_data_logger: DataLogger
-        self.val_miou_data_logger: DataLogger
+        self.val_top1_data_logger: DataLogger = None  # noqa
+        self.val_topk_data_logger: DataLogger = None  # noqa
+        self.val_miou_data_logger: DataLogger = None  # noqa
+
+        self.classification_loss_data_logger: DataLogger = None  # noqa
+        self.segmentation_loss_data_logger: DataLogger = None  # noqa
 
         self.init_logger()
 
@@ -157,25 +143,20 @@ class Trainer:
         shutil.copy(self.config_path, self.curr_exp_path)
 
     def init_mlflow(self) -> None:
-        set_experiment(self.project_args.experiment_name)
-        logger.info(f'MLFlow Experiment Name:{self.project_args.experiment_name}')
+        if self.project_args.mlflow_experiment_name == '':
+            logger.info(f'MLFlow Experiment Name: Default.')
+        else:
+            set_experiment(self.project_args.mlflow_experiment_name)
+            logger.info(f'MLFlow Experiment Name:{self.project_args.mlflow_experiment_name}.')
 
     def init_workspace(self) -> None:
         time = get_time()
 
         self.curr_exp_path = os.path.join(self.project_args.work_dir, 'runs', time)
         self.weights_dir = os.path.join(self.curr_exp_path, 'weights')
-        self.logs_dir = os.path.join(self.curr_exp_path, 'logs')
-
-        log_type = 'csv'
-        self.loss_log_path = os.path.join(self.logs_dir, f'training_loss_log.{log_type}')
-        self.training_performance_log_path = os.path.join(self.logs_dir, f'training_performance_log.{log_type}')
-        self.val_miou_log_path = os.path.join(self.logs_dir, f'Val_MIoU_log.{log_type}')
-        self.val_top1_log_path = os.path.join(self.logs_dir, f'Val_Top1_log.{log_type}')
 
         build_dir(self.project_args.work_dir)
         build_dir(self.curr_exp_path)
-        build_dir(self.logs_dir)
         build_dir(self.weights_dir)
 
     def init_logger(self):
@@ -245,7 +226,17 @@ class Trainer:
     def build_classification_dataset_and_dataloader(self) -> None:
         # Add transform
         # Train transform
+
         classification_transform = ClassificationTransform()
+
+        # classification_transform = None
+        # if self.classification_data_args['dataset']['train']['transform_resize']:
+        #     classification_transform = ClassificationTransform(
+        #         resize_wh=self.classification_data_args['dataset']['train']['wh']
+        #     )
+        # else:
+        #     classification_transform = ClassificationTransform()
+
         self.classification_data_args['dataset']['train'][
             'transform'] = classification_transform.image_transform
         self.classification_data_args['dataset']['train'][
@@ -295,10 +286,12 @@ class Trainer:
     def build_segmentation_dataset_and_dataloader(self) -> None:
         # Add transform
         segmentation_transform = None
-        if self.segmentation_data_args['dataset']['train'].get('wh'):
+        if self.segmentation_data_args['dataset']['train'].get('transform_resize') is not None:
             segmentation_transform = SegmentationTransform(
                 resize_wh=self.segmentation_data_args['dataset']['train']['wh']
             )
+        else:
+            segmentation_transform = SegmentationTransform()
 
         # Train transform
         self.segmentation_data_args['dataset']['train'][
@@ -307,9 +300,9 @@ class Trainer:
             'target_transform'] = segmentation_transform.target_transform
 
         # Val transform
-        self.classification_data_args['dataset']['val'][
+        self.segmentation_data_args['dataset']['val'][
             'transform'] = segmentation_transform.image_transform
-        self.classification_data_args['dataset']['val'][
+        self.segmentation_data_args['dataset']['val'][
             'target_transform'] = segmentation_transform.target_transform
 
         # Build Dataset
@@ -347,15 +340,10 @@ class Trainer:
         if self.task in [Task.MultiTask, Task.CLS]:
             self.losses.update({'classification': []})  # noqa
 
-            # for loss_name, loss_params in self.loss_args['classification'].items():
-            #     log_metric(loss_name, 0)
-
         if self.task in [Task.MultiTask, Task.SEG]:
             self.losses.update({'segmentation': []})  # noqa
-            # for loss_name, loss_params in self.loss_args['segmentation']:
-            #     log_metric(loss_name, 0)
 
-        self.losses_weights = self.loss_args.pop('losses_weights')
+        self.losses_weights = self.loss_args.pop('loss_weights')
 
         args: dict
         for loss_type, loss_config in self.loss_args.items():
@@ -403,7 +391,6 @@ class Trainer:
         return data
 
     def run(self):
-
         while self.train_args.epoch < self.train_args.max_epoch:
             # n*train -> k*val -> n*train->...
             for i, flow in enumerate(self.train_args.workflow):
@@ -418,18 +405,41 @@ class Trainer:
 
                     if mode == 'train':
                         self.train_args.epoch += 1
-                        log_metric('Training Epoch', self.train_args.epoch)
-                    elif mode == 'val':
-                        ...
+                        log_metric('Epoch', self.train_args.epoch)
 
-    # @timer
+                    elif mode == 'val':
+                        best_weight_info = {}
+
+                        if self.task in [Task.MultiTask, Task.CLS]:
+                            best_weight_info.update({
+                                'Top1#': self.round_float_4(self.val_top1_data_logger.avg)
+                            })
+
+                        if self.task in [Task.MultiTask, Task.SEG]:
+                            best_weight_info.update({
+                                'MIoU#': self.round_float_4(self.val_miou_data_logger.avg)
+                            })
+
+                        self.model.save_checkpoint(
+                            save_path=self.weights_dir,
+                            epoch=self.train_args.epoch,
+                            lr=self.curr_lr,
+                            optimizer_state_dict=self.amp_optimizer_wrapper.state_dict(),
+                            model_info=best_weight_info
+                        )
+
+                        self.val_top1_data_logger.reset()
+                        self.val_topk_data_logger.reset()
+                        self.val_miou_data_logger.reset()
+
+    @timer
     def train(self):
 
-        self.model.train()
+        if not self.model.training:
+            self.model.train()
 
         self.amp_optimizer_wrapper.step()
-        # self.amp_optimizer_wrapper.show_lr()
-
+        self.curr_lr = self.round_float_8(self.amp_optimizer_wrapper.lr[0])
         log_metric('Lr', self.amp_optimizer_wrapper.lr[0])
 
         dataloaders = []
@@ -451,6 +461,7 @@ class Trainer:
 
             input_data = None
             loss_results = {}  # [loss_res1,loss_res2,...]
+
             # curr_task=classification or segmentation
             for loss_type in self.loss_args.keys():
 
@@ -492,8 +503,8 @@ class Trainer:
                     targets
                 )
                 if loss_type == Task.CLS:
-                    self.training_top1_data_logger.update(training_performance['acc1'])
-                    self.training_topk_data_logger.update(training_performance['accn'])
+                    self.training_top1_data_logger.update(training_performance['top1'])
+                    self.training_topk_data_logger.update(training_performance['topk'])
                 if loss_type == Task.SEG:
                     self.training_miou_data_logger.update(training_performance['miou'])
 
@@ -523,37 +534,30 @@ class Trainer:
         self.training_topk_data_logger.reset()
         self.training_miou_data_logger.reset()
 
-    # @timer
+    @timer
     def val(self):
-        self.model.eval()
-        # self.val_logger.clear()
-        # for task in self.loss_args.keys():
-        #     task = task_convert(task)
-        #
-        #     if task == Task.SEG:
-        #         avg_miou = round(self.val_logger.MIoU.avg, 4)
-        #         print(f'Segmentation Val MIoU(Avg): {avg_miou}')
-        #         # self.write_csv(self.val_miou_log_path, [get_time(), self.train_args.epoch, avg_miou])
-        #
-        #     # task == Task.CLS
-        #     else:
-        #         top1 = round(self.val_logger.top1.avg, 4)
-        #         print(
-        #             f'Classification Val Top1(Avg): {top1} '
-        #             f'Top{self.train_args.topk}(Avg): {round(self.val_logger.topn.avg, 4)}'
-        #         )
-        # self.write_csv(self.val_top1_log_path, [get_time(), self.train_args.epoch, top1])
 
-    def classification_val(self):
-        confusion_matrix = np.zeros((self.model_args.num_classes, self.model_args.num_classes))
+        if self.model.training:
+            self.model.eval()
 
-        val_performance_data = {
-            'acc1': 0,
-            'accn': 0,
-        }
+        for task in self.loss_args.keys():
+            task = task_convert(task)
+
+            if task == Task.SEG:
+                self.segmentation_val()
+                print(f'Segmentation Val MIoU(Avg): {self.round_float_4(self.val_miou_data_logger.avg)}')
+
+            elif task == Task.CLS:
+                self.classification_val()
+                print(
+                    f'Classification Val Top1(Avg): {self.round_float_4(self.val_top1_data_logger.avg)} '
+                    f'Top{self.train_args.topk}(Avg): {self.round_float_4(self.val_topk_data_logger.avg)}'
+                )
+
+    def classification_val(self) -> None:
+
         for data in tqdm(self.cls_val_dataloader):
             images, targets = data
-            # print(targets)
             images = self.move_to_device(images)
             targets = self.move_to_device(targets)
 
@@ -564,11 +568,28 @@ class Trainer:
                 model_output=model_output,
                 targets=targets
             )
-            val_performance_data['acc1'] += performance['acc1']
-            val_performance_data['accn'] += performance['accn']
+            self.val_top1_data_logger.update(performance['top1'])
+            self.val_topk_data_logger.update(performance['topk'])
 
-    def segmentation_val(self):
-        ...
+        log_metric('Val Epoch Top1', self.val_top1_data_logger.avg)
+        log_metric(f'Val Epoch Top{self.train_args.topk}', self.val_topk_data_logger.avg)
+
+    def segmentation_val(self) -> None:
+        for data in tqdm(self.seg_val_dataloader):
+            images, targets = data
+            images = self.move_to_device(images)
+            targets = self.move_to_device(targets)
+
+            model_output = self.forward_with_val(images)
+            performance: dict = calc_performance(
+                task=Task.SEG,
+                model_output=model_output,
+                targets=targets,
+                mask_classes=self.model.mask_classes
+            )
+            self.val_miou_data_logger.update(performance['miou'])
+
+        log_metric('Val Epoch MIoU', self.val_miou_data_logger.avg)
 
     def update_training_loss_to_mlflow(
             self,
@@ -578,7 +599,7 @@ class Trainer:
         if batch_or_epoch == 'batch_size':
 
             for k, v in loss_results.items():
-                loss_results[k] = round(self.to_constant(v), 8)
+                loss_results[k] = self.round_float_8(self.to_constant(v))
 
             for kv, weight in zip(loss_results.items(), self.losses_weights):
                 loss_name, loss_val = kv
@@ -592,26 +613,21 @@ class Trainer:
                     elif task_convert(loss_type) == Task.SEG:
                         self.segmentation_loss_data_logger.update(loss_results[loss_name])
 
-                    log_metric(f'One Batch {loss_name}', loss_results[loss_name])
+                    log_metric(f'Batch {loss_name}', loss_results[loss_name])
 
         elif batch_or_epoch == 'epoch':
             log_metric('Classification Total Loss', self.classification_loss_data_logger.avg)
             log_metric('Segmentation Total Loss', self.segmentation_loss_data_logger.avg)
 
-    def update_val_performance_to_mlflow(self) -> None:
-        log_metric('Val Top1', self.val_top1_data_logger.avg)
-        log_metric(f'Val Top{self.train_args.topk}', self.val_topk_data_logger.avg)
-        log_metric('Val MIoU', self.val_miou_data_logger.avg)
-
     def update_training_performance_to_mlflow(self, batch_size_or_epoch: str = 'batch_size') -> None:
         if batch_size_or_epoch == 'batch_size':
-            log_metric('One Batch Training Top1', self.training_top1_data_logger.curr_val)
-            log_metric(f'One Batch Training Top{self.train_args.topk}', self.training_topk_data_logger.curr_val)
-            log_metric('One Batch Training MIoU', self.training_miou_data_logger.curr_val)
+            log_metric('Training Batch Top1', self.training_top1_data_logger.curr_val)
+            log_metric(f'Training Batch Top{self.train_args.topk}', self.training_topk_data_logger.curr_val)
+            log_metric('Training Batch MIoU', self.training_miou_data_logger.curr_val)
         else:
-            log_metric('One Epoch Training Top1', self.training_top1_data_logger.avg)
-            log_metric(f'One Epoch Training Top{self.train_args.topk}', self.training_topk_data_logger.avg)
-            log_metric('One Epoch Training MIoU', self.training_miou_data_logger.avg)
+            log_metric('Training Epoch Top1', self.training_top1_data_logger.avg)
+            log_metric(f'Training Epoch Top{self.train_args.topk}', self.training_topk_data_logger.avg)
+            log_metric('Training Epoch MIoU', self.training_miou_data_logger.avg)
 
     def loss_sum(self, loss_results: dict) -> torch.Tensor:
 
@@ -624,14 +640,6 @@ class Trainer:
             ret += loss_val * weight
 
         return ret  # noqa
-
-    @staticmethod
-    def write_csv(save_path: str, data: list) -> None:
-
-        with open(save_path, "a", encoding="utf-8", newline="") as f:
-            csv_writer = csv.writer(f)
-            csv_writer.writerow(data)
-            f.close()
 
     @staticmethod
     def to_constant(x: Union[np.float32, np.float64, torch.Tensor, np.ndarray]):
