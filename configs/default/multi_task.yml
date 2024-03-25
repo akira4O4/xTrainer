@@ -119,3 +119,26 @@ test_config:
   cls_threshold: [ ]
   seg_threshold: [ ]
 
+onnx_export_config:
+  opset_version: 12
+  model_path: ''
+  output_name: 'multi_task.onnx'
+  batch_size: 1
+  input_h: 480
+  input_w: 480
+  channel: 3
+  num_classes: 3
+  mask_classes: 3
+  input_names: [ 'images' ]
+  output_names: [ 'output1','output2' ]
+  is_simplify: true
+  verbose: false
+  #----------------------------
+  is_dynamic: true
+  dynamic_axes:
+    images:
+      0: 'batch'
+    output1:
+      0: 'batch'
+    output2:
+      0: 'batch'

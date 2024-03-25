@@ -85,3 +85,23 @@ test_config:
   cls_threshold: [ 0.2 , 0.85 ]
   seg_threshold: [ 0 ]
 
+onnx_export_config:
+  opset_version: 12
+  model_path: ''
+  output_name: 'classification.onnx'
+  batch_size: 1
+  input_h: 480
+  input_w: 480
+  channel: 3
+  num_classes: 3
+  input_names: [ 'images' ]
+  output_names: [ 'output' ]
+  is_simplify: true
+  verbose: false
+  #----------------------------
+  is_dynamic: true
+  dynamic_axes:
+    images:
+      0: 'batch'
+    output:
+      0: 'batch'

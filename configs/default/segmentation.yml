@@ -57,15 +57,15 @@ optimizer_config:
 lr_config:
   scheduler_step_in_batch: false
   #plan A
-  name: LambdaLR
-  optimizer: null
-  lr_lambda: "lambda epoch: 1 / (epoch / 4 + 1)" #hook call
+  #  name: LambdaLR
+  #  optimizer: null
+  #  lr_lambda: "lambda epoch: 1 / (epoch / 4 + 1)" #hook call
   #---------------------------------------
   #plan B
-  # name: CosineAnnealingWarmRestarts
-  # optimizer: null
-  # T_0: 10
-  # T_mult: 2
+  name: CosineAnnealingWarmRestarts
+  optimizer: null
+  T_0: 10
+  T_mult: 2
 
 loss_config:
   loss_weights: [ 1,0.5 ]
@@ -93,3 +93,23 @@ test_config:
   cls_threshold: [ ]
   seg_threshold: [ ]
 
+onnx_export_config:
+  opset_version: 12
+  model_path: ''
+  output_name: 'segmentation.onnx'
+  batch_size: 1
+  input_h: 480
+  input_w: 480
+  channel: 3
+  mask_classes: 3
+  input_names: [ 'images' ]
+  output_names: [ 'output' ]
+  is_simplify: true
+  verbose: false
+  #----------------------------
+  is_dynamic: true
+  dynamic_axes:
+    images:
+      0: 'batch'
+    output:
+      0: 'batch'
