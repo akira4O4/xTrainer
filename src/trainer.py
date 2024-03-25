@@ -189,7 +189,9 @@ class Trainer:
             })
 
         elif self.lr_args['name'] == 'CosineAnnealingWarmRestarts':
-            ...
+            self.lr_args.update({
+                'optimizer': self.amp_optimizer_wrapper.optimizer,
+            })
         else:
             ...
 
@@ -440,7 +442,7 @@ class Trainer:
 
         self.amp_optimizer_wrapper.step()
         self.curr_lr = self.round_float_8(self.amp_optimizer_wrapper.lr[0])
-        log_metric('Lr', self.amp_optimizer_wrapper.lr[0])
+        log_metric('Lr', self.curr_lr)
 
         dataloaders = []
         if self.task in [Task.CLS, Task.MultiTask]:
