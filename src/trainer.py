@@ -46,6 +46,10 @@ class Trainer:
         self.lr_args = self.config['lr_config']
         self.loss_args = self.config['loss_config']
 
+        if self.model_args.gpu == -1:
+            logger.error('Current Is Not Support CPU Training.')
+            exit()
+
         # Init workspace Env
         self.curr_exp_path: str = ''
         self.weights_dir = ''
@@ -79,8 +83,8 @@ class Trainer:
         self.losses_weights = []
         self.init_loss()
 
-        self.classification_data_args: dict | None = self.config.get('classification_data_config')
-        self.segmentation_data_args: dict | None = self.config.get('segmentation_data_config')
+        self.classification_data_args: dict = self.config.get('classification_data_config')
+        self.segmentation_data_args: dict = self.config.get('segmentation_data_config')
 
         # Init Classification And Segmentation Expand Rate
         self.cls_expanding_rate = 0
@@ -388,7 +392,7 @@ class Trainer:
         return model_output
 
     def move_to_device(self, data: torch.Tensor) -> torch.Tensor:
-        if self.model.device != 'cpu':
+        if self.model.device != torch.device('cpu'):
             return data.cuda(self.model.device, non_blocking=True)
         return data
 

@@ -146,7 +146,7 @@ class BaseDataset(Dataset, ABC):
             file_basename = os.path.basename(file)
             name, ext = os.path.splitext(file_basename)
 
-            if isinstance(subfix, list | tuple):
+            if isinstance(subfix, list) or isinstance(subfix, tuple):
                 if ext in subfix:
                     data.append(file)
             elif isinstance(subfix, str):
