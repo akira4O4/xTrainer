@@ -100,6 +100,7 @@ class Infer:
         self.segmentation_output_path = os.path.join(self.result_output_path, Task.SEG.value)  # temp/segmentation
 
         need_mk_dir = [
+            self.result_output_path,
             self.classification_output_path,
             self.segmentation_output_path
         ]
