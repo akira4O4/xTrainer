@@ -109,8 +109,9 @@ onnx_export_config:
 
 export_torchscript_config:
   model_path: ''
-  num_classes: 1
-  mask_classes: 1
+  fuse: true
+  num_classes: 3
+  mask_classes: 0
   output_name: 'classification.torchscriopt'
   batch_size: 1
   input_h: 480

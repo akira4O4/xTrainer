@@ -48,3 +48,17 @@ class TestArgs:
     need_segment: bool
     cls_threshold: list
     seg_threshold: list
+
+
+@dataclass
+class TorchScriptArgs:
+    model = None
+    fuse: bool
+    model_path: str
+    num_classes: int
+    mask_classes: int
+    output_name: str
+    batch_size: int
+    input_h: int
+    input_w: int
+    channel: int

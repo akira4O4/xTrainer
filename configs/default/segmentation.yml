@@ -114,3 +114,14 @@ onnx_export_config:
       0: 'batch'
     output:
       0: 'batch'
+
+export_torchscript_config:
+  model_path: ''
+  fuse: true
+  num_classes: 0
+  mask_classes: 2
+  output_name: 'segmentation.torchscriopt'
+  batch_size: 1
+  input_h: 480
+  input_w: 480
+  channel: 3

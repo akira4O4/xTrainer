@@ -248,14 +248,6 @@ class Trainer:
 
         classification_transform = ClassificationTransform()
 
-        # classification_transform = None
-        # if self.classification_data_args['dataset']['train']['transform_resize']:
-        #     classification_transform = ClassificationTransform(
-        #         resize_wh=self.classification_data_args['dataset']['train']['wh']
-        #     )
-        # else:
-        #     classification_transform = ClassificationTransform()
-
         self.classification_data_args['dataset']['train'][
             'transform'] = classification_transform.image_transform
         self.classification_data_args['dataset']['train'][
