@@ -20,6 +20,8 @@ class TrainArgs:
     max_epoch: int = 0
     print_freq: int = 10
     workflow: list = field(default_factory=list)
+    amp: bool = True
+    accumulation_steps: Optional[int] = 0
 
 
 @dataclass

@@ -13,7 +13,8 @@ train_config:
   max_epoch: 100
   print_freq: 10
   workflow: [ [ train, 1 ], [ val, 1 ] ]
-#  scheduler_step_batch: false
+  amp: true
+  accumulation_steps: 8 # if ==0 -> false
 
 model_config:
   model_name: shufflenet_v2_x1_0
