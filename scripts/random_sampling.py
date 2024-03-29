@@ -5,13 +5,16 @@ import shutil
 from tqdm import tqdm
 
 if __name__ == '__main__':
-    root = r'D:\llf\dataset\gz_sapa_0\suzhou_sapa_jiayaosai_duanmian\classification\train\0_good\suzou'
-    output = r'D:\llf\dataset\gz_sapa_0\suzhou_sapa_jiayaosai_duanmian\classification\not_used\0_good'
-    random_rate = 0.1
+    random_rate = 10000
+    root = r'D:\llf\dataset\danyang\2024_dataset\20240327\good-e'
+    output = r'D:\llf\dataset\danyang\2024_dataset\20240327\good-e_output'
 
     images = get_images(root)
-    imaegs_len = len(images)
-    new_data = sample(images, int(imaegs_len * random_rate))
+    images_len = len(images)
+    if random_rate < 1:
+        new_data = sample(images, int(images_len * random_rate))
+    else:
+        new_data = sample(images, random_rate)
 
     for image in tqdm(new_data):
         image_basename = os.path.basename(image)
@@ -19,4 +22,4 @@ if __name__ == '__main__':
         new_image_dir = new_image_path.split(image_basename)[0]
         if not os.path.exists(new_image_dir):
             os.makedirs(new_image_dir, exist_ok=True)
-        shutil.move(image, new_image_dir)
+        shutil.copy(image, new_image_dir)

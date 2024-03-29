@@ -117,14 +117,14 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\data\0danyang\20240123\loujian1
-#  test_dir: D:\data\0danyang\20240122\bad\E
-  weight: D:\code\DLFv2\project\danyang_E_mt\weights\20240122_233416_Epoch21_Acc99.8881_MIoU0.7611_lr1.3e-05_BestModel.pth
+  test_dir: D:\llf\dataset\danyang\2024_dataset\20240327\good-e_output
+  #  test_dir: D:\data\0danyang\20240122\bad\E
+  weight: D:\llf\code\pytorch-lab\project\danyang_E_mt\20240326_131855_Epoch97_Acc99.9374_MIoU0.7744_lr4e-06_BestModel.pth
   good_idx: 0
   sum_method: true
   need_segment: true
-  cls_threshold: [ 0.2 , 0.85, 1, 0.9]
-#  cls_threshold: [ 0.9 , 0.1, 0.1, 0.1 ]
-#  seg_threshold: [ 0, 100, 40, 200 ,100,40 ]
+  cls_threshold: [ 0.2 , 0.85, 1, 0.9 ]
+  #  cls_threshold: [ 0.9 , 0.1, 0.1, 0.1 ]
+  #  seg_threshold: [ 0, 100, 40, 200 ,100,40 ]
   seg_threshold: [ 0 ]
 

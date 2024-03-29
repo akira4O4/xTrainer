@@ -225,7 +225,7 @@ class Infer:
                 f'[NG_Label]:{ng_pred_label}\n'
             )
 
-    @timer
+    # @timer
     def segmentation_postprocessing(
             self,
             image: str,
