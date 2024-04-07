@@ -9,13 +9,13 @@ from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
 
 from .model import Model
-from .optim import AmpOptimWrapper
+from .optim import OptimWrapper, AmpOptimWrapper
 from utils.util import get_time
 import lr_scheduler.lr_adjustment as lr_adjustment
 from .loss_forward import BaseLossRunner, LOSS_FORWARD_TABLE
 
 
-def build_dir(path: str)->None:
+def build_dir(path: str) -> None:
     if os.path.exists(path) is False:
         os.makedirs(path)
     logger.success(f'Create dir:{path}')
@@ -63,6 +63,13 @@ def build_amp_optimizer_wrapper(name: str, **kwargs) -> AmpOptimWrapper:
 
     logger.success(f'Build AmpOptimWrapper: {name} Done.')
     return amp_optimizer_wrapper
+
+
+def build_optimizer_wrapper(name: str, **kwargs) -> OptimWrapper:
+    optimizer = build_optimizer(name, **kwargs)
+    optimizer_wrapper = OptimWrapper(optimizer=optimizer)
+    logger.success(f'Build OptimWrapper: {name} Done.')
+    return optimizer_wrapper
 
 
 def build_lr_scheduler(name: str, **kwargs):

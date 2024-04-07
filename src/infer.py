@@ -100,6 +100,7 @@ class Infer:
         self.segmentation_output_path = os.path.join(self.result_output_path, Task.SEG.value)  # temp/segmentation
 
         need_mk_dir = [
+            self.result_output_path,
             self.classification_output_path,
             self.segmentation_output_path
         ]
@@ -113,6 +114,11 @@ class Infer:
 
     def init_model(self) -> None:
         self.model = Model(**asdict(self.model_args))
+
+        if os.path.exists(self.test_args.weight) is False:
+            logger.error('Don`t found the infer weight.')
+            exit()
+
         self.model.set_model_path(self.test_args.weight)
         self.model.init_model()  # building model and loading weight
         self.model.move_to_device()
@@ -173,6 +179,11 @@ class Infer:
     def run(self):
         postprocessing_func = self.processing_funcs.get(self.task)
         logger.info(f'Test Dir: {self.test_args.test_dir}')
+
+        if os.path.exists(self.test_args.test_dir) is False:
+            logger.warning('Don`t found the test dir path.')
+            exit()
+
         images = get_images(self.test_args.test_dir)
 
         for image in tqdm(images):

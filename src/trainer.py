@@ -1,7 +1,7 @@
 import os
 import math
 import shutil
-from typing import Union, List, Optional,Tuple
+from typing import Union, List, Optional, Tuple
 
 import torch
 import numpy as np
@@ -15,12 +15,12 @@ from utils.util import load_yaml, get_num_of_images, timer, get_time
 from .task import Task, task_convert
 from .args import ProjectArgs, TrainArgs, ModelArgs
 from .builder import build_dir, init_seeds, init_backends_cudnn
-from .builder import build_model, build_amp_optimizer_wrapper, build_loss, build_lr_scheduler
+from .builder import build_model, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_loss, build_lr_scheduler
 from .balanced_batch_sampler import BalancedBatchSampler
 from .dataset import ClassificationDataset, SegmentationDataSet
 from .transforms import ClassificationTransform, SegmentationTransform
 from .model import Model
-from .optim import AmpOptimWrapper
+from .optim import AmpOptimWrapper, OptimWrapper
 from .loss_forward import *
 from .performance import calc_performance
 from .data_logger import DataLogger
@@ -46,6 +46,15 @@ class Trainer:
         self.lr_args = self.config['lr_config']
         self.loss_args = self.config['loss_config']
 
+        if self.model_args.gpu == -1:
+            logger.error('Current Is Not Support CPU Training.')
+            exit()
+
+        if self.train_args.accumulation_steps != 0:
+            self.is_accumulation = True
+        else:
+            self.is_accumulation = False
+
         # Init workspace Env
         self.curr_exp_path: str = ''
         self.weights_dir = ''
@@ -61,7 +70,8 @@ class Trainer:
         self.init_model()
 
         # Build Optimizer
-        self.amp_optimizer_wrapper: AmpOptimWrapper = None  # noqa
+        # self.amp_optimizer_wrapper: AmpOptimWrapper = None  # noqa
+        self.optimizer_wrapper: Union[OptimWrapper, AmpOptimWrapper] = None  # noqa
         self.init_optimizer()
 
         # Build Lr Scheduler
@@ -79,8 +89,8 @@ class Trainer:
         self.losses_weights = []
         self.init_loss()
 
-        self.classification_data_args: dict | None = self.config.get('classification_data_config')
-        self.segmentation_data_args: dict | None = self.config.get('segmentation_data_config')
+        self.classification_data_args: dict = self.config.get('classification_data_config')
+        self.segmentation_data_args: dict = self.config.get('segmentation_data_config')
 
         # Init Classification And Segmentation Expand Rate
         self.cls_expanding_rate = 0
@@ -175,21 +185,30 @@ class Trainer:
         self.model = build_model(asdict(self.model_args))
 
     def init_optimizer(self) -> None:
+
         self.optimizer_args['params'] = self.model.parameters
-        self.amp_optimizer_wrapper = build_amp_optimizer_wrapper(**self.optimizer_args)
+
+        if self.train_args.amp:
+            self.optimizer_wrapper = build_amp_optimizer_wrapper(**self.optimizer_args)
+            logger.info('AMP is open.')
+        else:
+            self.optimizer_wrapper = build_optimizer_wrapper(**self.optimizer_args)
+            logger.info('AMP is close')
 
     def init_lr_scheduler(self) -> None:
         self.scheduler_step_in_batch = self.lr_args.pop('scheduler_step_in_batch')
         if self.lr_args['name'] == 'LambdaLR':
             self.lr_args.update({
-                'optimizer': self.amp_optimizer_wrapper.optimizer,
+                'optimizer': self.optimizer_wrapper.optimizer,
                 'lr_lambda': lambda epoch: 1 / (epoch / 4 + 1),
                 'last_epoch': -1,
                 'verbose': False
             })
 
         elif self.lr_args['name'] == 'CosineAnnealingWarmRestarts':
-            ...
+            self.lr_args.update({
+                'optimizer': self.optimizer_wrapper.optimizer,
+            })
         else:
             ...
 
@@ -228,14 +247,6 @@ class Trainer:
         # Train transform
 
         classification_transform = ClassificationTransform()
-
-        # classification_transform = None
-        # if self.classification_data_args['dataset']['train']['transform_resize']:
-        #     classification_transform = ClassificationTransform(
-        #         resize_wh=self.classification_data_args['dataset']['train']['wh']
-        #     )
-        # else:
-        #     classification_transform = ClassificationTransform()
 
         self.classification_data_args['dataset']['train'][
             'transform'] = classification_transform.image_transform
@@ -386,7 +397,7 @@ class Trainer:
         return model_output
 
     def move_to_device(self, data: torch.Tensor) -> torch.Tensor:
-        if self.model.device != 'cpu':
+        if self.model.device != torch.device('cpu'):
             return data.cuda(self.model.device, non_blocking=True)
         return data
 
@@ -424,7 +435,7 @@ class Trainer:
                             save_path=self.weights_dir,
                             epoch=self.train_args.epoch,
                             lr=self.curr_lr,
-                            optimizer_state_dict=self.amp_optimizer_wrapper.state_dict(),
+                            optimizer_state_dict=self.optimizer_wrapper.state_dict(),
                             model_info=best_weight_info
                         )
 
@@ -438,9 +449,9 @@ class Trainer:
         if not self.model.training:
             self.model.train()
 
-        self.amp_optimizer_wrapper.step()
-        self.curr_lr = self.round_float_8(self.amp_optimizer_wrapper.lr[0])
-        log_metric('Lr', self.amp_optimizer_wrapper.lr[0])
+        self.optimizer_wrapper.step()
+        self.curr_lr = self.round_float_8(self.optimizer_wrapper.lr[0])
+        log_metric('Lr', self.curr_lr)
 
         dataloaders = []
         if self.task in [Task.CLS, Task.MultiTask]:
@@ -479,7 +490,10 @@ class Trainer:
                 targets = self.move_to_device(targets)
 
                 # AMP training
-                with self.amp_optimizer_wrapper.optim_context():
+                if self.train_args.amp:
+                    with self.optimizer_wrapper.optim_context():
+                        model_output = self.forward_with_train(images)
+                else:
                     model_output = self.forward_with_train(images)
 
                 # Loss forward
@@ -489,7 +503,10 @@ class Trainer:
                     loss_runner.model_output = model_output
                     loss_runner.targets = targets
 
-                    with self.amp_optimizer_wrapper.optim_context():
+                    if self.train_args.amp:
+                        with self.optimizer_wrapper.optim_context():
+                            loss_val = loss_runner.forward()  # noqa
+                    else:
                         loss_val = loss_runner.forward()  # noqa
 
                     assert not torch.any(torch.isnan(loss_val))
@@ -512,7 +529,15 @@ class Trainer:
 
             # Update optimizer
             loss_sum = self.loss_sum(loss_results)
-            self.amp_optimizer_wrapper.update_params(loss_sum)
+
+            if self.is_accumulation:
+                loss_sum = loss_sum / self.train_args.accumulation_steps
+                self.optimizer_wrapper.loss_backward(loss_sum)
+
+                if (curr_step + 1) % self.train_args.accumulation_steps == 0:
+                    self.optimizer_wrapper.step_update_zero()
+            else:
+                self.optimizer_wrapper.backward_step_update_zero(loss_sum)
 
             self.update_training_loss_to_mlflow(loss_results, 'batch_size')
             log_metric('Sum of Loss', self.to_constant(loss_sum))

@@ -19,15 +19,7 @@ class OptimWrapper:
         self.optimizer = optimizer
         self._update_count = 0
 
-    # @property
-    # def optimizer(self):
-    #     return self.optimizer
-    #
-    # @optimizer.setter
-    # def optimizer(self, value):
-    #     self._optimizer = value
-
-    def backward(self, loss: torch.Tensor, **kwargs) -> None:
+    def loss_backward(self, loss: torch.Tensor, **kwargs) -> None:
         loss.backward(**kwargs)
         self._update_count += 1
 
@@ -56,7 +48,7 @@ class OptimWrapper:
     def load_state_dict(self, state_dict: dict) -> None:
         self.optimizer.load_state_dict(state_dict)
 
-    def update_params(
+    def backward_step_update_zero(
             self,
             loss: torch.Tensor,
             step_kwargs: Optional[Dict] = None,
@@ -66,7 +58,7 @@ class OptimWrapper:
             step_kwargs = {}
         if zero_kwargs is None:
             zero_kwargs = {}
-        self.backward(loss)
+        self.loss_backward(loss)
         self.step(**step_kwargs)
         self.zero_grad(**zero_kwargs)
 
@@ -82,27 +74,27 @@ class AmpOptimWrapper(OptimWrapper):
         if loss_scale == 'dynamic':
             #  If loss_scale is a string, it must be 'dynamic', then dynamic
             #  loss scaling will be used.
-            self.loss_scaler = GradScaler()
+            self.grad_scaler = GradScaler()
         elif isinstance(loss_scale, float):
             # Static loss scaling
             self._scale_update_param = loss_scale
-            self.loss_scaler = GradScaler(init_scale=loss_scale)
+            self.grad_scaler = GradScaler(init_scale=loss_scale)
         elif isinstance(loss_scale, dict):
             # More specific configuration.
-            self.loss_scaler = GradScaler(**loss_scale)
+            self.grad_scaler = GradScaler(**loss_scale)
         else:
             raise TypeError('loss_scale must be of type float, dict, or '
                             f'"dynamic", but got {loss_scale}')
 
-    def backward(self, loss: torch.Tensor, **kwargs):
-        self.loss_scaler.scale(loss).backward(**kwargs)
+    def loss_backward(self, loss: torch.Tensor, **kwargs):
+        self.grad_scaler.scale(loss).backward(**kwargs)
         self._update_count += 1
 
     def step_update(self, **kwargs):
-        self.loss_scaler.step(self.optimizer, **kwargs)
-        self.loss_scaler.update(self._scale_update_param)
+        self.grad_scaler.step(self.optimizer, **kwargs)
+        self.grad_scaler.update(self._scale_update_param)
 
-    def update_params(
+    def backward_step_update_zero(
             self,
             loss: torch.Tensor,
             step_kwargs: Optional[Dict] = None,
@@ -110,19 +102,24 @@ class AmpOptimWrapper(OptimWrapper):
     ) -> None:
         if zero_kwargs is None:
             zero_kwargs = {}
+        self.grad_scaler.scale(loss).backward()
+        self.grad_scaler.step(self.optimizer)
+        self.grad_scaler.update()
         self.zero_grad(**zero_kwargs)
-        self.loss_scaler.scale(loss).backward()
-        self.loss_scaler.step(self.optimizer)
-        self.loss_scaler.update()
+
+    def step_update_zero(self) -> None:
+        self.grad_scaler.step(self.optimizer)
+        self.grad_scaler.update()
+        self.zero_grad()
 
     def state_dict(self) -> dict:
         state_dict = self.optimizer.state_dict()
-        state_dict['loss_scaler'] = self.loss_scaler.state_dict()
+        state_dict['loss_scaler'] = self.grad_scaler.state_dict()
         return state_dict
 
     def load_state_dict(self, state_dict: dict):
         if 'loss_scaler' in state_dict:
-            self.loss_scaler.load_state_dict(state_dict.pop('loss_scaler'))
+            self.grad_scaler.load_state_dict(state_dict.pop('loss_scaler'))
         self.optimizer.load_state_dict(state_dict)
 
     @contextmanager

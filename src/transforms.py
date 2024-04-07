@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Union
 
 import cv2
@@ -31,6 +32,7 @@ class BaseTransform:
         ]
 
         if resize_wh is not None:
+            logging.info('Add Resize op to transform.')
             self.ops.append(Resize((resize_wh[1], resize_wh[0])))
 
         self.normalize_transform = Compose(self.ops)

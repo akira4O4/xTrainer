@@ -21,6 +21,9 @@ class TrainArgs:
     print_freq: int = 10
     workflow: list = field(default_factory=list)
     torch_2x_compile: bool = False
+    amp: bool = True
+    accumulation_steps: Optional[int] = 0
+
 
 @dataclass
 class ModelArgs:
@@ -46,3 +49,17 @@ class TestArgs:
     need_segment: bool
     cls_threshold: list
     seg_threshold: list
+
+
+@dataclass
+class TorchScriptArgs:
+    model = None
+    fuse: bool
+    model_path: str
+    num_classes: int
+    mask_classes: int
+    output_name: str
+    batch_size: int
+    input_h: int
+    input_w: int
+    channel: int
