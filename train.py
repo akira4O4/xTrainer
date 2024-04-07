@@ -22,9 +22,9 @@ if __name__ == '__main__':
                         # default=r"configs/danyang_G.yml",
                         # default=r"configs/danyang_F_seg_exp2.yml",
 
-                        # default=r"configs/default/classification.yml",
+                        default=r"configs/default/classification.yml",
                         # default=r"configs/default/segmentation.yml",
-                        default=r"configs/default/multi_task.yml",
+                        # default=r"configs/default/multi_task.yml",
                         help='your project config json.')
     args = parser.parse_args()
     trainer = Trainer(args.config)

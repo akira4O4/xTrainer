@@ -20,7 +20,7 @@ class TrainArgs:
     max_epoch: int = 0
     print_freq: int = 10
     workflow: list = field(default_factory=list)
-
+    torch_2x_compile: bool = False
 
 @dataclass
 class ModelArgs:

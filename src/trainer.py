@@ -1,7 +1,7 @@
 import os
 import math
 import shutil
-from typing import Union, List, Optional
+from typing import Union, List, Optional,Tuple
 
 import torch
 import numpy as np
@@ -201,7 +201,7 @@ class Trainer:
             logger.info(f'cls dataset expanding rate: x{self.cls_expanding_rate}')
             logger.info(f"seg dataset expanding rate: x{self.seg_expanding_rate}")
 
-    def calc_expand_rate(self) -> tuple[int, int]:
+    def calc_expand_rate(self) -> Tuple[int, int]:
         # expanding data
         cls_train_num_of_images = get_num_of_images(self.classification_data_args['dataset']['train']['root'])
         seg_train_num_of_images = get_num_of_images(self.segmentation_data_args['dataset']['train']['root'])
