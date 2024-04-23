@@ -117,9 +117,9 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\llf\dataset\danyang\2024_dataset\20240327\good-e_output
+  test_dir: D:\llf\dataset\danyang\2024-04-08bad-E-bad-seg-done\5_jipianshang.checked
   #  test_dir: D:\data\0danyang\20240122\bad\E
-  weight: D:\llf\code\pytorch-lab\project\danyang_E_mt\20240326_131855_Epoch97_Acc99.9374_MIoU0.7744_lr4e-06_BestModel.pth
+  weight: D:\llf\code\pytorch-lab\project\danyang_E_mt\20240420_234146_Epoch24_Acc99.5629_MIoU0.7462_lr3e-05_BestModel.pth
   good_idx: 0
   sum_method: true
   need_segment: true

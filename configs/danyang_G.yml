@@ -80,15 +80,14 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  #  test_dir: D:\llf\dataset\danyang\2024_dataset\20240316-bad-dl\G
-  #  test_dir: D:\llf\dataset\danyang\2024_dataset\20240327\good-g
-  test_dir: D:\llf\dataset\danyang\2024_dataset\2024-03-27bad\g
-  weight: D:\llf\code\pytorch-lab\project\danyang_G\weights\20240328_085328_Epoch199_Acc99.9683_lr2e-06_BestModel.pth
+  test_dir: D:\llf\code\pytorch-lab\project\danyang_G\1_shouzhiwen
+  weight: D:\llf\code\pytorch-lab\project\danyang_G\weights\20240420_083043_Epoch93_Acc99.9967_lr4.2e-05_BestModel.pth
   # batch_size: 1
   good_idx: 0
   sum_method: true
   need_segment: false
-  #  cls_threshold: [ 0.5 , 0.7]
-  cls_threshold: [ 0.3 , 0.7 ]
+  cls_threshold: [ 0.3 , 0.7]
+#  cls_threshold: [ 0.9 , 0.1 ]
+#  cls_threshold: [ 0.1 , 0.9 ]
 #  seg_threshold: [ 0, 36, 50, 36 ]
 

@@ -4,7 +4,7 @@ from utils.util import get_images
 from tqdm import tqdm
 
 if __name__ == '__main__':
-    root = r'D:\llf\dataset\danyang\2024_dataset\20240327\good-e_output'
+    root = r'D:\llf\dataset\danyang\0\gen_bad\20240406b-cls-temp-e-done\classification\cls\wenli.checked'
 
     wh = (576, 576)
     output = root + f'-w{wh[0]}h{wh[1]}'

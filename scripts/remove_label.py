@@ -5,15 +5,18 @@ import json
 import shutil
 
 if __name__ == '__main__':
-    root = r"D:\data\E_train\seg\576x576_exp2\bad"
-    output = r'D:\data\E_train\seg\576x576_exp2\bad1'
-    background_output = r'D:\data\E_train\seg\576x576_exp2\1_background_1'
-    remove_label_name = ['1_heidian','5_jipianshang']
+    root = r"D:\llf\dataset\danyang\B\B-labelme\dataset\B-crop-2"
+    output = r'D:\llf\dataset\danyang\B\B-labelme\dataset\B-crop-2-clean'
+    background_output = r'D:\llf\dataset\danyang\B\B-labelme\dataset\B-crop-2-background'
+    remove_label_name = ['manyPoint', 'ngPoint']
+
     if not os.path.exists(output):
         os.makedirs(output)
+        print(f'create:{output}')
 
     if not os.path.exists(background_output):
         os.makedirs(background_output)
+        print(f'create:{background_output}')
 
     images = get_images(root)
     for image in tqdm(images):
@@ -27,6 +30,7 @@ if __name__ == '__main__':
             shapes = json_data['shapes']
 
             for shape in shapes:
+
                 if shape['label'] not in remove_label_name:
                     new_shapes.append(shape)
 
@@ -35,10 +39,10 @@ if __name__ == '__main__':
 
             else:
                 json_data['shapes'] = new_shapes
-                new_json_path = os.path.join(output, os.path.basename(json_file))
 
+                new_json_path = os.path.join(output, os.path.basename(json_file))
+                new_img_path = os.path.join(output, basename)
+
+                shutil.copy(image, new_img_path)
                 with open(new_json_path, "w") as f:
                     json.dump(json_data, f)
-
-                shutil.copy(image, os.path.join(output, basename))
-
