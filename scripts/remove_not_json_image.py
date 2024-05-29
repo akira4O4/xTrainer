@@ -4,8 +4,8 @@ import shutil
 from utils.util import get_images
 
 if __name__ == '__main__':
-    target_dir = r'C:\Users\Lee Linfeng\Desktop\421good-F-bad2-未标\imgs'
-    output_dir = r'C:\Users\Lee Linfeng\Desktop\421good-F-bad2-未标\nojson'
+    target_dir = r'C:\Users\Lee Linfeng\Desktop\新建文件夹\images'
+    output_dir = r'C:\Users\Lee Linfeng\Desktop\新建文件夹\nojson'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 

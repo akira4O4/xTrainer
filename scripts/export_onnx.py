@@ -3,16 +3,11 @@ import torch
 import onnx
 from onnxsim import simplify
 from utils.util import get_time
-from typing import Optional
 from loguru import logger
 import shutil
 from network.shufflenetv2 import shufflenet_v2_x1_0
 from network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as seg_shufflenet_v2_x1_0
 from network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet_v2_x1_0
-
-
-def model_backup():
-    ...
 
 
 def export_onnx(
@@ -39,7 +34,7 @@ def export_onnx(
         input_names=input_names,
         output_names=output_names,
         dynamic_axes=dynamic_axes,
-        **kwargs
+        # **kwargs
     )
 
     onnx_model = onnx.load(output_path)
@@ -62,94 +57,111 @@ def model_prepare(model, model_path: str):
     return model
 
 
-def get_danyang_E_config() -> dict:
-    return {
-        'model_path': r"D:\llf\code\pytorch-lab\project\danyang_E_mt\20240422_171751_Epoch95_Acc99.9709_MIoU0.7555_lr1.2e-05_BestModel.pth",
-        'nchw': [1, 3, 576, 576],
-        'num_classes': 4,
-        'mask_classes': 6,
-        'onnx_model_name': '_danyang_E_',
-        'input_names': ['images'],
-        'output_names': ['output1', 'output2'],
-        # 'model ': multi_task_shufflenet_v2_x1_0(num_classes=3, mask_classes=6),
-    }
+danyang_E_config = {
+    'opset_version': 12,
+    'model_path': r"D:\llf\code\pytorch-lab\project\danyang_E_mt\20240509_104153_Epoch99_Acc99.965_MIoU0.7467_lr1.2e-05_BestModel.pth",
+    'model': multi_task_shufflenet_v2_x1_0(num_classes=4, mask_classes=6),
+    'img': None,
+    'nchw': [1, 3, 576, 576],
+    'num_classes': 4,
+    'mask_classes': 6,
+    'onnx_model_name': '_danyang_E_',
+    'input_names': ['images'],
+    'output_names': ['output1', 'output2'],
+    'is_simplify': True,
+    # 'dynamic_axes': {
+    #     'images': {0: 'batch'},
+    #     'output1': {0: 'batch'},
+    #     # 'output2': {0: 'batch'},
+    # }
+}
 
+danyang_G_config = {
+    'opset_version': 12,
+    'model_path': r"D:\llf\code\pytorch-lab\project\danyang_G\weights\20240315_015742_Epoch97_Acc100.0_lr7.4e-05_BestModel.pth",
+    'model': shufflenet_v2_x1_0(num_classes=2),
+    'img': None,
+    'nchw': [1, 3, 480, 480],
+    'num_classes': 2,
+    'mask_classes': 0,
+    'onnx_model_name': '_danyang_G_',
+    'input_names': ['images'],
+    'output_names': ['output'],
+    'is_simplify': True,
+    # 'dynamic_axes': {
+    #     'images': {0: 'batch'},
+    #     'output1': {0: 'batch'},
+    #     # 'output2': {0: 'batch'},
+    # }
+}
 
-def get_danyang_G_config() -> dict:
-    return {
-        'model_path': r"D:\llf\code\pytorch-lab\project\danyang_E_mt\20240422_171751_Epoch95_Acc99.9709_MIoU0.7555_lr1.2e-05_BestModel.pth",
-        'nchw': [1, 3, 480, 480],
-        'num_classes': 2,
-        'mask_classes': 0,
-        'onnx_model_name': '_danyang_G_',
-        'input_names': ['images'],
-        'output_names': ['output'],
-        'model': shufflenet_v2_x1_0(num_classes=1),
-    }
+danyang_F_config = {
+    'opset_version': 12,
+    'model_path': r"D:\llf\code\pytorch-lab\project\danyang_F_seg_exp2\weights\20240515_213213_Epoch199_MIoU0.9518_lr1e-05_BestModel.pth",
+    'model': seg_shufflenet_v2_x1_0(mask_classes=6),
+    'img': None,
+    'nchw': [1, 3, 256, 256],
+    'num_classes': 0,
+    'mask_classes': 6,
+    'onnx_model_name': '_danyang_F_',
+    'input_names': ['images'],
+    'output_names': ['output'],
+    'is_simplify': True,
+    # 'dynamic_axes': {
+    #     'images': {0: 'batch'},
+    #     'output1': {0: 'batch'},
+    #     # 'output2': {0: 'batch'},
+    # }
+}
 
-
-def get_danyang_F_config() -> dict:
-    return {
-        'model_path': r"D:\llf\code\pytorch-lab\project\danyang_E_mt\20240422_171751_Epoch95_Acc99.9709_MIoU0.7555_lr1.2e-05_BestModel.pth",
-        'nchw': [1, 3, 576, 576],
-        'num_classes': 0,
-        'mask_classes': 6,
-        'onnx_model_name': '_danyang_F_',
-        'input_names': ['images'],
-        'output_names': ['output'],
-        'model': seg_shufflenet_v2_x1_0(mask_classes=6),
-    }
-
-
-def get_danyang_C2_config() -> dict:
-    return {
-        'model_path': r"D:\llf\code\pytorch-lab\project\danyang_E_mt\20240422_171751_Epoch95_Acc99.9709_MIoU0.7555_lr1.2e-05_BestModel.pth",
-        'nchw': [1, 3, 480, 479],
-        'num_classes': 3,
-        'mask_classes': 0,
-        'onnx_model_name': '_danyang_E_',
-        'input_names': ['images'],
-        'output_names': ['output0'],
-        'model': shufflenet_v2_x1_0(num_classes=3),
-    }
-
+danyang_C2_config = {
+    'opset_version': 12,
+    'model_path': r"D:\llf\code\pytorch-lab\project\danyang_C2\20240121_004244_Epoch49_Acc98.4857_lr8e-06_BestModel.pth",
+    'model': shufflenet_v2_x1_0(num_classes=3),
+    'img': None,
+    'nchw': [1, 3, 480, 480],
+    'num_classes': 3,
+    'mask_classes': 0,
+    'onnx_model_name': '_danyang_C2_',
+    'input_names': ['images'],
+    'output_names': ['output'],
+    'is_simplify': True,
+    # 'dynamic_axes': {
+    #     'images': {0: 'batch'},
+    #     'output1': {0: 'batch'},
+    #     # 'output2': {0: 'batch'},
+    # },
+}
 
 if __name__ == '__main__':
     curr_time = get_time()
+    onnx_output_path = f'../onnx_output/{curr_time}'
+    if not os.path.exists(onnx_output_path):
+        os.makedirs(onnx_output_path)
+
     model_str = '{}_{}_{}_{}_CLS{}_SEG{}'  # N_C_H_W_CLS_SEG.ONNX
 
-    export_config = get_danyang_E_config()
-    # export_config = get_danyang_G_config()
-    # export_config = get_danyang_F_config()
-    # export_config = get_danyang_C2_config()
-    n = export_config['nchw'][0]
-    c = export_config['nchw'][1]
-    h = export_config['nchw'][2]
-    w = export_config['nchw'][3]
+    # export_config = danyang_E_config
+    export_config = danyang_G_config
+    # export_config = danyang_F_config
+    # export_config = danyang_C2_config
+    #
+    onnx_output_name = curr_time + export_config['onnx_model_name'] + model_str.format(
+        export_config['nchw'][0],
+        export_config['nchw'][1],
+        export_config['nchw'][2],
+        export_config['nchw'][3],
+        export_config['num_classes'],
+        export_config['mask_classes']
+    )
 
-    onnx_output_path = curr_time + \
-                       export_config['onnx_model_name'] + \
-                       model_str.format(n, c, h, w, export_config['num_classes'], export_config['mask_classes'])
-
-    export_args = {
-        'model': None,
-        'img': None,
-        'opset_version': 12,
-        'output_path': os.path.join(f'../', onnx_output_path),
-        'input_names': export_config['input_names'],
-        'output_names': export_config['output_names'],
-        # 'dynamic_axes': {
-        #     'images': {0: 'batch'},
-        #     'output1': {0: 'batch'},
-        #     # 'output2': {0: 'batch'},
-        # },
-        'is_simplify': True
-    }
+    shutil.copy(export_config['model_path'], onnx_output_path)  # backup pytorch model
+    export_config['output_path'] = os.path.join(onnx_output_path, onnx_output_name)
 
     model = model_prepare(export_config['model'], export_config['model_path'])
     img = torch.zeros(export_config['nchw'])
 
-    export_args['model'] = model
-    export_args['img'] = img
+    export_config['model'] = model
+    export_config['img'] = img
 
-    export_onnx(**export_args)
+    export_onnx(**export_config)

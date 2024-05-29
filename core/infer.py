@@ -237,8 +237,9 @@ class Infer:
         # output:Tensor or [Tensor,...]
         if isinstance(model_output, list):
             model_output = model_output[0]
-
-        img = cv2.imread(image)
+        img = Image.open(image)  # 读入图片数据
+        img = np.array(img)  # 转换为numpy
+        # img = cv2.imread(image)
         h, w, c = img.shape
 
         if h != self.wh[1] or w != self.wh[0]:

@@ -28,7 +28,7 @@ segmentation_data_config:
   train:
     dataset_params:
       root: /home/main/llf/data/F_train
-      wh: [ 480,480 ]
+      wh: [ 256,256 ]
     dataloader_params:
       batch_size: 200
       shuffle: True
@@ -38,7 +38,7 @@ segmentation_data_config:
   val:
     dataset_params:
       root: /home/main/llf/data/F_train
-      wh: [ 480,480 ]
+      wh: [ 256,256 ]
     dataloader_params:
       batch_size: 32
       shuffle: false
@@ -87,12 +87,13 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: C:\Users\Lee Linfeng\Desktop\temp
-  weight: D:\llf\code\pytorch-lab\project\danyang_F_seg_exp2\weights\20240420_151126_Epoch99_MIoU0.9382_lr1.2e-05_BestModel.pth
+  test_dir: D:\llf\dataset\danyang\2024_dataset\F-liepian-4.28.tar\F-liepian-4.28
+  weight: D:\llf\code\pytorch-lab\project\danyang_F_seg_exp2\weights\20240422_211240_Epoch99_MIoU0.9452_lr1.2e-05_BestModel.pth
+#  weight: D:\llf\code\pytorch-lab\project\danyang_F_seg_exp2\weights\20240428_143638_Epoch99_MIoU0.9328_lr2e-05_BestModel.pth
   good_idx: 0
   sum_method: true
   need_segment: true
   cls_threshold: [ 0 ]
-  seg_threshold: [ 0,0, 100, 100000, 100000,10000 ]
-#  seg_threshold: [ 0 ]
+#  seg_threshold: [ 0,85, 100, 100000, 100000,10000 ]
+  seg_threshold: [ 0,0,0,0,0,0 ]
 

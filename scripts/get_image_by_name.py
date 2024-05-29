@@ -4,10 +4,10 @@ from tqdm import tqdm
 from utils.util import get_images
 
 if __name__ == '__main__':
-    root = r'D:\llf\dataset\danyang\2024_dataset\20240327'
+    root = r'D:\llf\dataset\danyang\2024_dataset\20240522深度漏检'
     images_dir = os.path.join(root, 'imgs')
-    output_dir = os.path.join(root, 'good-g')
-    name = 'B4'
+    output_dir = os.path.join(root, 'f')
+    name = 'B5'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     assert os.path.exists(output_dir) is True

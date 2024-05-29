@@ -117,14 +117,15 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\llf\dataset\danyang\2024-04-08bad-E-bad-seg-done\5_jipianshang.checked
-  #  test_dir: D:\data\0danyang\20240122\bad\E
+  test_dir: C:\Users\Lee Linfeng\Desktop\新建文件夹 (2)
   weight: D:\llf\code\pytorch-lab\project\danyang_E_mt\20240420_234146_Epoch24_Acc99.5629_MIoU0.7462_lr3e-05_BestModel.pth
+  #  weight: D:\llf\code\pytorch-lab\project\danyang_E_mt\20240422_171751_Epoch95_Acc99.9709_MIoU0.7555_lr1.2e-05_BestModel.pth
   good_idx: 0
   sum_method: true
   need_segment: true
   cls_threshold: [ 0.2 , 0.85, 1, 0.9 ]
   #  cls_threshold: [ 0.9 , 0.1, 0.1, 0.1 ]
-  #  seg_threshold: [ 0, 100, 40, 200 ,100,40 ]
+#  seg_threshold: [ 0, 100, 40, 200 ,100,40 ]
+#  seg_threshold: [ 0, 15, 100000, 100000 ,100000,1000000 ]
   seg_threshold: [ 0 ]
 

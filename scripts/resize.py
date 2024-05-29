@@ -2,19 +2,26 @@ import cv2
 import os
 from utils.util import get_images
 from tqdm import tqdm
+from PIL import Image
+import numpy as np
 
 if __name__ == '__main__':
-    root = r'D:\llf\dataset\danyang\0\gen_bad\20240406b-cls-temp-e-done\classification\cls\wenli.checked'
-
+    root = r'C:\Users\Lee Linfeng\Desktop\E_good\928x928'
+    output = r'C:\Users\Lee Linfeng\Desktop\E_good\output'
     wh = (576, 576)
-    output = root + f'-w{wh[0]}h{wh[1]}'
+    output = output + f'-w{wh[0]}h{wh[1]}'
 
     if not os.path.exists(output):
         os.makedirs(output)
 
     images = get_images(root)
     for image in tqdm(images):
+        img = Image.open(image)
+        img = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+
+        img = cv2.resize(img, wh)
+
         basename = os.path.basename(image)
-        im = cv2.imread(image)
-        im = cv2.resize(im, wh)
-        cv2.imwrite(os.path.join(output, basename), im)
+        save_path = os.path.join(output, basename)
+        # print(save_path)
+        cv2.imwrite(save_path, img)

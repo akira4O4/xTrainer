@@ -80,9 +80,8 @@ ddp_config:
   sync_bn: false
 
 test_config:
-  test_dir: D:\llf\code\pytorch-lab\project\danyang_G\1_shouzhiwen
+  test_dir: D:\llf\code\amat\temp\images\G
   weight: D:\llf\code\pytorch-lab\project\danyang_G\weights\20240420_083043_Epoch93_Acc99.9967_lr4.2e-05_BestModel.pth
-  # batch_size: 1
   good_idx: 0
   sum_method: true
   need_segment: false
