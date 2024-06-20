@@ -97,13 +97,12 @@ class Trainer:
         self.optimizer_wrapper: Union[OptimWrapper, AmpOptimWrapper] = None  # noqa
         self.init_optimizer()
 
-        #
-        # # Build Lr Scheduler
-        # self.curr_lr = 0
-        # self.lr_scheduler = None
-        # self.scheduler_step_in_batch = False
-        # self.init_lr_scheduler()
-        #
+        # Build Lr Scheduler
+        self.curr_lr = 0
+        self.lr_scheduler = None
+        self.scheduler_step_in_batch = False
+        self.init_lr_scheduler()
+
         # # Init loss
         # self.losses = {}
         # self.loss_results = {
@@ -219,23 +218,24 @@ class Trainer:
             logger.info('AMP is close')
 
     def init_lr_scheduler(self) -> None:
-        self.scheduler_step_in_batch = self.lr_args.pop('scheduler_step_in_batch')
-        if self.lr_args['name'] == 'LambdaLR':
-            self.lr_args.update({
-                'optimizer': self.optimizer_wrapper.optimizer,
+        name = CONFIG("lr_scheduler")
+        args = {
+            # "name": lr_name,
+            'optimizer': self.optimizer_wrapper.optimizer,
+        }
+        if name == 'LambdaLR':
+            args.update({
                 'lr_lambda': lambda epoch: 1 / (epoch / 4 + 1),
                 'last_epoch': -1,
                 'verbose': False
             })
 
-        elif self.lr_args['name'] == 'CosineAnnealingWarmRestarts':
-            self.lr_args.update({
-                'optimizer': self.optimizer_wrapper.optimizer,
-            })
+        elif name == 'CosineAnnealingWarmRestarts':
+            ...
         else:
             ...
 
-        self.lr_scheduler = build_lr_scheduler(**self.lr_args)
+        self.lr_scheduler = build_lr_scheduler(name, **args)
 
     def init_expand_rate(self) -> None:
         if self.task == Task.MultiTask:

@@ -40,6 +40,7 @@ def init_backends_cudnn(deterministic: bool = False) -> None:
 
 
 def build_model(model_args: dict) -> Model:
+    warnings.warn("", DeprecationWarning)
     model = Model(**model_args)
     model.init_model()
     model.move_to_device()
@@ -52,18 +53,14 @@ def build_optimizer(name: str, **kwargs):
     if optim is None:
         logger.error(f'Do not get the {name} optimizer from torch.optim.')
         exit()
-
     optimizer = optim(**kwargs)
-
-    logger.success(f'Build optimizer: {name} Done.')
+    # logger.success(f'Build optimizer: {name} Done.')
     return optimizer
 
 
-def build_amp_optimizer_wrapper(name: str,  **kwargs) -> AmpOptimWrapper:
+def build_amp_optimizer_wrapper(name: str, **kwargs) -> AmpOptimWrapper:
     optimizer = build_optimizer(name, **kwargs)
-
     amp_optimizer_wrapper = AmpOptimWrapper(optimizer=optimizer)
-
     logger.success(f'Build AmpOptimWrapper: {name} Done.')
     return amp_optimizer_wrapper
 
@@ -76,18 +73,15 @@ def build_optimizer_wrapper(name: str, **kwargs) -> OptimWrapper:
 
 
 def build_lr_scheduler(name: str, **kwargs):
-    # lr_scheduler = lr_adjustment.__dict__.get(name)
-
-    # if lr_scheduler is None:
     lr_scheduler = torch_lr_scheduler.__dict__.get(name)
 
     if lr_scheduler is None:
         logger.error(f'Do not get the {name} lr_scheduler.')
         exit()
 
-    lr_scheduler = lr_scheduler(**kwargs)
+    scheduler = lr_scheduler(**kwargs)
     logger.success(f'Build lr scheduler: {name} Done.')
-    return lr_scheduler
+    return scheduler
 
 
 def build_loss(name, **kwargs) -> BaseLossRunner:

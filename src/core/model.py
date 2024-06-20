@@ -177,8 +177,8 @@ class Model:
         else:
             logger.warning(f'Model path:{self._model_path} is not found.')
 
-        logger.info(f'Build model done.')
         logger.info(f'Current model.net device is: {self._device}.')
+        logger.success(f'Build model done.')
 
     def save_checkpoint(
         self,
