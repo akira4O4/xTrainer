@@ -4,13 +4,13 @@ import shutil
 import torch
 from loguru import logger
 
-from src.args import TorchScriptArgs
-from utils.util import load_yaml, get_time
+from lab.src.args import TorchScriptArgs
+from lab.utils import load_yaml, get_time
 from fuse_conv_bn_layer import FuseConvBN
 
-from network.shufflenetv2 import shufflenet_v2_x1_0 as classification_shufflenet
-from network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenet
-from network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet
+from lab.network.shufflenetv2 import shufflenet_v2_x1_0 as classification_shufflenet
+from lab.network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenet
+from lab.network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet
 
 
 def model_prepare(task: str, num_classes: int, mask_classes: int, model_path: str):

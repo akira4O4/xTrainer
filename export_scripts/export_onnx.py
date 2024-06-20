@@ -3,13 +3,13 @@ import torch
 import onnx
 from onnxsim import simplify
 from loguru import logger
-from utils.util import get_time
+from lab.utils import get_time
 import shutil
-from network.shufflenetv2 import shufflenet_v2_x1_0 as classification_shufflenet
-from network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenet
-from network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet
+from lab.network.shufflenetv2 import shufflenet_v2_x1_0 as classification_shufflenet
+from lab.network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenet
+from lab.network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet
 
-from utils.util import load_yaml
+from lab.utils import load_yaml
 
 
 def export(

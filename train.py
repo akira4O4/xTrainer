@@ -1,5 +1,5 @@
 import argparse
-from src.trainer import Trainer
+from lab.src import Trainer
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Project')

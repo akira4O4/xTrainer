@@ -1,5 +1,5 @@
 import argparse
-from src.infer import Infer
+from lab.src import Infer
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Project')
