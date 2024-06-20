@@ -1,0 +1,54 @@
+#Default setting--------------------------------------------------------------------------------------------------------
+mode: train           #train test
+task: classification  #classification segmentation multitask
+project: v3
+
+#Train setting----------------------------------------------------------------------------------------------------------
+gpu: 0 #-1=cpu
+seed: 0
+epoch: 0
+max_epoch: 10
+workers: 2
+workflow: [ [ train, 1 ], [ val, 1 ] ]
+model: shufflenet_v2_x1_0
+#model: segmentation_shufflenetplus_v2_x1_0
+#model: multi_task_shufflenetplus_v2_x1_0
+weight: ''
+pretrained: true
+wh: [ 480,480 ]
+letterbox: true
+
+#Hyperparameters--------------------------------------------------------------------------------------------------------
+optimizer: AdamW
+lr_scheduler: LambdaLR
+lr0: 0.01 # (float) initial learning rate
+lrf: 0.01 # (float) final learning rate (lr0 * lrf)
+amp: true
+deterministic: True
+
+# Classification--------------------------------------------------------------------------------------------------------
+classification:
+  batch: 8
+  classes: 3
+  train: 'D:\llf\dataset\danyang\training_data\C2\output\train'
+  val: 'D:\llf\dataset\danyang\training_data\C2\output\val'
+  labels: 'D:\llf\code\pytorch-lab\project\v3\labels.yaml'
+
+# Segmentation----------------------------------------------------------------------------------------------------------
+segmentation:
+  batch: 8
+  classes: 2
+  train: ''
+  val: ''
+  labels: ''
+
+#Test setting-----------------------------------------------------------------------------------------------------------
+test: ''
+#weight: ''
+cls_thr: ''
+seg_thr: ''
+
+# MlFlow setting--------------------------------------------------------------------------------------------------------
+mlflow_uri: localhost
+mlflow_port: 5000
+mlflow_experiment_name: multi_task
