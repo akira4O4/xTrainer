@@ -17,7 +17,7 @@ from mlflow import log_metric, log_param, set_experiment
 from src import CONFIG, Default_WorkSpace_Dir
 from src.utils.util import load_yaml, get_num_of_images, timer, get_time, check_dir
 from .task import Task, task_convert
-from .args import ProjectArgs, TrainArgs, ModelArgs
+from .args import ProjectArgs, TrainArgs, ModelArgs, DataSetArgs
 from .builder import build_dir, init_seeds, init_backends_cudnn
 from .builder import build_model, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_loss, build_lr_scheduler
 from .balanced_batch_sampler import BalancedBatchSampler
@@ -64,16 +64,7 @@ def backup_config(file: str, output: str) -> None:
 
 class Trainer:
     def __init__(self):
-        # make project dir
         self.project_root_path, self.weight_path, self.output_path = init_workspace(CONFIG('project'))
-        # Init Args
-        # self.config = load_yaml(config_path)
-        # self.project_args = ProjectArgs(**self.config['project_config'])
-        # self.train_args = TrainArgs(**self.config['train_config'])
-        # self.model_args = ModelArgs(**self.config['model_config'])
-        # self.optimizer_args = self.config['optimizer_config']
-        # self.lr_args = self.config['lr_config']
-        # self.loss_args = self.config['loss_config']
 
         # if self.model_args.gpu == -1:
         #     logger.error('Current Is Not Support CPU Training.')
@@ -83,6 +74,23 @@ class Trainer:
         #     self.is_accumulation = True
         # else:
         #     self.is_accumulation = False
+
+        cls_ds_kw = CONFIG("classification")
+        self.cls_ds_args = DataSetArgs(
+            cls_ds_kw['batch'],
+            cls_ds_kw['classes'],
+            cls_ds_kw['train'],
+            cls_ds_kw['val'],
+            cls_ds_kw['labels'],
+        )
+        seg_ds_kw = CONFIG("classification")
+        self.seg_ds_args = DataSetArgs(
+            seg_ds_kw['batch'],
+            seg_ds_kw['classes'],
+            seg_ds_kw['train'],
+            seg_ds_kw['val'],
+            seg_ds_kw['labels'],
+        )
 
         init_seeds(CONFIG('seed'))
         init_backends_cudnn(CONFIG('deterministic'))

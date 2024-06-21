@@ -3,6 +3,15 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class DataSetArgs:
+    batch: int
+    classes: int
+    train: str
+    val: str
+    label: str
+
+
+@dataclass
 class ProjectArgs:
     task: str
     work_dir: str
