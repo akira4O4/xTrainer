@@ -31,3 +31,4 @@ utils/__pycache__
 /onnx_output/
 /mlruns/
 /scripts/
+*.jpg

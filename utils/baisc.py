@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import random
+
 __all__ = ['Hswish', 'Hsigmoid', 'Identity', 'SEModule', 'SPPF']
 
 
@@ -92,8 +93,9 @@ class SPPF(nn.Module):
         x = self.cv1(x)  # 先通过CBL进行通道数的减半
         y1 = self.p(x)
         y2 = self.p(y1)
+        y3 = self.p(y2)
         # 上述两次最大池化
-        return self.cv2(torch.cat([x, y1, y2, self.p(x)], 1))
+        return self.cv2(torch.cat([x, y1, y2, y3], 1))
         # 将原来的x,一次池化后的y1,两次池化后的y2,3次池化的self.m(y2)先进行拼接，然后再CBL
 
 
@@ -105,11 +107,11 @@ class MultiSampleDropout(nn.Module):
         self.average = average
 
         assert dim <= 2
-        if dim==1:
+        if dim == 1:
             self.dropout_ops = nn.ModuleList(
                 [nn.Dropout2d(p) for _ in range(self.dropout_num)]
             )
-        elif dim==2:
+        elif dim == 2:
             self.dropout_ops = nn.ModuleList(
                 [nn.Dropout2d(p) for _ in range(self.dropout_num)]
             )
