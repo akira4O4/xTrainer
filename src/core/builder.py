@@ -1,25 +1,18 @@
 import os
 import random
-
+from typing import Optional
 import torch
 import torch.cuda
 import torch.backends.cudnn
 import numpy as np
-from loguru import logger
+# from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
-
+from torch.optim import Optimizer
 from .model import Model
 from .optim import OptimWrapper, AmpOptimWrapper
 from src import lr_scheduler as lr_adjustment
-from .loss_forward import BaseLossRunner, LOSS_FORWARD_TABLE
+from .loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 import warnings
-
-
-def build_dir(path: str) -> None:
-    warnings.warn("Deprecation", DeprecationWarning)
-    if os.path.exists(path) is False:
-        os.makedirs(path)
-    logger.success(f'Create dir:{path}')
 
 
 def init_seeds(seed: int = 0) -> None:
@@ -29,8 +22,6 @@ def init_seeds(seed: int = 0) -> None:
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)
-
-    logger.info(f'Init seed:{seed}.')
 
 
 def init_backends_cudnn(deterministic: bool = False) -> None:
@@ -48,44 +39,36 @@ def build_model(model_args: dict) -> Model:
 
 
 # kwargs=official args
-def build_optimizer(name: str, **kwargs):
+def build_optimizer(name: str, **kwargs) -> Optimizer:
     optim = torch.optim.__dict__.get(name)
-    if optim is None:
-        logger.error(f'Do not get the {name} optimizer from torch.optim.')
-        exit()
+    assert optim is not None
     optimizer = optim(**kwargs)
-    # logger.success(f'Build optimizer: {name} Done.')
     return optimizer
 
 
 def build_amp_optimizer_wrapper(name: str, **kwargs) -> AmpOptimWrapper:
     optimizer = build_optimizer(name, **kwargs)
     amp_optimizer_wrapper = AmpOptimWrapper(optimizer=optimizer)
-    logger.success(f'Build AmpOptimWrapper: {name} Done.')
     return amp_optimizer_wrapper
 
 
 def build_optimizer_wrapper(name: str, **kwargs) -> OptimWrapper:
     optimizer = build_optimizer(name, **kwargs)
     optimizer_wrapper = OptimWrapper(optimizer=optimizer)
-    logger.success(f'Build OptimWrapper: {name} Done.')
     return optimizer_wrapper
 
 
 def build_lr_scheduler(name: str, **kwargs):
     lr_scheduler = torch_lr_scheduler.__dict__.get(name)
-
-    if lr_scheduler is None:
-        logger.error(f'Do not get the {name} lr_scheduler.')
-        exit()
-
+    assert lr_scheduler is not None
     scheduler = lr_scheduler(**kwargs)
-    logger.success(f'Build lr scheduler: {name} Done.')
     return scheduler
 
 
-def build_loss(name, **kwargs) -> BaseLossRunner:
-    loss_forward = LOSS_FORWARD_TABLE.get(name)
-    loss_forward_obj = loss_forward(**kwargs)
-    loss_forward_obj.build()
-    return loss_forward_obj
+def build_loss_forward(name, **kwargs) -> BaseLossForward:
+    loss_forward_class = LOSS_FORWARD_TABLE.get(name)
+    assert loss_forward_class is not None
+
+    loss_forward_instance = loss_forward_class(**kwargs)
+    loss_forward_instance.build()
+    return loss_forward_instance

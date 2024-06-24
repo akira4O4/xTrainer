@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import warnings
 from typing import Optional
 from collections import OrderedDict
 
@@ -23,7 +24,6 @@ class Model:
         gpu: Optional[int] = 0,  # -1==cpu
         strict: Optional[bool] = True,
         map_location: Optional[str] = 'cpu',
-        input_channels: Optional[str] = 3,
         use_ddp: bool = False,
     ):
         self._model_name = model_name
@@ -34,7 +34,6 @@ class Model:
         self._strict = strict
         self._gpu = gpu
         self._map_location = map_location
-        self._input_channels = input_channels
         self._use_ddp = use_ddp
 
         if gpu != -1 and torch.cuda.is_available():
@@ -124,29 +123,29 @@ class Model:
             **kwargs
         )
 
-    def load_model(
+    def load_weight(
         self,
-        model_path: str,
+        weight_path: str,
         strict: Optional[bool] = True,
         map_location: Optional[str] = 'cpu',
     ) -> None:
 
-        if not osp.exists(model_path):
-            logger.warning(f"{model_path} 权重文件不存在。")
+        if not osp.exists(weight_path):
+            logger.warning(f"{weight_path} 权重文件不存在。")
             return
 
-        checkpoint = torch.load(model_path, map_location=map_location)
+        weight = torch.load(weight_path, map_location=map_location)
         model_state_dict = self.net.state_dict()
-        pretrain_model_state_dict = checkpoint.get('state_dict')
+        weight_state_dict = weight.get('state_dict')
 
-        if pretrain_model_state_dict is None:
-            logger.error(f'checkpoint do not found the model state_dict.')
+        if weight_state_dict is None:
+            logger.error(f'weight do not found the state_dict.')
             return
 
         total_item = 0
-        loading_itme = 0
+        loading_item = 0
 
-        for k, v in pretrain_model_state_dict.items():
+        for k, v in weight_state_dict.items():
             total_item += 1
 
             if 'module' in k:  # DDP model
@@ -155,12 +154,12 @@ class Model:
             if k in model_state_dict.keys():
                 if v.shape == model_state_dict[k].shape:
                     model_state_dict[k] = v
-                    loading_itme += 1
+                    loading_item += 1
 
         self.net.load_state_dict(model_state_dict, strict=strict)
 
-        logger.info(f'Loading :{model_path} .')
-        logger.info(f'Loading [{loading_itme}/{total_item}] item to model.')
+        logger.info(f'Loading [{loading_item}/{total_item}] item to model.')
+        logger.success(f'Loading :{weight_path} .')
 
     def init_model(self) -> None:
 
@@ -172,26 +171,24 @@ class Model:
         )
 
         if osp.exists(self._model_path) is True:
-            self.load_model(self._model_path, self._strict, self._map_location)
+            self.load_weight(self._model_path, self._strict, self._map_location)
             logger.success('Load model done.')
         else:
             logger.warning(f'Model path:{self._model_path} is not found.')
 
-        logger.info(f'Current model.net device is: {self._device}.')
-        logger.success(f'Build model done.')
+        logger.info(f'Current device is: {self._device}.')
+        logger.success(f'Build model success.')
 
     def save_checkpoint(
         self,
         save_path: str,
         epoch: Optional[int] = 0,
-        lr: Optional[float] = None,
-        optimizer_state_dict: Optional[dict] = None,
-        model_info: Optional[dict] = None
+        other_kw: Optional[dict] = None,
     ) -> None:
 
         if not osp.exists(save_path):
             os.makedirs(save_path)
-            logger.success(f"Create path {save_path} to save checkpoint.")
+            logger.success(f"Create path {save_path} to save weight.")
 
         # Remove DDP key
 
@@ -201,25 +198,20 @@ class Model:
             state_dict = self.state_dict
 
         save_dict = {
-            "epoch": epoch,
             "state_dict": state_dict,
         }
-        if lr is not None:
-            save_dict.update({'lr': lr})
-        if optimizer_state_dict is not None:
-            save_dict.update({'optimizer_state_dict': optimizer_state_dict})
 
-        model_info_str = ''
-        if model_info is not None:
-            for k, v in model_info.items():
-                model_info_str += f'_{k}{v}'
+        if other_kw is not None:
+            for k, v in other_kw.items():
+                save_dict.update({k: v})
 
         curr_time = get_time()
-        model_save_path = os.path.join(save_path, f"{curr_time}_Epoch{epoch}{model_info_str}.pth")
+        model_save_path = os.path.join(save_path, f"{curr_time}_epoch{epoch}.pth")  # e.g.20240101_epoch1.pth
         torch.save(save_dict, model_save_path)
-        logger.success(f'👍 Epoch:{epoch}: Save the Weight to :{save_path}\n')
+        logger.success(f'👍 Save epoch:{epoch} weight to :{save_path}\n')
 
     def remove_ddp_key(self) -> dict:
+        warnings.warn("", DeprecationWarning)
         del_count = 0
         del_ddp_key_flag = False
         new_state_dict = OrderedDict()
@@ -238,6 +230,8 @@ class Model:
         return new_state_dict
 
     def ddp_mode(self, sync_bn: bool = False) -> None:
+
+        warnings.warn("", DeprecationWarning)
         if self._gpu is None or self._gpu == -1:
             logger.warning(f'Your GPU:{self._gpu}.')
             return

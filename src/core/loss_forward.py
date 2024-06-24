@@ -9,15 +9,15 @@ from src.loss.period_loss import PeriodLoss
 from src.loss.dice_loss import DiceLoss
 
 __all__ = [
-    'BaseLossRunner',
-    'CrossEntropyLossRunner',
-    'DiceLossRunner',
-    'PeriodLossRunner',
+    'BaseLossForward',
+    'CrossEntropyLossForward',
+    'DiceLossForward',
+    'PeriodLossForward',
     'LOSS_FORWARD_TABLE'
 ]
 
 
-class BaseLossRunner:
+class BaseLossForward:
     def __init__(
         self,
         model_output: Optional[torch.Tensor] = None,
@@ -60,7 +60,7 @@ class BaseLossRunner:
         ...
 
 
-class CrossEntropyLossRunner(BaseLossRunner):
+class CrossEntropyLossForward(BaseLossForward):
     def __init__(
         self,
         model_output: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
@@ -89,7 +89,7 @@ class CrossEntropyLossRunner(BaseLossRunner):
         return _loss
 
 
-class PeriodLossRunner(BaseLossRunner):
+class PeriodLossForward(BaseLossForward):
     def __init__(
         self,
         model_output: Optional[List[torch.Tensor]] = None,
@@ -108,16 +108,14 @@ class PeriodLossRunner(BaseLossRunner):
     def weight(self):
         return self._weight
 
-    @weight.setter
-    def weight(self, val) -> None:
+    def set_weight(self, val) -> None:
         self._weight = val
 
     @property
-    def device(self):
+    def device(self) -> torch.device:
         return self._device
 
-    @device.setter
-    def device(self, val) -> None:
+    def set_device(self, val: torch.device) -> None:
         self._device = val
 
     def build(self) -> None:
@@ -137,7 +135,7 @@ class PeriodLossRunner(BaseLossRunner):
         return _loss
 
 
-class DiceLossRunner(BaseLossRunner):
+class DiceLossForward(BaseLossForward):
     def __init__(
         self,
         model_output: Optional[List[torch.Tensor]] = None,
@@ -154,17 +152,16 @@ class DiceLossRunner(BaseLossRunner):
     def layer_weights(self):
         return self._layer_weights
 
-    @layer_weights.setter
-    def layer_weights(self, val) -> None:
+    def set_layer_weights(self, val) -> None:
         self._layer_weights = val
 
     def build(self) -> None:
         self.loss = DiceLoss(**self.kwargs)
 
         if self.layer_weights is None:
-            self.layer_weights = [1, 1, 0.5, 0.5]
+            self._layer_weights = [1, 1, 0.5, 0.5]
         else:
-            self.layer_weights = self.layer_weights
+            self._layer_weights = self.layer_weights
 
         logger.success('Build DiceLoss Done.')
 
@@ -188,7 +185,7 @@ class DiceLossRunner(BaseLossRunner):
 
 
 LOSS_FORWARD_TABLE = {
-    'CrossEntropyLoss': CrossEntropyLossRunner,
-    'PeriodLoss': PeriodLossRunner,
-    'DiceLoss': DiceLossRunner,
+    'CrossEntropyLoss': CrossEntropyLossForward,
+    'PeriodLoss': PeriodLossForward,
+    'DiceLoss': DiceLossForward,
 }

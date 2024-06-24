@@ -1,15 +1,15 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
-task: classification  #classification segmentation multitask
+task: multitask  #classification segmentation multitask
 project: v3
 
 #Train setting----------------------------------------------------------------------------------------------------------
 gpu: 0 #-1=cpu
 seed: 0
-epoch: 0
-max_epoch: 10
+epochs: 10
 workers: 2
 workflow: [ [ train, 1 ], [ val, 1 ] ]
+save_period: 0 # (int) Save checkpoint every x epochs (disabled if < 1)
 model: shufflenet_v2_x1_0
 #model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0

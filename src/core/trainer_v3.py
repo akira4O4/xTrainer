@@ -4,7 +4,7 @@ from pathlib import Path
 
 import math
 import shutil
-from typing import Union, List, Optional, Tuple
+from typing import Union, List, Optional, Tuple, Any
 
 import torch
 import numpy as np
@@ -14,12 +14,12 @@ from dataclasses import asdict
 from torch.utils.data import DataLoader
 from mlflow import log_metric, log_param, set_experiment
 
-from src import CONFIG, Default_WorkSpace_Dir
+from src import CONFIG, DEFAULT_WORKSPACE
 from src.utils.util import load_yaml, get_num_of_images, timer, get_time, check_dir
-from .task import Task, task_convert
+from .task import Task
 from .args import ProjectArgs, TrainArgs, ModelArgs, DataSetArgs
-from .builder import build_dir, init_seeds, init_backends_cudnn
-from .builder import build_model, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_loss, build_lr_scheduler
+from .builder import init_seeds, init_backends_cudnn
+from .builder import build_loss_forward, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_lr_scheduler
 from .balanced_batch_sampler import BalancedBatchSampler
 from .dataset import ClassificationDataset, SegmentationDataSet
 from .transforms import ClassificationTransform, SegmentationTransform
@@ -36,7 +36,7 @@ def init_workspace(root: str) -> tuple:
     if os.path.isdir(root):
         project_root = root
     else:  # ./workspace/project
-        project_root = os.path.join(Default_WorkSpace_Dir, CONFIG('project'))
+        project_root = os.path.join(DEFAULT_WORKSPACE, CONFIG('project'))
 
     check_dir(project_root)
 
@@ -64,17 +64,49 @@ def backup_config(file: str, output: str) -> None:
 
 class Trainer:
     def __init__(self):
-        self.project_root_path, self.weight_path, self.output_path = init_workspace(CONFIG('project'))
 
-        # if self.model_args.gpu == -1:
-        #     logger.error('Current Is Not Support CPU Training.')
-        #     exit()
-        #
+        self.project_root_path, self.weight_path, self.output_path = init_workspace(CONFIG('project'))
+        self.is_classification: bool = False
+        self.is_segmentation: bool = False
+        self.is_multi_task: bool = False
+
+        self.loss_forwards: List[BaseLossForward] = []
+        self.loss_weights: List[int] = []
+
         # if self.train_args.accumulation_steps != 0:
         #     self.is_accumulation = True
         # else:
         #     self.is_accumulation = False
 
+        # Init work env ------------------------------------------------------------------------------------------------
+        init_seeds(CONFIG('seed'))
+        logger.info(f'Init seed:{CONFIG("seed")}.')
+
+        init_backends_cudnn(CONFIG('deterministic'))
+        logger.info(f'Init deterministic:{CONFIG("deterministic")}.')
+        logger.info(f'Init benchmark:{not CONFIG("deterministic")}.')
+
+        self.task = Task(CONFIG('task'))
+        logger.info(f"Task: {self.task}")
+
+        # Init Model --------------------------------------------------------------------------------------------------
+        self.model: Model = None  # noqa
+        self.init_model()
+
+        # Init Optimizer ----------------------------------------------------------------------------------------------
+        self.optimizer_wrapper: Union[OptimWrapper, AmpOptimWrapper] = None  # noqa
+        self.init_optimizer()
+
+        # Init Lr Scheduler -------------------------------------------------------------------------------------------
+        self.curr_lr = 0
+        self.lr_scheduler = None
+        self.scheduler_step_in_batch = False
+        self.init_lr_scheduler()
+
+        # Init loss ---------------------------------------------------------------------------------------------------
+        self.init_loss()
+
+        # Init dataset and dataloader ---------------------------------------------------------------------------------
         cls_ds_kw = CONFIG("classification")
         self.cls_ds_args = DataSetArgs(
             cls_ds_kw['batch'],
@@ -92,34 +124,6 @@ class Trainer:
             seg_ds_kw['labels'],
         )
 
-        init_seeds(CONFIG('seed'))
-        init_backends_cudnn(CONFIG('deterministic'))
-        # self.task = task_convert(self.project_args.task)
-
-        # Build Model
-        self.model: Model = None  # noqa
-        self.init_model()
-
-        # Build Optimizer
-        # self.amp_optimizer_wrapper: AmpOptimWrapper = None  # noqa
-        self.optimizer_wrapper: Union[OptimWrapper, AmpOptimWrapper] = None  # noqa
-        self.init_optimizer()
-
-        # Build Lr Scheduler
-        self.curr_lr = 0
-        self.lr_scheduler = None
-        self.scheduler_step_in_batch = False
-        self.init_lr_scheduler()
-
-        # # Init loss
-        # self.losses = {}
-        # self.loss_results = {
-        #     'classification': [],
-        #     'segmentation': []
-        # }
-        # self.losses_weights = []
-        # self.init_loss()
-        #
         # self.classification_data_args: dict = self.config.get('classification_data_config')
         # self.segmentation_data_args: dict = self.config.get('segmentation_data_config')
         #
@@ -218,12 +222,12 @@ class Trainer:
             "lr": CONFIG("lr0")
         }
 
+        logger.success(f'Build Optim: {CONFIG("optimizer")}.')
         if CONFIG("amp"):
             self.optimizer_wrapper = build_amp_optimizer_wrapper(**args)
-            logger.info('AMP is open.')
+            logger.info('AMP: Open Automatic Mixed Precision(AMP)')
         else:
             self.optimizer_wrapper = build_optimizer_wrapper(**args)
-            logger.info('AMP is close')
 
     def init_lr_scheduler(self) -> None:
         name = CONFIG("lr_scheduler")
@@ -244,6 +248,7 @@ class Trainer:
             ...
 
         self.lr_scheduler = build_lr_scheduler(name, **args)
+        logger.success(f'Build lr scheduler: {name} Done.')
 
     def init_expand_rate(self) -> None:
         if self.task == Task.MultiTask:
@@ -377,30 +382,24 @@ class Trainer:
                     f'model mask_classes:{self.model.mask_classes}!=num of dataset labels:{len(self.seg_train_dataset.labels)}')
                 exit()
 
-    def init_loss(self):
+    def init_loss(self) -> None:
 
-        if self.task in [Task.MultiTask, Task.CLS]:
-            self.losses.update({'classification': []})  # noqa
+        if self.task.CLS or self.task.MT:
+            self.loss_weights = [1]
+            self.loss_forwards.append(build_loss_forward('CrossEntropyLoss'))
 
-        if self.task in [Task.MultiTask, Task.SEG]:
-            self.losses.update({'segmentation': []})  # noqa
+        if self.task.SEG or self.task.MT:
+            self.loss_weights.extend([1, 0.5])
+            self.loss_forwards.extend(
+                [
+                    build_loss_forward('PeriodLoss', weight=[1] * self.model.mask_classes, device=self.model.device),
+                    build_loss_forward('DiceLoss')
+                ]
+            )
+        logger.info(f'loss weights: {self.loss_weights}.')
+        assert len(self.loss_weights) == len(self.loss_forwards)
 
-        self.losses_weights = self.loss_args.pop('loss_weights')
-
-        args: dict
-        for loss_type, loss_config in self.loss_args.items():
-            for name, args in loss_config.items():
-                if name == 'PeriodLoss':
-                    args.update({
-                        'device': self.model.device
-                    })
-                self.losses[loss_type].append(build_loss(name, **args))
-
-        if not self.losses:
-            logger.error('Loss is empty.')
-            return
-
-    def forward_with_train(self, images: torch.Tensor) -> Union[torch.Tensor, List[torch.Tensor]]:
+    def forward_with_train(self, images: torch.Tensor) -> Any:
 
         if images is None:
             logger.error('Images is None')
@@ -413,7 +412,7 @@ class Trainer:
 
         return model_output
 
-    def forward_with_val(self, images: torch.Tensor) -> Union[torch.Tensor, List[torch.Tensor]]:
+    def forward_with_val(self, images: torch.Tensor) -> Any:
 
         if images is None:
             logger.error('Images is None')
