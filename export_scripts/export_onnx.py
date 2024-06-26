@@ -3,26 +3,24 @@ import torch
 import onnx
 from onnxsim import simplify
 from loguru import logger
-from lab.utils import get_time
+from src.utils.util import get_time, load_yaml
 import shutil
-from lab.network.shufflenetv2 import shufflenet_v2_x1_0 as classification_shufflenet
-from lab.network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenet
-from lab.network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet
-
-from lab.utils import load_yaml
+from src.network.shufflenetv2 import shufflenet_v2_x1_0 as classification_shufflenet
+from src.network.shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenet
+from src.network.shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenet
 
 
 def export(
-        model,
-        img: torch.Tensor,
-        opset_version: int,
-        output_path: str,
-        input_names: list,
-        output_names: list,
-        dynamic_axes: dict = None,
-        is_simplify: bool = True,
-        verbose=True,
-        **kwargs
+    model,
+    img: torch.Tensor,
+    opset_version: int,
+    output_path: str,
+    input_names: list,
+    output_names: list,
+    dynamic_axes: dict = None,
+    is_simplify: bool = True,
+    verbose=True,
+    **kwargs
 ):
     logger.info('Starting ONNX export with onnx %s...' % onnx.__version__)
 

@@ -10,25 +10,25 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
-from dataclasses import asdict
 from torch.utils.data import DataLoader
 from mlflow import log_metric, log_param, set_experiment
 
 from src import CONFIG, DEFAULT_WORKSPACE
 from src.utils.util import load_yaml, get_num_of_images, timer, get_time, check_dir
 from .task import Task
-from .args import ProjectArgs, TrainArgs, ModelArgs, DataSetArgs
 from .builder import init_seeds, init_backends_cudnn
 from .builder import build_loss_forward, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_lr_scheduler
 from .balanced_batch_sampler import BalancedBatchSampler
 from .dataset import ClassificationDataset, SegmentationDataSet
-from .transforms import ClassificationTransform, SegmentationTransform
+from .transforms import ClsImageTransform, ClsTargetTransform
+from .transforms import SegTargetTransform, SegImageTransform
+from .transforms import ValTransform
 from .model import Model
 from .optim import AmpOptimWrapper, OptimWrapper
 from .loss_forward import *
 from .performance import calc_performance
 from .data_logger import DataLogger
-from .utils import save_yaml
+from .utils import save_yaml, error_exit, round4, round8
 from dataclasses import dataclass
 
 
@@ -58,8 +58,28 @@ def init_mlflow(exp_name: str) -> None:
         logger.info(f'MLFlow Experiment Name:{exp_name}.')
 
 
-def backup_config(file: str, output: str) -> None:
+def backup(file: str, output: str) -> None:
     shutil.copy(file, output)
+
+
+def align_data_size(data1: int, data2: int) -> Tuple[int, int]:
+    assert data1 != 0
+    assert data2 != 0
+
+    expanding_rate1 = 1
+    expanding_rate2 = 1
+
+    if data1 > data2:
+        difference = data1 - data2
+        expanding_rate1 = 0
+    else:
+        difference = data2 - data1
+        expanding_rate2 = 0
+
+    expanding_rate1 *= math.ceil(difference / data1)
+    expanding_rate2 *= math.ceil(difference / data2)
+
+    return expanding_rate1, expanding_rate2
 
 
 class Trainer:
@@ -107,77 +127,61 @@ class Trainer:
         self.init_loss()
 
         # Init dataset and dataloader ---------------------------------------------------------------------------------
-
-        seg_ds_kw = CONFIG("classification")
-        self.seg_ds_args = DataSetArgs(
-            seg_ds_kw['batch'],
-            seg_ds_kw['classes'],
-            seg_ds_kw['train'],
-            seg_ds_kw['val'],
-            seg_ds_kw['labels'],
-        )
-
-        if self.task.MT:
-            self.build_classification_ds_dl()
-        if self.task.SEG:
-            ...
         if self.task.CLS:
+            self.cls_train_dataset: ClassificationDataset = None  # noqa
+            self.cls_val_dataset: ClassificationDataset = None  # noqa
+            self.cls_train_dataloader: DataLoader = None  # noqa
+            self.cls_val_dataloader: DataLoader = None  # noqa
             self.build_classification_ds_dl()
 
-        # # Init Classification And Segmentation Expand Rate
-        # self.cls_expanding_rate = 0
-        # self.seg_expanding_rate = 0
-        # self.init_expand_rate()
-        #
-        # self.total_step = 0
-        # # Init Classification Dataset And Dataloader
-        # if self.task == Task.MultiTask:
-        #     self.classification_data_args['dataset']['train']['expanding_rate'] = self.cls_expanding_rate
-        #     self.segmentation_data_args['dataset']['train']['expanding_rate'] = self.seg_expanding_rate
-        #
-        # if self.task in [Task.MultiTask, Task.CLS]:
-        #     self.cls_train_dataset: ClassificationDataset = None  # noqa
-        #     self.cls_val_dataset: ClassificationDataset = None  # noqa
-        #     self.cls_train_dataloader: DataLoader = None  # noqa
-        #     self.cls_val_dataloader: DataLoader = None  # noqa
-        #     self.build_classification_dataset_and_dataloader()
-        #     logger.success('Init Classification Dataset And Dataloader Done.')
-        #
-        # # Init Segmentation Dataset And Dataloader
-        # if self.task in [Task.MultiTask, Task.SEG]:
-        #     self.seg_train_dataset: SegmentationDataSet = None  # noqa
-        #     self.seg_val_dataset: SegmentationDataSet = None  # noqa
-        #     self.seg_train_dataloader: DataLoader = None  # noqa
-        #     self.seg_val_dataloader: DataLoader = None  # noqa
-        #     self.build_segmentation_dataset_and_dataloader()
-        #     logger.success('Init Segmentation Dataset And Dataloader Done.')
-        #
-        # if self.task == Task.MultiTask:
-        #     self.total_step = min(len(self.cls_train_dataloader), len(self.seg_train_dataloader))
-        # elif self.task == Task.CLS:
-        #     self.total_step = len(self.cls_train_dataloader)
-        # elif self.task == Task.SEG:
-        #     self.total_step = len(self.seg_train_dataloader)
-        #
-        # self.check_num_of_classes()
-        # self.backup_config()
-        #
+            if CONFIG('classification')['classes'] != self.cls_train_dataset.num_of_label:
+                logger.error('classification num of classes setting error.')
+                error_exit()
+
+        if self.task.SEG:
+            self.seg_train_dataset: SegmentationDataSet = None  # noqa
+            self.seg_val_dataset: SegmentationDataSet = None  # noqa
+            self.seg_train_dataloader: DataLoader = None  # noqa
+            self.seg_val_dataloader: DataLoader = None  # noqa
+            self.build_segmentation_ds_dl()
+
+            if CONFIG('segmentation')['classes'] != self.seg_train_dataset.num_of_label:
+                logger.error('segmentation num of classes setting error.')
+                error_exit()
+
+        # Expand dataset -----------------------------------------------------------------------------------------------
+        if self.task.MT:
+            rate1, rate2 = align_data_size(self.cls_train_dataset.data_size, self.seg_train_dataset.data_size)
+            self.cls_train_dataset.expanding_data(rate1)
+            self.seg_train_dataset.expanding_data(rate2)
+
+            logger.info(f'Expanding classification dataset to: {self.cls_train_dataset.data_size} x{rate1}')
+            logger.info(f'Expanding segmentation dataset to: {self.seg_train_dataset.data_size} x{rate2}')
+
+        self.total_step = 0
+        if self.task.MT:
+            self.total_step = min(len(self.cls_train_dataloader), len(self.seg_train_dataloader))
+        elif self.task.CLS:
+            self.total_step = len(self.cls_train_dataloader)
+        elif self.task.SEG:
+            self.total_step = len(self.seg_train_dataloader)
+
         # self.train_logger = None
         # self.val_logger = None
-        #
+
         # self.training_top1_data_logger: DataLogger = None  # noqa
         # self.training_topk_data_logger: DataLogger = None  # noqa
         # self.training_miou_data_logger: DataLogger = None  # noqa
-        #
+
         # self.val_top1_data_logger: DataLogger = None  # noqa
         # self.val_topk_data_logger: DataLogger = None  # noqa
         # self.val_miou_data_logger: DataLogger = None  # noqa
-        #
+
         # self.classification_loss_data_logger: DataLogger = None  # noqa
         # self.segmentation_loss_data_logger: DataLogger = None  # noqa
-        #
+
         # self.init_logger()
-        #
+
         init_mlflow(CONFIG("mlflow_experiment_name"))
         logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
 
@@ -247,162 +251,110 @@ class Trainer:
         self.lr_scheduler = build_lr_scheduler(name, **args)
         logger.success(f'Build lr scheduler: {name} Done.')
 
-    def init_expand_rate(self) -> None:
-        if self.task == Task.MultiTask:
-            self.cls_expanding_rate, self.seg_expanding_rate = self.calc_expand_rate()
-            logger.info(f'cls dataset expanding rate: x{self.cls_expanding_rate}')
-            logger.info(f"seg dataset expanding rate: x{self.seg_expanding_rate}")
-
-    def calc_expand_rate(self) -> Tuple[int, int]:
-        # expanding data
-        cls_train_num_of_images = get_num_of_images(self.classification_data_args['dataset']['train']['root'])
-        seg_train_num_of_images = get_num_of_images(self.segmentation_data_args['dataset']['train']['root'])
-
-        cls_expanding_rate = 1
-        seg_expanding_rate = 1
-        if cls_train_num_of_images > seg_train_num_of_images:
-            difference = cls_train_num_of_images - seg_train_num_of_images
-            cls_expanding_rate = 0
-        else:
-            difference = seg_train_num_of_images - cls_train_num_of_images
-            seg_expanding_rate = 0
-
-        cls_expanding_rate *= math.ceil(difference / cls_train_num_of_images)
-        seg_expanding_rate *= math.ceil(difference / seg_train_num_of_images)
-
-        log_param('cls data expanding rate', cls_expanding_rate)
-        log_param('seg data expanding rate', seg_expanding_rate)
-
-        return cls_expanding_rate, seg_expanding_rate
-
     def build_classification_ds_dl(self) -> None:
-        # Add transform
-        # Train transform
 
-        cls_ds_kw = CONFIG("classification")
-        # self.cls_ds_args = DataSetArgs(
-        #     cls_ds_kw['batch'],
-        #     cls_ds_kw['classes'],
-        #     cls_ds_kw['train'],
-        #     cls_ds_kw['val'],
-        #     cls_ds_kw['labels'],
-        # )
-        classification_transform = ClassificationDataset(
+        image_t = ClsImageTransform()
+        target_t = ClsTargetTransform()
+        val_t = ValTransform()
+
+        # Build Dataset ------------------------------------------------------------------------------------------------
+        self.cls_train_dataset = ClassificationDataset(
             root=CONFIG('classification')['train'],
             wh=CONFIG('wh'),
+            transform=image_t,
+            target_transform=target_t,
+            letterbox=CONFIG('letterbox')
         )
-        save_yaml(
-            classification_transform.labels,
-            os.path.join(self.output_path, 'cls_labels.yaml')
+        self.cls_val_dataset = ClassificationDataset(
+            root=CONFIG('classification')['val'],
+            wh=CONFIG('wh'),
+            transform=val_t,
+            target_transform=target_t,
+            letterbox=CONFIG('letterbox')
         )
+        logger.info(f'Classification num of labels: {self.cls_train_dataset.num_of_label}.')
+        logger.info(f'Classification Train data size: {self.cls_train_dataset.data_size}.')
+        logger.info(f'Classification Val data size: {self.cls_val_dataset.data_size}.')
 
-        # self.classification_data_args['dataset']['train'][
-        #     'transform'] = classification_transform.image_transform
-        # self.classification_data_args['dataset']['train'][
-        #     'target_transform'] = classification_transform.target_transform
-        #
-        # # Val transform
-        # self.classification_data_args['dataset']['val'][
-        #     'transform'] = classification_transform.normalize_transform
-        # self.classification_data_args['dataset']['val'][
-        #     'target_transform'] = classification_transform.target_transform
+        save_yaml(self.cls_train_dataset.labels, os.path.join(self.output_path, 'cls_labels.yaml'))
 
-        # Build Dataset
-        # self.cls_train_dataset = ClassificationDataset(
-        # **self.classification_data_args['dataset']['train']
-        # )
-        # self.cls_val_dataset = ClassificationDataset(**self.classification_data_args['dataset']['val'])
-        # self.cls_train_dataset.save_label_to_id_map(
-        #     os.path.join(self.curr_exp_path, 'cls_id_to_label.txt'),
-        #     self.cls_train_dataset.labels_to_idx
-        # )
+        # Build BalancedBatchSampler -----------------------------------------------------------------------------------
+        balanced_batch_sampler = None
+        if CONFIG('balanced_batch_sampler'):
+            balanced_batch_sampler = BalancedBatchSampler(
+                torch.tensor(self.cls_train_dataset.targets),
+                n_classes=self.model.num_classes,
+                n_samples=math.ceil(CONFIG('classification')['batch'] / self.model.num_classes)
+            )
 
-        # BalancedBatchSampler
-        # if self.classification_data_args['dataloader']['train']['batch_sampler'] == 'BalancedBatchSampler':
-        #     batch_sampler = BalancedBatchSampler(
-        #         torch.tensor(self.cls_train_dataset.targets),
-        #         n_classes=self.model.num_classes,
-        #         n_samples=math.ceil(
-        #             self.classification_data_args['dataloader']['train']['batch_size'] / self.model.num_classes
-        #         )
-        #     )
-        #     self.classification_data_args['dataloader']['train'].update({
-        #         'shuffle': False,
-        #         'batch_size': 1,
-        #         'drop_last': False,
-        #         'sampler': None,
-        #         'batch_sampler': batch_sampler
-        #     })
-
-        # Build Dataloader
-        # self.cls_train_dataloader = DataLoader(
-        #     dataset=self.cls_train_dataset,
-        #     **self.classification_data_args['dataloader']['train']
-        # )
-        # self.cls_val_dataloader = DataLoader(
-        #     dataset=self.cls_val_dataset,
-        #     **self.classification_data_args['dataloader']['val']
-        # )
+        # Build Dataloader ---------------------------------------------------------------------------------------------
+        self.cls_train_dataloader = DataLoader(
+            dataset=self.cls_train_dataset,
+            batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('batch'),
+            num_workers=CONFIG('workers'),
+            pin_memory=CONFIG('pin_memory'),
+            batch_sampler=balanced_batch_sampler,
+            shuffle=False,
+            drop_last=False,
+            sampler=None
+        )
+        self.cls_val_dataloader = DataLoader(
+            dataset=self.cls_val_dataset,
+            batch_size=CONFIG('batch'),
+            num_workers=CONFIG('workers'),
+            pin_memory=CONFIG('pin_memory'),
+            shuffle=False
+        )
 
     def build_segmentation_ds_dl(self) -> None:
-        # Add transform
-        segmentation_transform = None
-        if self.segmentation_data_args['dataset']['train'].get('transform_resize') is not None:
-            segmentation_transform = SegmentationTransform(
-                resize_wh=self.segmentation_data_args['dataset']['train']['wh']
-            )
-        else:
-            segmentation_transform = SegmentationTransform()
+        image_t = SegImageTransform()
+        target_t = SegTargetTransform()
+        val_t = ValTransform()
 
-        # Train transform
-        self.segmentation_data_args['dataset']['train'][
-            'transform'] = segmentation_transform.image_transform
-        self.segmentation_data_args['dataset']['train'][
-            'target_transform'] = segmentation_transform.target_transform
+        # Build Dataset ------------------------------------------------------------------------------------------------
+        self.seg_train_dataset = SegmentationDataSet(
+            root=CONFIG('segmentation')['train'],
+            transform=image_t,
+            target_transform=target_t,
+        )
+        self.seg_val_dataset = SegmentationDataSet(
+            root=CONFIG('segmentation')['val'],
+            transform=val_t,
+            target_transform=target_t,
+        )
+        background_size = len(self.seg_val_dataset.background_samples)
+        logger.info(f'Segmentation num of labels: {self.seg_train_dataset.num_of_label}.')
+        logger.info(f'Segmentation Train data size: {self.seg_train_dataset.data_size} (background:{background_size}).')
+        logger.info(f'Segmentation Val data size: {self.seg_val_dataset.data_size}.')
 
-        # Val transform
-        self.segmentation_data_args['dataset']['val'][
-            'transform'] = segmentation_transform.image_transform
-        self.segmentation_data_args['dataset']['val'][
-            'target_transform'] = segmentation_transform.target_transform
-
-        # Build Dataset
-        self.seg_train_dataset = SegmentationDataSet(**self.segmentation_data_args['dataset']['train'])
-        self.seg_val_dataset = SegmentationDataSet(**self.segmentation_data_args['dataset']['val'])
-        self.seg_train_dataset.save_label_to_id_map(
-            os.path.join(self.curr_exp_path, 'seg_id_to_label.txt'),
-            self.seg_train_dataset.labels_to_idx
+        save_yaml(
+            self.seg_train_dataset.labels,
+            os.path.join(self.output_path, 'seg_labels.yaml')
         )
 
-        # Build Dataloader
+        # Build Dataloader ---------------------------------------------------------------------------------------------
         self.seg_train_dataloader = DataLoader(
             dataset=self.seg_train_dataset,
-            **self.segmentation_data_args['dataloader']['train']
+            batch_size=CONFIG('batch'),
+            shuffle=False,
+            num_workers=CONFIG('workers'),
+            pin_memory=CONFIG('pin_memory'),
         )
         self.seg_val_dataloader = DataLoader(
             dataset=self.seg_val_dataset,
-            **self.segmentation_data_args['dataloader']['val']
+            batch_size=CONFIG('batch'),
+            shuffle=False,
+            num_workers=CONFIG('workers'),
+            pin_memory=CONFIG('pin_memory'),
         )
-
-    def check_num_of_classes(self) -> None:
-        if self.task in [Task.MultiTask, Task.CLS]:
-            if self.model.num_classes != len(self.cls_train_dataset.labels):
-                logger.error(
-                    f'model num_classes:{self.model.num_classes}!=num of dataset labels:{len(self.cls_train_dataset.labels)}')
-                exit()
-        if self.task in [Task.MultiTask, Task.SEG]:
-            if self.model.mask_classes != len(self.seg_train_dataset.labels):
-                logger.error(
-                    f'model mask_classes:{self.model.mask_classes}!=num of dataset labels:{len(self.seg_train_dataset.labels)}')
-                exit()
 
     def init_loss(self) -> None:
 
-        if self.task.CLS or self.task.MT:
+        if self.task.CLS:
             self.loss_weights = [1]
             self.loss_forwards.append(build_loss_forward('CrossEntropyLoss'))
 
-        if self.task.SEG or self.task.MT:
+        if self.task.SEG:
             self.loss_weights.extend([1, 0.5])
             self.loss_forwards.extend(
                 [
@@ -445,42 +397,36 @@ class Trainer:
             return data.cuda(self.model.device, non_blocking=True)
         return data
 
-    def run(self):
-        while self.train_args.epoch < self.train_args.max_epoch:
+    def run(self) -> None:
+        curr_epoch = 0
+        while curr_epoch < CONFIG('epochs'):
             # n*train -> k*val -> n*train->...
-            for i, flow in enumerate(self.train_args.workflow):
+            for i, flow in enumerate(CONFIG('workflow')):
                 mode, epochs = flow
                 run_one_epoch = getattr(self, mode)
 
                 for _ in range(epochs):
-                    if self.train_args.epoch >= self.train_args.max_epoch:
+                    if curr_epoch >= CONFIG('epochs'):
                         break
 
                     run_one_epoch()  # train() or val()
 
                     if mode == 'train':
-                        self.train_args.epoch += 1
-                        log_metric('Epoch', self.train_args.epoch)
+                        curr_epoch += 1
+                        log_metric('Epoch', curr_epoch)
 
                     elif mode == 'val':
                         best_weight_info = {}
 
-                        if self.task in [Task.MultiTask, Task.CLS]:
-                            best_weight_info.update({
-                                'Top1#': self.round_float_4(self.val_top1_data_logger.avg)
-                            })
+                        if self.task.MT:
+                            best_weight_info.update({'Top1#': round4(self.val_top1_data_logger.avg)})
 
-                        if self.task in [Task.MultiTask, Task.SEG]:
-                            best_weight_info.update({
-                                'MIoU#': self.round_float_4(self.val_miou_data_logger.avg)
-                            })
+                        if self.task.MT:
+                            best_weight_info.update({'MIoU#': round4(self.val_miou_data_logger.avg)})
 
                         self.model.save_checkpoint(
                             save_path=self.weights_dir,
-                            epoch=self.train_args.epoch,
-                            lr=self.curr_lr,
-                            optimizer_state_dict=self.optimizer_wrapper.state_dict(),
-                            model_info=best_weight_info
+                            epoch=curr_epoch,
                         )
 
                         self.val_top1_data_logger.reset()
@@ -494,13 +440,13 @@ class Trainer:
             self.model.train()
 
         self.optimizer_wrapper.step()
-        self.curr_lr = self.round_float_8(self.optimizer_wrapper.lr[0])
+        self.curr_lr = round8(self.optimizer_wrapper.lr[0])
         log_metric('Lr', self.curr_lr)
 
         dataloaders = []
-        if self.task in [Task.CLS, Task.MultiTask]:
+        if self.task.CLS:
             dataloaders.append(self.cls_train_dataloader)
-        if self.task in [Task.SEG, Task.MultiTask]:
+        if self.task.SEG:
             dataloaders.append(self.seg_train_dataloader)
 
         # Update lr
@@ -509,7 +455,7 @@ class Trainer:
 
         datas: tuple
         for curr_step, datas in enumerate(zip(*dataloaders)):
-            if self.task == Task.MultiTask:
+            if self.task.MT:
                 cls_data, seg_data = datas
             else:
                 cls_data = seg_data = datas[0]  # cls or seg training

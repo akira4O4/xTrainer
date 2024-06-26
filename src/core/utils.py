@@ -4,14 +4,24 @@ import json
 import yaml
 
 
-def load_json(self) -> None:
-    with open(self.path, 'r') as config_file:
-        self._data = json.load(config_file)
+def round4(data):
+    return round(float(data), 4)
 
 
-def load_yaml(self) -> None:
-    with open(self._path, encoding='utf-8') as f:
-        self._data = yaml.load(f, Loader=yaml.FullLoader)
+def round8(data):
+    return round(float(data), 8)
+
+
+def load_json(path: str):
+    with open(path, 'r') as config_file:
+        data = json.load(config_file)
+    return data
+
+
+def load_yaml(path: str):
+    with open(path, encoding='utf-8') as f:
+        data = yaml.load(f, Loader=yaml.FullLoader)
+    return data
 
 
 def save_json(data, save: str) -> None:
@@ -53,3 +63,7 @@ def timer(func):
 def get_time(fmt: str = '%Y%m%d_%H%M%S') -> str:
     time_str = time.strftime(fmt, time.localtime())
     return str(time_str)
+
+
+def error_exit() -> None:
+    exit(1)

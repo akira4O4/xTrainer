@@ -1,15 +1,20 @@
-import logging
-from typing import Optional, Union
-
 import cv2
 import torch
 import numpy as np
 from PIL import Image
-from torchvision.transforms import Normalize, Resize
+from torchvision.transforms import Normalize
 from torchvision.transforms import Compose, ToTensor
 from imgaug import augmenters as ia
 from imgaug import augmenters as iaa
-from typing import List
+
+__all__ = [
+    'BaseTransform',
+    'ValTransform',
+    'ClsImageTransform',
+    'ClsTargetTransform',
+    'SegImageTransform',
+    'SegTargetTransform'
+]
 
 
 class BaseTransform:
@@ -22,21 +27,22 @@ class BaseTransform:
             Normalize(mean=self._mean, std=self._std)
         ]
 
-    def add_op(self, op) -> None:
-        self._ops.append(op)
-
-    def set_mean(self, mean: List[float]) -> None:
-        self._mean = mean
-
-    def set_std(self, std: List[float]) -> None:
-        self._std = std
-
-    @property
-    def base_transform(self):
+    def get_compose(self):
         return Compose(self._ops)
 
 
-class ClsTransform(BaseTransform):
+class ValTransform(BaseTransform):
+    def __init__(self):
+        super(ValTransform, self).__init__()
+
+    def __call__(self, img: np.ndarray) -> torch.Tensor:
+        assert type(img) == np.ndarray
+        t = self.get_compose()
+        img = t(img)
+        return img
+
+
+class ClsImageTransform(BaseTransform):
     def __init__(self):
         super().__init__()
         self.iaa_aug_seq = iaa.Sequential(
@@ -52,7 +58,8 @@ class ClsTransform(BaseTransform):
         assert type(img) == np.ndarray
 
         img = self.iaa_aug_seq.augment_image(img)
-        img = self.base_transform(img)
+        t = self.get_compose()
+        img = t(img)
         return img
 
 
@@ -62,20 +69,6 @@ class ClsTargetTransform:
 
     def __call__(self, data):
         return data
-
-
-# class ClassificationTransform(BaseTransform):
-#     def __init__(self) -> None:
-#         super().__init__()
-#
-#     @property
-#     def image_transform(self):
-#         image_transform = IAATransform()
-#         return image_transform
-#
-#     @property
-#     def target_transform(self) -> None:
-#         return None
 
 
 class AugKeypoints(torch.nn.Module):  # noqa
@@ -127,26 +120,20 @@ class AugKeypoints(torch.nn.Module):  # noqa
         return self.__class__.__name__ + '(p={})'.format(self.p)
 
 
-class SegTransform(BaseTransform):
+class SegImageTransform(BaseTransform):
     def __init__(self) -> None:
         super().__init__()
 
     def __call__(self, img: np.ndarray) -> torch.Tensor:
         assert type(img) == np.ndarray
-        img = self.base_transform(img)
+        t = self.get_compose()
+        img = t(img)
         return img
 
 
-class SegmentationTransform(BaseTransform):
+class SegTargetTransform(BaseTransform):
     def __init__(self) -> None:
         super().__init__()
-        # self.iaa_transform = IAATransform()
 
-    # @property
     def __call__(self, keypoint):
-        # target_transform = AugKeypoints(
-        #     p=1,
-        #     seq_det=self.iaa_transform.iaa_aug_seq,
-        #     convert_float_coord=True
-        # )
         return keypoint

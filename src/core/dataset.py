@@ -1,20 +1,17 @@
 import os
-import os.path as osp
-import sys
-import json
 import random
 from abc import ABC
-import pandas as pd
-import cv2
-import numpy as np
-import torch
+from typing import Optional, Callable, Tuple, List, Union
 
+import cv2
+import torch
+import numpy as np
 from PIL import Image
 from PIL import ImageDraw
-from typing import Optional, Callable, Any, Tuple, Dict, List, Union
-from torch.utils.data import Dataset
 from loguru import logger
-from .utils import save_yaml, get_images
+from torch.utils.data import Dataset
+
+from .utils import get_images, load_json
 
 __all__ = [
     'BaseDataset',
@@ -27,7 +24,9 @@ class BaseDataset(Dataset, ABC):
     def __init__(
         self,
         loader_type: str = 'pil',
-        img_type: Optional[str] = 'RGB'
+        img_type: Optional[str] = 'RGB',
+        transform: Optional[Callable] = None,  # to samples
+        target_transform: Optional[Callable] = None,  # to target
     ) -> None:
 
         self.support_img_suffix = ('.jpg', '.jpeg', '.png')
@@ -36,18 +35,43 @@ class BaseDataset(Dataset, ABC):
         self.loader_type = loader_type
         self.image_loader = self.get_image_loader(loader_type)
 
-        assert img_type in self.support_img_type, logger.error('Image type is not support.')
+        self.transform = transform
+        self.target_transform = target_transform
+
+        self.samples = []
+
+        self._labels: List[str] = []
+
+        assert img_type in self.support_img_type, 'Image type is not support.'
         self.img_type = img_type
 
-    @staticmethod
-    def expanding_data(data: list, rate: int = 0) -> list:
-        assert rate >= 0, f'Expanding data rate<0.'
+    @property
+    def labels(self) -> list:
+        return self._labels
+
+    @property
+    def num_of_label(self) -> int:
+        return len(self._labels)
+
+    @property
+    def data_size(self) -> int:
+        return len(self.samples)
+
+    def set_transform(self, val) -> None:
+        self.transform = val
+
+    def set_target_transform(self, val) -> None:
+        self.target_transform = val
+
+    def expanding_data(self, rate: int = 0):
+        if rate == 0:
+            return
 
         new_data = []
         for i in range(rate):
-            new_data += data
+            new_data += self.samples
         random.shuffle(new_data)
-        return new_data
+        self.samples = new_data
 
     def check_image_suffix(self, filename: str) -> bool:
         return filename.lower().endswith(self.support_img_suffix)
@@ -81,42 +105,6 @@ class BaseDataset(Dataset, ABC):
             return self.opencv_loader
         elif loader_type == 'pil':
             return self.pil_loader
-
-    # @staticmethod
-    # def gen_idx_to_labels_map(classes: list) -> dict:
-    #     # idx_to_cls={0:cls0,1:cls1,...}
-    #     idx_to_label = {idx: label for idx, label in enumerate(classes)}
-    #     return idx_to_label
-    #
-    # @staticmethod
-    # def gen_labels_to_idx_map(classes: list) -> dict:
-    #     # label_to_idx={classes0:0,classes1:1,...}
-    #     label_to_idx = {label: idx for idx, label in enumerate(classes)}
-    #     return label_to_idx
-    #
-    # @staticmethod
-    # def save_label_to_id_map(save_path: str, label_to_idx: dict) -> None:
-    #     with open(save_path, 'w') as f:
-    #         # classes_to_idx=classes1:0,classes1:1,...
-    #         # classes_id_map = 0:classes1,1:classes2,...
-    #         f.writelines([f'{idx}:{cls}\n' for cls, idx in label_to_idx.items()])
-    #
-    # @staticmethod
-    # def load_label_to_id_map(label_to_id_map_path: str) -> dict:
-    #
-    #     if not os.path.exists(label_to_id_map_path):
-    #         return {}
-    #
-    #     class_id_map = {}
-    #     with open(label_to_id_map_path, "r") as f:
-    #         for line in f.readlines():
-    #             line = line.strip()
-    #             # k=0,1,2,...
-    #             # v=classes1,classes2,...
-    #             idx, cls = line.split(":", 1)
-    #             # class_id_map={0:"classes1",1:"classes2",...}
-    #             class_id_map.update({int(idx): cls})
-    #     return class_id_map
 
     @staticmethod
     def get_dirs(path: str) -> list:
@@ -196,7 +184,9 @@ class ClassificationDataset(BaseDataset):
     ):
         super(ClassificationDataset, self).__init__(
             loader_type=loader_type,
-            img_type=img_type
+            img_type=img_type,
+            transform=transform,
+            target_transform=target_transform
         )
 
         self.root = root
@@ -205,55 +195,37 @@ class ClassificationDataset(BaseDataset):
         self.letterbox_flag = letterbox
         self.letterbox_color = (114, 114, 114)
 
-        self._labels: List[str] = []
-        self.num_of_labels = 0
-        self.check_labels()
+        self.find_labels()
 
-        # self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
+        # samples=[('xxx/xxx.jpg',1),(xxx/xxx.jpg,0),...]
+        self.samples: List[Tuple[str, int]] = []
+        self.load_data()
 
-        self.transform = transform
-        self.target_transform = target_transform
-
-        self.samples: List[str] = []
-        self.get_samples()
-
-        if expanding_rate != 0:
-            self.samples += self.expanding_data(self.samples, expanding_rate)
+        if expanding_rate > 0:
+            self.expanding_data(expanding_rate)
 
         self.targets = [s[1] for s in self.samples]
         if len(self.samples) == 0:
             logger.warning(f"Found 0 files in sub folders of: {self.root}\n")
 
-    @property
-    def labels(self) -> list:
-        return self._labels
-
-    def check_labels(self) -> None:
+    def find_labels(self) -> None:
         for d in os.scandir(self.root):
             if d.is_dir():
                 self._labels.append(d.name)
         self._labels.sort()
-        self.num_of_labels = len(self._labels)
 
-    def set_transform(self, val) -> None:
-        self.transform = val
-
-    def set_target_transform(self, val) -> None:
-        self.target_transform = val
-
-    def get_samples(self) -> None:
+    def load_data(self) -> None:
 
         # samples=[('xxx/xxx.jpg',1),(xxx/xxx.jpg,0),...]
 
-        for idx in range(self.num_of_labels):
+        for idx in range(self.num_of_label):
             target_path = os.path.join(self.root, self._labels[idx])
 
             images: List[str] = get_images(target_path, self.support_img_suffix)
 
-            print(f'{self.labels[idx]}: {len(images)}')
+            # print(f'{self.labels[idx]}: {len(images)}')
             self.samples.extend(list(map(lambda x: (x, idx), images)))  # noqa
 
-        print(f'Total Classification Images: {len(self.samples)}')
         random.shuffle(self.samples)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
@@ -295,126 +267,115 @@ class SegmentationDataSet(BaseDataset):
     def __init__(
         self,
         root: str,
-        img_loader_type: str = 'pil',
+        loader_type: str = 'pil',
         add_background: bool = True,
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
         is_training: Optional[bool] = False,
         expanding_rate: Optional[int] = 0,
         img_type: Optional[str] = 'RGB',
-        **kwargs
     ) -> None:
         super(SegmentationDataSet, self).__init__(
-            img_loader_type=img_loader_type,
-            img_type=img_type
+            loader_type=loader_type,
+            img_type=img_type,
+            transform=transform,
+            target_transform=target_transform
         )
         self.root = root
+        self.add_background = add_background
         self.is_training = is_training
-        self.transform = transform
-        self.target_transform = target_transform
 
-        self._labels = self.find_labels(self.root, add_background)
-        self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
+        self.find_labels()
         self.samples = self.get_file_by_subfix(self.root, self.support_img_suffix)
 
         if expanding_rate != 0:
-            self.samples += self.expanding_data(self.samples, expanding_rate)
+            self.expanding_data(expanding_rate)
 
-        self.samples_info, self.samples_with_label, self.background_samples = self.data_prefetch(self.samples)
+        self.samples_with_label = []
+        self.background_samples = []
+        self.samples_info = {}
+
+        self.data_prefetch()
         self.samples = self.samples_with_label + self.background_samples
 
-    @property
-    def labels(self) -> list:
-        return self._labels
+    def find_labels(self):
 
-    @property
-    def labels_to_idx(self) -> dict:
-        return self._labels_to_idx
-
-    def set_transform(self, val):
-        self.transform = val
-
-    def set_target_transform(self, val):
-        self.target_transform = val
-
-    # check json file
-    @staticmethod
-    def json_loader(path: str):
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data
-
-    def find_labels(self, root: str, add_background: bool = True) -> list:
-
-        classes = ['0_background_'] if add_background else []
-        json_files = self.get_file_by_subfix(root, '.json')
+        self._labels = ['0_background_'] if self.add_background else []
+        json_files = self.get_file_by_subfix(self.root, '.json')
         for json_item in json_files:
             if os.path.exists(json_item):
-                key_points_json = self.json_loader(json_item)
-                # "shapes": [
-                #     {
-                #         "label": "qipao",
-                #         "points": []
-                #       }
-                # ]
-                for key_points in key_points_json.get("shapes"):
-                    if key_points["label"] not in classes:
-                        classes.append(key_points["label"])
+                key_points_json = load_json(json_item)
+                '''
+                shapes": [
+                   {
+                       "label": "",
+                       "points": []
+                    }
+                ]
+                '''
+                for shape in key_points_json.get("shapes"):
+                    if shape["label"] not in self._labels:
+                        self._labels.append(shape["label"])
+        self._labels.sort()
 
-        return sorted(classes)
-
-    def data_prefetch(self, samples: list) -> tuple:
-        samples_with_label = []
-        background_samples = []
-        samples_info = {}
-
-        for img_path in samples:
+    def data_prefetch(self):
+        for img_path in self.samples:
 
             img_basename = os.path.basename(img_path)
             name, ext = os.path.splitext(img_basename)
             label_path = img_path.replace(ext, '.json')
 
             if os.path.exists(label_path):
-                label_data = self.json_loader(label_path)
+                label_data = load_json(label_path)
+
+                # shapes:[{label,points},{},...]
+                shapes = label_data.get('shapes')
 
                 # 首先要进行关键点按label进行排序，因为labelme存储的标签可能不是从label开始的。
-                sort_res = sorted(label_data.get('shapes'),
-                                  key=lambda x: x.get('label'))
+                shapes = sorted(shapes, key=lambda x: x.get('label'))
 
-                key_points_data = []  # [[(x,y),...],[(x,y),...]]
-                key_points_cls = []  # [cls1,cls2,...]
-                for key_point in sort_res:
-                    if key_point.get("shape_type") == "polygon":
-                        polygon_key_points = key_point["points"]
-                    else:  # rectangle
-                        point1 = key_point["points"][0]
-                        point2 = [key_point["points"][1][0], key_point["points"][0][1]]
-                        point3 = key_point["points"][1]
-                        point4 = [key_point["points"][0][0], key_point["points"][1][1]]
-                        polygon_key_points = [point1, point2, point3, point4]
+                total_points = []  # [[(x,y),...],[(x,y),...]]
+                total_label_idx = []  # [cls1,cls2,...]
 
-                    key_points_data.append(polygon_key_points)
+                # points:[[x,y],[x,y],...]
+                points: List[List[float]] = []
+                for shape in shapes:
 
-                    cur_idx = self._labels_to_idx.get(key_point["label"])
+                    if shape.get("shape_type") == "polygon":
+                        points = shape["points"]
 
-                    key_points_cls.append(cur_idx)
+                    elif shape.get("shape_type") == "rectangle":  # rectangle
+                        point1 = shape["points"][0]
+                        point2 = [shape["points"][1][0], shape["points"][0][1]]
+                        point3 = shape["points"][1]
+                        point4 = [shape["points"][0][0], shape["points"][1][1]]
+                        points = [point1, point2, point3, point4]
+
+                    total_points.append(points)
+
+                    label_idx: int = self._labels.index(shape["label"])
+
+                    total_label_idx.append(label_idx)
 
                 if label_data.get("imagePath") != img_basename:
                     logger.warning(f"json file->imagePath != image name")
                     continue
 
-                samples_info.update({
-                    img_path: [key_points_data, key_points_cls]
+                self.samples_info.update({
+                    img_path: [total_points, total_label_idx]
                 })
-                samples_with_label.append(img_path)
+                self.samples_with_label.append(img_path)
 
             else:
-                background_samples.append(img_path)
-
-        return samples_info, samples_with_label, background_samples
+                self.background_samples.append(img_path)
 
     @staticmethod
-    def landmark_to_mask_vec(mask: np.ndarray, key_points_list: list, class_id: int = 1) -> np.ndarray:
+    def landmark_to_mask_vec(
+        mask: np.ndarray,
+        key_points_list: list,
+        class_id: int = 1
+    ) -> np.ndarray:
+
         mask = Image.fromarray(mask)
         draw = ImageDraw.Draw(mask)
         xy = [tuple(point) for point in key_points_list]
@@ -429,9 +390,9 @@ class SegmentationDataSet(BaseDataset):
 
         curr_sample_info = self.samples_info.get(path)
         iw, ih = 0, 0
-        if self.img_loader_type == 'pil':
+        if self.loader_type == 'pil':
             iw, ih = image.size
-        elif self.img_loader_type == 'opencv':
+        elif self.loader_type == 'opencv':
             ih, iw = image.shape
         assert iw > 0 and ih > 0, f'iw<=0 or ih<=0'
 

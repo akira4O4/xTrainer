@@ -9,9 +9,7 @@ if __name__ == '__main__':
         '-cfg',
         '--config',
         type=str,
-        # default=r'amat\configs\default\classification.yaml',
         default=r'configs\new.yaml',
-        # default=r'amat\configs\default\detection.yaml',
         help='CONFIG path'
     )
     logger.info(f'OS: {OS}')

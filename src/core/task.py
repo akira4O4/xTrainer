@@ -9,8 +9,12 @@ class Task:
 
         if task.lower() == 'multitask':
             self.MT = True
+            self.CLS = True
+            self.SEG = True
+
         elif task.lower() == 'classification':
             self.CLS = True
+
         elif task.lower() == 'segmentation':
             self.SEG = True
 
