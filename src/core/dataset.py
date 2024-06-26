@@ -7,12 +7,14 @@ from abc import ABC
 import pandas as pd
 import cv2
 import numpy as np
+import torch
 
 from PIL import Image
 from PIL import ImageDraw
 from typing import Optional, Callable, Any, Tuple, Dict, List, Union
 from torch.utils.data import Dataset
 from loguru import logger
+from .utils import save_yaml, get_images
 
 __all__ = [
     'BaseDataset',
@@ -23,35 +25,32 @@ __all__ = [
 
 class BaseDataset(Dataset, ABC):
     def __init__(
-            self,
-            img_loader_type: str = 'pil',
-            img_type: Optional[str] = 'RGB'
+        self,
+        loader_type: str = 'pil',
+        img_type: Optional[str] = 'RGB'
     ) -> None:
 
-        self.IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png')
-        self.img_loader_type = img_loader_type
-        self.image_loader = self.get_image_loader(img_loader_type)
+        self.support_img_suffix = ('.jpg', '.jpeg', '.png')
+        self.support_img_type = ['RGB', 'GRAY']
 
-        self._support_img_types = ['RGB', 'GRAY']
-        assert img_type in self._support_img_types, logger.error('Image type is not support.')
+        self.loader_type = loader_type
+        self.image_loader = self.get_image_loader(loader_type)
+
+        assert img_type in self.support_img_type, logger.error('Image type is not support.')
         self.img_type = img_type
 
     @staticmethod
-    def expanding_data(samples: list, rate: int = 0):
+    def expanding_data(data: list, rate: int = 0) -> list:
         assert rate >= 0, f'Expanding data rate<0.'
 
-        new_samples = []
+        new_data = []
         for i in range(rate):
-            new_samples += samples
-        random.shuffle(new_samples)
-        return new_samples
+            new_data += data
+        random.shuffle(new_data)
+        return new_data
 
-    @staticmethod
-    def has_file_allowed_extension(filename: str, extensions: Tuple[str, ...]) -> bool:
-        return filename.lower().endswith(extensions)
-
-    def is_valid_image(self, filename: str) -> bool:
-        return self.has_file_allowed_extension(filename, self.IMG_EXTENSIONS)
+    def check_image_suffix(self, filename: str) -> bool:
+        return filename.lower().endswith(self.support_img_suffix)
 
     # image loader e.g. PIL or OpenCV
     def pil_loader(self, path: str) -> Image.Image:
@@ -83,32 +82,41 @@ class BaseDataset(Dataset, ABC):
         elif loader_type == 'pil':
             return self.pil_loader
 
-    @staticmethod
-    def save_label_to_id_map(save_path: str, label_to_idx: dict) -> None:
-        with open(save_path, 'w') as f:
-            # classes_to_idx=classes1:0,classes1:1,...
-            # classes_id_map = 0:classes1,1:classes2,...
-            f.writelines([f'{idx}:{cls}\n' for cls, idx in label_to_idx.items()])
-
-    @staticmethod
-    def load_label_to_id_map(label_to_id_map_path: str) -> dict:
-
-        if not os.path.exists(label_to_id_map_path):
-            return {}
-
-        class_id_map = {}
-        with open(label_to_id_map_path, "r") as f:
-            for line in f.readlines():
-                line = line.strip()
-                # k=0,1,2,...
-                # v=classes1,classes2,...
-                idx, cls = line.split(":", 1)
-                # class_id_map={0:"classes1",1:"classes2",...}
-                class_id_map.update({int(idx): cls})
-        return class_id_map
-
-    # def get_labels(self, path: str) -> list:
-    #     return self.get_dirs(path)
+    # @staticmethod
+    # def gen_idx_to_labels_map(classes: list) -> dict:
+    #     # idx_to_cls={0:cls0,1:cls1,...}
+    #     idx_to_label = {idx: label for idx, label in enumerate(classes)}
+    #     return idx_to_label
+    #
+    # @staticmethod
+    # def gen_labels_to_idx_map(classes: list) -> dict:
+    #     # label_to_idx={classes0:0,classes1:1,...}
+    #     label_to_idx = {label: idx for idx, label in enumerate(classes)}
+    #     return label_to_idx
+    #
+    # @staticmethod
+    # def save_label_to_id_map(save_path: str, label_to_idx: dict) -> None:
+    #     with open(save_path, 'w') as f:
+    #         # classes_to_idx=classes1:0,classes1:1,...
+    #         # classes_id_map = 0:classes1,1:classes2,...
+    #         f.writelines([f'{idx}:{cls}\n' for cls, idx in label_to_idx.items()])
+    #
+    # @staticmethod
+    # def load_label_to_id_map(label_to_id_map_path: str) -> dict:
+    #
+    #     if not os.path.exists(label_to_id_map_path):
+    #         return {}
+    #
+    #     class_id_map = {}
+    #     with open(label_to_id_map_path, "r") as f:
+    #         for line in f.readlines():
+    #             line = line.strip()
+    #             # k=0,1,2,...
+    #             # v=classes1,classes2,...
+    #             idx, cls = line.split(":", 1)
+    #             # class_id_map={0:"classes1",1:"classes2",...}
+    #             class_id_map.update({int(idx): cls})
+    #     return class_id_map
 
     @staticmethod
     def get_dirs(path: str) -> list:
@@ -118,18 +126,6 @@ class BaseDataset(Dataset, ABC):
                 dir_names.append(d.name)
         dir_names.sort()
         return dir_names
-
-    @staticmethod
-    def gen_labels_to_idx_map(classes: list) -> dict:
-        # label_to_idx={classes0:0,classes1:1,...}
-        label_to_idx = {label: idx for idx, label in enumerate(classes)}
-        return label_to_idx
-
-    @staticmethod
-    def gen_idx_to_labels_map(classes: list) -> dict:
-        # idx_to_cls={0:cls0,1:cls1,...}
-        idx_to_label = {idx: label for idx, label in enumerate(classes)}
-        return idx_to_label
 
     @staticmethod
     def get_all_file(path: str) -> list:
@@ -156,9 +152,9 @@ class BaseDataset(Dataset, ABC):
 
     @staticmethod
     def letterbox(
-            image_src: np.ndarray,
-            dst_size: tuple,  # hw
-            pad_color: tuple = (114, 114, 114)
+        image_src: np.ndarray,
+        dst_size: tuple,  # hw
+        pad_color: tuple = (114, 114, 114)
     ) -> tuple:
 
         src_h, src_w = image_src.shape[:2]
@@ -188,18 +184,18 @@ class BaseDataset(Dataset, ABC):
 
 class ClassificationDataset(BaseDataset):
     def __init__(
-            self,
-            root: str,
-            wh: Optional[Union[list, tuple]] = None,
-            img_loader_type: str = 'pil',
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-            expanding_rate: Optional[int] = 0,
-            letterbox: Optional[bool] = False,
-            img_type: Optional[str] = 'RGB',
+        self,
+        root: str,
+        wh: Optional[list] = None,
+        loader_type: str = 'pil',
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        expanding_rate: Optional[int] = 0,
+        letterbox: Optional[bool] = False,
+        img_type: Optional[str] = 'RGB',
     ):
         super(ClassificationDataset, self).__init__(
-            img_loader_type=img_loader_type,
+            loader_type=loader_type,
             img_type=img_type
         )
 
@@ -209,13 +205,17 @@ class ClassificationDataset(BaseDataset):
         self.letterbox_flag = letterbox
         self.letterbox_color = (114, 114, 114)
 
-        self._labels = self.get_dirs(root)
-        self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
+        self._labels: List[str] = []
+        self.num_of_labels = 0
+        self.check_labels()
+
+        # self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
 
         self.transform = transform
         self.target_transform = target_transform
 
-        self.samples = self.get_samples(root, class_to_idx=self._labels_to_idx)
+        self.samples: List[str] = []
+        self.get_samples()
 
         if expanding_rate != 0:
             self.samples += self.expanding_data(self.samples, expanding_rate)
@@ -228,41 +228,35 @@ class ClassificationDataset(BaseDataset):
     def labels(self) -> list:
         return self._labels
 
-    @property
-    def labels_to_idx(self) -> dict:
-        return self._labels_to_idx
+    def check_labels(self) -> None:
+        for d in os.scandir(self.root):
+            if d.is_dir():
+                self._labels.append(d.name)
+        self._labels.sort()
+        self.num_of_labels = len(self._labels)
 
-    def set_transform(self, val):
+    def set_transform(self, val) -> None:
         self.transform = val
 
-    def set_target_transform(self, val):
+    def set_target_transform(self, val) -> None:
         self.target_transform = val
 
-    def get_samples(self, path: str, class_to_idx: dict) -> list:
-        # class_to_idx = kwargs.get('class_to_idx')
+    def get_samples(self) -> None:
 
-        samples = []
-        path = os.path.expanduser(path)
+        # samples=[('xxx/xxx.jpg',1),(xxx/xxx.jpg,0),...]
 
-        # target:classes0,classes1,...(low->high)
-        for classes in sorted(class_to_idx.keys()):
-            target_path = os.path.join(path, classes)
+        for idx in range(self.num_of_labels):
+            target_path = os.path.join(self.root, self._labels[idx])
 
-            if not os.path.exists(target_path):
-                logger.warning(f'Don`t not found path:{target_path}')
-                continue
+            images: List[str] = get_images(target_path, self.support_img_suffix)
 
-            for root, dirs, files in os.walk(target_path):
-                for file in files:
-                    if self.is_valid_image(file):
-                        file = os.path.join(root, file)
-                        item = (file, class_to_idx[classes])
-                        # samples=[('xxx/xxx.jpg',1),(xxx/xxx.jpg,0),...]
-                        samples.append(item)
-        random.shuffle(samples)
-        return samples
+            print(f'{self.labels[idx]}: {len(images)}')
+            self.samples.extend(list(map(lambda x: (x, idx), images)))  # noqa
 
-    def __getitem__(self, index: int) -> Any:
+        print(f'Total Classification Images: {len(self.samples)}')
+        random.shuffle(self.samples)
+
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
         path, label = self.samples[index]
         image: Union[Image.Image, np.ndarray] = self.image_loader(path)
 
@@ -270,19 +264,21 @@ class ClassificationDataset(BaseDataset):
             sw: int = -1
             sh: int = -1
 
-            if self.img_loader_type == 'pil':
+            if self.loader_type == 'pil':
                 sw, sh = image.size
-            elif self.img_loader_type == 'opencv':
+            elif self.loader_type == 'opencv':
                 sh, sw = image.shape
 
             assert sw > 0 and sh > 0, f'Error: sw or sh <0'
 
             if sh != self.wh[1] or sw != self.wh[0]:
                 if isinstance(image, np.ndarray) is False:
-                    image = np.asarray(image)  # PIL.Image -> numpy.ndarray
+                    # PIL.Image -> numpy.ndarray
+                    image = np.asarray(image)  # noqa
 
-                image, _, _ = self.letterbox(image, dst_size=self.wh, pad_color=self.letterbox_color)
+                image, _, _ = self.letterbox(image, dst_size=tuple(self.wh), pad_color=self.letterbox_color)
 
+        image: torch.Tensor
         if self.transform is not None:
             image = self.transform(image)
 
@@ -297,16 +293,16 @@ class ClassificationDataset(BaseDataset):
 
 class SegmentationDataSet(BaseDataset):
     def __init__(
-            self,
-            root: str,
-            img_loader_type: str = 'pil',
-            add_background: bool = True,
-            transform: Optional[Callable] = None,  # to samples
-            target_transform: Optional[Callable] = None,  # to target
-            is_training: Optional[bool] = False,
-            expanding_rate: Optional[int] = 0,
-            img_type: Optional[str] = 'RGB',
-            **kwargs
+        self,
+        root: str,
+        img_loader_type: str = 'pil',
+        add_background: bool = True,
+        transform: Optional[Callable] = None,  # to samples
+        target_transform: Optional[Callable] = None,  # to target
+        is_training: Optional[bool] = False,
+        expanding_rate: Optional[int] = 0,
+        img_type: Optional[str] = 'RGB',
+        **kwargs
     ) -> None:
         super(SegmentationDataSet, self).__init__(
             img_loader_type=img_loader_type,
@@ -319,7 +315,7 @@ class SegmentationDataSet(BaseDataset):
 
         self._labels = self.find_labels(self.root, add_background)
         self._labels_to_idx = self.gen_labels_to_idx_map(self._labels)
-        self.samples = self.get_file_by_subfix(self.root, self.IMG_EXTENSIONS)
+        self.samples = self.get_file_by_subfix(self.root, self.support_img_suffix)
 
         if expanding_rate != 0:
             self.samples += self.expanding_data(self.samples, expanding_rate)

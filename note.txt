@@ -1,0 +1,38 @@
+Transferred 355/355 items from pretrained weights                                                                       ││ NVITOP 1.2.0        Driver Version: 535.98        CUDA Driver Version: 12.2 │
+Freezing layer 'model.22.dfl.conv.weight'                                                                               │├───────────────────────────────┬──────────────────────┬──────────────────────┤
+AMP: running Automatic Mixed Precision (AMP) checks with YOLOv8n...                                                     ││ GPU Fan Temp Perf Pwr:Usg/Cap │         Memory-Usage │ GPU-Util  Compute M. │
+AMP: checks passed ✅                                                                                                   │╞═══════════════════════════════╪══════════════════════╪══════════════════════╪════════════════════════════╕
+train: Scanning /home/main/llf/data/G_yolov8/train/20240621/background... 914 images, 55 backgrounds, 0                 ││   0 33%  46C  P2   92W / 450W │  16678MiB / 23.99GiB │      0%      Default │ MEM: ███████████▌ 67.9%    │
+train: New cache created: /home/main/llf/data/G_yolov8/train/20240621/background.cache                                  │├───────────────────────────────┼──────────────────────┼──────────────────────┼────────────────────────────┤
+train: Caching images (0.6GB RAM): 100%|██████████| 914/914 [00:00<00:00, 2163.69it/s]                                  ││   1 31%  41C  P2   60W / 450W │  16606MiB / 23.99GiB │      0%      Default │ MEM: ███████████▌ 67.6%    │
+albumentations: Blur(p=0.01, blur_limit=(3, 7)), MedianBlur(p=0.01, blur_limit=(3, 7)), ToGray(p=0.01), CLAHE(p=0.01, cl│├───────────────────────────────┼──────────────────────┼──────────────────────┼────────────────────────────┤
+ip_limit=(1, 4.0), tile_grid_size=(8, 8))                                                                               ││   2 31%  33C  P8   17W / 450W │     17MiB / 23.99GiB │      0%      Default │ MEM: ▏ 0.1%                │
+val: Scanning /home/main/llf/data/G_yolov8/train/20240621/background.cache... 914 images, 55 backgrounds                │├───────────────────────────────┼──────────────────────┼──────────────────────┼────────────────────────────┤
+val: Caching images (0.6GB RAM): 100%|██████████| 914/914 [00:00<00:00, 2010.95it/s]                                    ││   3 44%  50C  P2  148W / 450W │   6754MiB / 23.99GiB │      1%      Default │ MEM: ████▋ 27.5%           │
+Plotting labels to danyang_G/20240622/labels.jpg...                                                                     │╘═══════════════════════════════╧══════════════════════╧══════════════════════╧════════════════════════════╛
+optimizer: AdamW(lr=0.0008, momentum=0.937) with parameter groups 57 weight(decay=0.0), 64 weight(decay=0.0005), 63 bias│[ CPU: ██████████████████████████████████████████████▍ 79.9%          ]  ( Load Average: 67.40 71.10 71.84 )
+(decay=0.0)                                                                                                             │[ MEM: ██████████████████████████████████████████▊ 73.6%              ]  [ SWP: ██████████████████████ MAX ]
+Image sizes 480 train, 480 val                                                                                          │
+Using 8 dataloader workers                                                                                              │╒══════════════════════════════════════════════════════════════════════════════════════════════════════════╕
+Logging results to danyang_G/20240622                                                                                   ││ Processes:                                                                        main@main-Super-Server │
+Starting training for 300 epochs...
+
+
+loss_config:
+  loss_weights: [ 1,1, 0.5 ]
+
+  classification:
+    CrossEntropyLoss: { }
+
+  segmentation:
+    PeriodLoss:
+      top_k: 0.5
+      weight: [ 1, 1 ,1,1,1,1 ]
+
+    DiceLoss:
+      model: MULTICLASS_MODE
+      log_loss: false
+      from_logits: true
+      smooth: 1
+      ignore_index: null
+      eps: 1.e-7

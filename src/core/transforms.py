@@ -9,79 +9,73 @@ from torchvision.transforms import Normalize, Resize
 from torchvision.transforms import Compose, ToTensor
 from imgaug import augmenters as ia
 from imgaug import augmenters as iaa
-
-__all__ = [
-    'ClassificationTransform',
-    'SegmentationTransform'
-]
+from typing import List
 
 
 class BaseTransform:
-    def __init__(
-            self,
-            mean: Optional[list] = None,
-            std: Optional[list] = None,
-            resize_wh: Optional[list] = None
-    ) -> None:
-        self._mean = [0.485, 0.456, 0.406] if mean is None else mean
-        self._std = [0.229, 0.224, 0.225] if mean is None else std
+    def __init__(self) -> None:
+        self._mean = [0.485, 0.456, 0.406]
+        self._std = [0.229, 0.224, 0.225]
 
-        self.ops = [
+        self._ops = [
             ToTensor(),
             Normalize(mean=self._mean, std=self._std)
         ]
 
-        if resize_wh is not None:
-            logging.info('Add Resize op to transform.')
-            self.ops.append(Resize((resize_wh[1], resize_wh[0])))
+    def add_op(self, op) -> None:
+        self._ops.append(op)
 
-        self.normalize_transform = Compose(self.ops)
+    def set_mean(self, mean: List[float]) -> None:
+        self._mean = mean
+
+    def set_std(self, std: List[float]) -> None:
+        self._std = std
+
+    @property
+    def base_transform(self):
+        return Compose(self._ops)
 
 
-class IAATransform(BaseTransform):
+class ClsTransform(BaseTransform):
     def __init__(self):
         super().__init__()
-        self.iaa_aug_seq = iaa.Sequential([
-            iaa.SomeOf((0, 1), [iaa.Flipud(0.7), iaa.Fliplr(0.7)]),
-            iaa.MultiplyHue((0.9, 1.1)),
-            iaa.MultiplySaturation((0.9, 1.1)),
-            iaa.SomeOf((0, 1), [iaa.Add((-10, 20)), iaa.Multiply((0.8, 1.2))]),
-        ])
+        self.iaa_aug_seq = iaa.Sequential(
+            [
+                iaa.SomeOf((0, 1), [iaa.Flipud(0.7), iaa.Fliplr(0.7)]),
+                iaa.MultiplyHue((0.9, 1.1)),
+                iaa.MultiplySaturation((0.9, 1.1)),
+                iaa.SomeOf((0, 1), [iaa.Add((-10, 20)), iaa.Multiply((0.8, 1.2))]),
+            ]
+        )
 
-    # @property
-    # def iaa_aug_seq(self):
-    #     return self.iaa_aug_seq
-    #
-    # @iaa_aug_seq.setter
-    # def iaa_aug_seq(self, value):
-    #     self.iaa_aug_seq = value
-
-    def __call__(self, img: Union[np.ndarray, Image.Image]) -> torch.Tensor:
-        if not isinstance(img, np.ndarray):
-            img = np.array(img)  # noqa
+    def __call__(self, img: np.ndarray) -> torch.Tensor:
+        assert type(img) == np.ndarray
 
         img = self.iaa_aug_seq.augment_image(img)
-        img = self.normalize_transform(img)
+        img = self.base_transform(img)
         return img
 
 
-class ClassificationTransform(BaseTransform):
-    def __init__(
-            self,
-            mean: Optional[list] = None,
-            std: Optional[list] = None,
-            resize_wh: Optional[list] = None
-    ) -> None:
-        super().__init__(mean, std, resize_wh)
+class ClsTargetTransform:
+    def __init__(self) -> None:
+        ...
 
-    @property
-    def image_transform(self):
-        image_transform = IAATransform()
-        return image_transform
+    def __call__(self, data):
+        return data
 
-    @property
-    def target_transform(self) -> None:
-        return None
+
+# class ClassificationTransform(BaseTransform):
+#     def __init__(self) -> None:
+#         super().__init__()
+#
+#     @property
+#     def image_transform(self):
+#         image_transform = IAATransform()
+#         return image_transform
+#
+#     @property
+#     def target_transform(self) -> None:
+#         return None
 
 
 class AugKeypoints(torch.nn.Module):  # noqa
@@ -133,25 +127,26 @@ class AugKeypoints(torch.nn.Module):  # noqa
         return self.__class__.__name__ + '(p={})'.format(self.p)
 
 
+class SegTransform(BaseTransform):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __call__(self, img: np.ndarray) -> torch.Tensor:
+        assert type(img) == np.ndarray
+        img = self.base_transform(img)
+        return img
+
+
 class SegmentationTransform(BaseTransform):
-    def __init__(
-            self,
-            mean: Optional[list] = None,
-            std: Optional[list] = None,
-            resize_wh: Optional[list] = None
-    ) -> None:
-        super().__init__(mean, std, resize_wh)
-        self.iaa_transform = IAATransform()
+    def __init__(self) -> None:
+        super().__init__()
+        # self.iaa_transform = IAATransform()
 
-    @property
-    def image_transform(self):
-        return self.normalize_transform
-
-    @property
-    def target_transform(self):
-        target_transform = AugKeypoints(
-            p=1,
-            seq_det=self.iaa_transform.iaa_aug_seq,
-            convert_float_coord=True
-        )
-        return target_transform
+    # @property
+    def __call__(self, keypoint):
+        # target_transform = AugKeypoints(
+        #     p=1,
+        #     seq_det=self.iaa_transform.iaa_aug_seq,
+        #     convert_float_coord=True
+        # )
+        return keypoint

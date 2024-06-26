@@ -28,7 +28,7 @@ from .optim import AmpOptimWrapper, OptimWrapper
 from .loss_forward import *
 from .performance import calc_performance
 from .data_logger import DataLogger
-
+from .utils import save_yaml
 from dataclasses import dataclass
 
 
@@ -107,14 +107,7 @@ class Trainer:
         self.init_loss()
 
         # Init dataset and dataloader ---------------------------------------------------------------------------------
-        cls_ds_kw = CONFIG("classification")
-        self.cls_ds_args = DataSetArgs(
-            cls_ds_kw['batch'],
-            cls_ds_kw['classes'],
-            cls_ds_kw['train'],
-            cls_ds_kw['val'],
-            cls_ds_kw['labels'],
-        )
+
         seg_ds_kw = CONFIG("classification")
         self.seg_ds_args = DataSetArgs(
             seg_ds_kw['batch'],
@@ -124,9 +117,13 @@ class Trainer:
             seg_ds_kw['labels'],
         )
 
-        # self.classification_data_args: dict = self.config.get('classification_data_config')
-        # self.segmentation_data_args: dict = self.config.get('segmentation_data_config')
-        #
+        if self.task.MT:
+            self.build_classification_ds_dl()
+        if self.task.SEG:
+            ...
+        if self.task.CLS:
+            self.build_classification_ds_dl()
+
         # # Init Classification And Segmentation Expand Rate
         # self.cls_expanding_rate = 0
         # self.seg_expanding_rate = 0
@@ -278,59 +275,76 @@ class Trainer:
 
         return cls_expanding_rate, seg_expanding_rate
 
-    def build_classification_dataset_and_dataloader(self) -> None:
+    def build_classification_ds_dl(self) -> None:
         # Add transform
         # Train transform
 
-        classification_transform = ClassificationTransform()
+        cls_ds_kw = CONFIG("classification")
+        # self.cls_ds_args = DataSetArgs(
+        #     cls_ds_kw['batch'],
+        #     cls_ds_kw['classes'],
+        #     cls_ds_kw['train'],
+        #     cls_ds_kw['val'],
+        #     cls_ds_kw['labels'],
+        # )
+        classification_transform = ClassificationDataset(
+            root=CONFIG('classification')['train'],
+            wh=CONFIG('wh'),
+        )
+        save_yaml(
+            classification_transform.labels,
+            os.path.join(self.output_path, 'cls_labels.yaml')
+        )
 
-        self.classification_data_args['dataset']['train'][
-            'transform'] = classification_transform.image_transform
-        self.classification_data_args['dataset']['train'][
-            'target_transform'] = classification_transform.target_transform
-
-        # Val transform
-        self.classification_data_args['dataset']['val'][
-            'transform'] = classification_transform.normalize_transform
-        self.classification_data_args['dataset']['val'][
-            'target_transform'] = classification_transform.target_transform
+        # self.classification_data_args['dataset']['train'][
+        #     'transform'] = classification_transform.image_transform
+        # self.classification_data_args['dataset']['train'][
+        #     'target_transform'] = classification_transform.target_transform
+        #
+        # # Val transform
+        # self.classification_data_args['dataset']['val'][
+        #     'transform'] = classification_transform.normalize_transform
+        # self.classification_data_args['dataset']['val'][
+        #     'target_transform'] = classification_transform.target_transform
 
         # Build Dataset
-        self.cls_train_dataset = ClassificationDataset(**self.classification_data_args['dataset']['train'])
-        self.cls_val_dataset = ClassificationDataset(**self.classification_data_args['dataset']['val'])
-        self.cls_train_dataset.save_label_to_id_map(
-            os.path.join(self.curr_exp_path, 'cls_id_to_label.txt'),
-            self.cls_train_dataset.labels_to_idx
-        )
+        # self.cls_train_dataset = ClassificationDataset(
+        # **self.classification_data_args['dataset']['train']
+        # )
+        # self.cls_val_dataset = ClassificationDataset(**self.classification_data_args['dataset']['val'])
+        # self.cls_train_dataset.save_label_to_id_map(
+        #     os.path.join(self.curr_exp_path, 'cls_id_to_label.txt'),
+        #     self.cls_train_dataset.labels_to_idx
+        # )
 
         # BalancedBatchSampler
-        if self.classification_data_args['dataloader']['train']['batch_sampler'] == 'BalancedBatchSampler':
-            batch_sampler = BalancedBatchSampler(
-                torch.tensor(self.cls_train_dataset.targets),
-                n_classes=self.model.num_classes,
-                n_samples=math.ceil(
-                    self.classification_data_args['dataloader']['train']['batch_size'] / self.model.num_classes
-                )
-            )
-            self.classification_data_args['dataloader']['train'].update({
-                'shuffle': False,
-                'batch_size': 1,
-                'drop_last': False,
-                'sampler': None,
-                'batch_sampler': batch_sampler
-            })
+        # if self.classification_data_args['dataloader']['train']['batch_sampler'] == 'BalancedBatchSampler':
+        #     batch_sampler = BalancedBatchSampler(
+        #         torch.tensor(self.cls_train_dataset.targets),
+        #         n_classes=self.model.num_classes,
+        #         n_samples=math.ceil(
+        #             self.classification_data_args['dataloader']['train']['batch_size'] / self.model.num_classes
+        #         )
+        #     )
+        #     self.classification_data_args['dataloader']['train'].update({
+        #         'shuffle': False,
+        #         'batch_size': 1,
+        #         'drop_last': False,
+        #         'sampler': None,
+        #         'batch_sampler': batch_sampler
+        #     })
 
         # Build Dataloader
-        self.cls_train_dataloader = DataLoader(
-            dataset=self.cls_train_dataset,
-            **self.classification_data_args['dataloader']['train']
-        )
-        self.cls_val_dataloader = DataLoader(
-            dataset=self.cls_val_dataset,
-            **self.classification_data_args['dataloader']['val']
-        )
+        # self.cls_train_dataloader = DataLoader(
+        #     dataset=self.cls_train_dataset,
+        #     **self.classification_data_args['dataloader']['train']
+        # )
+        # self.cls_val_dataloader = DataLoader(
+        #     dataset=self.cls_val_dataset,
+        #     **self.classification_data_args['dataloader']['val']
+        # )
 
-    def build_segmentation_dataset_and_dataloader(self) -> None:
+    def build_segmentation_ds_dl(self) -> None:
         # Add transform
         segmentation_transform = None
         if self.segmentation_data_args['dataset']['train'].get('transform_resize') is not None:

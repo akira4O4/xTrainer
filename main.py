@@ -4,7 +4,6 @@ from src import CONFIG, OS
 from src.core.trainer_v3 import Trainer
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-cfg',

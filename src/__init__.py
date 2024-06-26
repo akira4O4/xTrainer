@@ -11,7 +11,7 @@ CONFIG = DataFile()
 # default val ----------------------------------------------------------------------------------------------------------
 NoArgs = None
 Default_WorkSpace_Dir = 'workspace'
-DEFAULT_WORKSPACE = 'workspace'
+DEFAULT_WORKSPACE = 'project'
 COLOR_LIST = np.random.uniform(0, 255, size=(80, 3))
 OS = platform.system()
 MACOS, LINUX, WINDOWS = (platform.system() == x for x in ["Darwin", "Linux", "Windows"])  # environment booleans
