@@ -66,10 +66,9 @@ def model_prepare(task: str, num_classes: int, mask_classes: int, model_path: st
     return model
 
 
-def main(config_path: str):
-    config = load_yaml(config_path)
-    task = config['project_config']['task']
-    export_config = config['onnx_export_config']
+def main(args: dict) -> None:
+    task = args['project_config']['task']
+    export_config = args['onnx_export_config']
 
     if os.path.exists(export_config['model_path']) is False:
         logger.error('input model path is not found.')
@@ -95,7 +94,7 @@ def main(config_path: str):
     output_name = file_name + ('_static.onnx' if export_config['is_dynamic'] is None else '_dynamic.onnx')
 
     export_time = get_time()
-    output_dir = os.path.join('../', config['project_config']['work_dir'], 'export_onnx', export_time)
+    output_dir = os.path.join('../', args['project_config']['work_dir'], 'export_onnx', export_time)
 
     if os.path.exists(output_dir) is False:
         os.makedirs(output_dir)
@@ -112,5 +111,16 @@ def main(config_path: str):
 
 
 if __name__ == '__main__':
-    config_path = 'D:\llf\code\pytorch-lab\configs\default\classification.yml'
-    main(config_path)
+    args = {
+        'model_path': '',
+        'fuse': True,
+        'num_classes': 3,
+        'mask_classes': 0,
+        'output_name': 'classification.onnx',
+        'batch_size': 1,
+        'channel': 3,
+        'input_h': 480,
+        'input_w': 480,
+    }
+    # config_path = 'D:\llf\code\pytorch-lab\configs\default\classification.yml'
+    main(args)

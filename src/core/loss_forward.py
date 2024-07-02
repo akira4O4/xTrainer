@@ -41,22 +41,22 @@ class BaseLossForward:
     def model_output(self):
         return self._model_output
 
-    @model_output.setter
-    def model_output(self, val) -> None:
+    # @model_output.setter
+    def set_model_output(self, val) -> None:
         self._model_output = val
 
     @property
     def targets(self):
         return self._targets
 
-    @targets.setter
-    def targets(self, val) -> None:
+    # @targets.setter
+    def set_targets(self, val) -> None:
         self._targets = val
 
     def build(self) -> None:
         ...
 
-    def forward(self):
+    def run(self):
         ...
 
 
@@ -75,7 +75,7 @@ class CrossEntropyLossForward(BaseLossForward):
         self.loss = nn.CrossEntropyLoss(**self.kwargs)
         logger.success('Build CrossEntropyLoss Done.')
 
-    def forward(self):
+    def run(self):
         _loss: float = 0.0
 
         if isinstance(self._model_output, list):  # [Tensor1,Tensor2,...] or [cls_output,seg_output]
@@ -125,7 +125,7 @@ class PeriodLossForward(BaseLossForward):
         self.loss = PeriodLoss(**self.kwargs)
         logger.success('Build PeriodLoss Done.')
 
-    def forward(self) -> float:
+    def run(self) -> float:
         if isinstance(self._model_output, list):  # [Tensor1,Tensor2,...] or [cls_output,seg_output]
             if isinstance(self._model_output[0], list):  # [Tensor1,Tensor2,...]
                 self._model_output = self._model_output[1]
@@ -165,7 +165,7 @@ class DiceLossForward(BaseLossForward):
 
         logger.success('Build DiceLoss Done.')
 
-    def forward(self) -> float:
+    def run(self) -> float:
         _loss = 0.0
         if isinstance(self._model_output, list):
             if isinstance(self._model_output[1], list):

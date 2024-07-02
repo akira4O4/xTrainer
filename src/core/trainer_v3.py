@@ -233,7 +233,6 @@ class Trainer:
     def init_lr_scheduler(self) -> None:
         name = CONFIG("lr_scheduler")
         args = {
-            # "name": lr_name,
             'optimizer': self.optimizer_wrapper.optimizer,
         }
         if name == 'LambdaLR':
@@ -244,7 +243,8 @@ class Trainer:
             })
 
         elif name == 'CosineAnnealingWarmRestarts':
-            ...
+            self.scheduler_step_in_batch = True
+
         else:
             ...
 
@@ -349,6 +349,9 @@ class Trainer:
         )
 
     def init_loss(self) -> None:
+        # e.g.loss forward=[cls_forward]
+        # e.g.loss forward=[seg_forward]
+        # e.g.loss forward=[cls_forward,seg_forward]
 
         if self.task.CLS:
             self.loss_weights = [1]
@@ -400,6 +403,7 @@ class Trainer:
     def run(self) -> None:
         curr_epoch = 0
         while curr_epoch < CONFIG('epochs'):
+
             # n*train -> k*val -> n*train->...
             for i, flow in enumerate(CONFIG('workflow')):
                 mode, epochs = flow
@@ -434,7 +438,7 @@ class Trainer:
                         self.val_miou_data_logger.reset()
 
     @timer
-    def train(self):
+    def train(self) -> None:
 
         if not self.model.training:
             self.model.train()
@@ -443,7 +447,7 @@ class Trainer:
         self.curr_lr = round8(self.optimizer_wrapper.lr[0])
         log_metric('Lr', self.curr_lr)
 
-        dataloaders = []
+        dataloaders: List[DataLoader] = []
         if self.task.CLS:
             dataloaders.append(self.cls_train_dataloader)
         if self.task.SEG:
@@ -461,59 +465,89 @@ class Trainer:
                 cls_data = seg_data = datas[0]  # cls or seg training
 
             input_data = None
-            loss_results = {}  # [loss_res1,loss_res2,...]
+            # loss_results = {}  # [loss_res1,loss_res2,...]
+            if self.task.CLS:
+                input_data = cls_data
+
+            if self.task.SEG:
+                input_data = seg_data
+
+            images, targets = input_data
+            images = self.move_to_device(images)
+            targets = self.move_to_device(targets)
+            # Train ----------------------------------------------------------------------------------------------------
+            if CONFIG('amp'):
+                with self.optimizer_wrapper.optim_context():
+                    model_output = self.forward_with_train(images)
+            else:
+                model_output = self.forward_with_train(images)
+
+            # Calc loss ------------------------------------------------------------------------------------------------
+            loss_result = {}
+            for loss_forward in self.loss_forwards:
+                loss_forward.set_model_output(model_output)
+                loss_forward.set_targets(targets)
+
+                if CONFIG('amp'):
+                    with self.optimizer_wrapper.optim_context():
+                        loss_val = forward.run()  # noqa
+                else:
+                    loss_val = forward.run()  # noqa
+
+                assert not torch.any(torch.isnan(loss_val))
+                loss_result.update({loss_forward.loss_name: loss_val})
 
             # curr_task=classification or segmentation
-            for loss_type in self.loss_args.keys():
-
-                # Get the classification data or segmentation data
-                if loss_type == Task.CLS.value:
-                    input_data = cls_data
-                elif loss_type == Task.SEG.value:
-                    input_data = seg_data
-
-                loss_type = task_convert(loss_type)
-
-                # Move to device
-                images, targets = input_data
-                images = self.move_to_device(images)
-                targets = self.move_to_device(targets)
-
-                # AMP training
-                if self.train_args.amp:
-                    with self.optimizer_wrapper.optim_context():
-                        model_output = self.forward_with_train(images)
-                else:
-                    model_output = self.forward_with_train(images)
-
-                # Loss forward
-                # loss1->loss2->...
-                loss_runner: BaseLossRunner
-                for loss_runner in self.losses[loss_type.value]:
-                    loss_runner.model_output = model_output
-                    loss_runner.targets = targets
-
-                    if self.train_args.amp:
-                        with self.optimizer_wrapper.optim_context():
-                            loss_val = loss_runner.forward()  # noqa
-                    else:
-                        loss_val = loss_runner.forward()  # noqa
-
-                    assert not torch.any(torch.isnan(loss_val))
-                    loss_results.update({loss_runner.loss_name: loss_val})
-
-                training_performance: dict = calc_performance(
-                    loss_type,
-                    self.train_args.topk,
-                    self.model_args.mask_classes,
-                    model_output,
-                    targets
-                )
-                if loss_type == Task.CLS:
-                    self.training_top1_data_logger.update(training_performance['top1'])
-                    self.training_topk_data_logger.update(training_performance['topk'])
-                if loss_type == Task.SEG:
-                    self.training_miou_data_logger.update(training_performance['miou'])
+            # for loss_type in self.loss_args.keys():
+            #
+            #     # Get the classification data or segmentation data
+            #     if loss_type == Task.CLS.value:
+            #         input_data = cls_data
+            #     elif loss_type == Task.SEG.value:
+            #         input_data = seg_data
+            #
+            #     loss_type = task_convert(loss_type)
+            #
+            #     # Move to device
+            #     images, targets = input_data
+            #     images = self.move_to_device(images)
+            #     targets = self.move_to_device(targets)
+            #
+            #     # AMP training
+            #     if self.train_args.amp:
+            #         with self.optimizer_wrapper.optim_context():
+            #             model_output = self.forward_with_train(images)
+            #     else:
+            #         model_output = self.forward_with_train(images)
+            #
+            #     # Loss forward
+            #     # loss1->loss2->...
+            #     loss_runner: BaseLossRunner
+            #     for loss_runner in self.losses[loss_type.value]:
+            #         loss_runner.model_output = model_output
+            #         loss_runner.targets = targets
+            #
+            #         if self.train_args.amp:
+            #             with self.optimizer_wrapper.optim_context():
+            #                 loss_val = loss_runner.forward()  # noqa
+            #         else:
+            #             loss_val = loss_runner.forward()  # noqa
+            #
+            #         assert not torch.any(torch.isnan(loss_val))
+            #         loss_results.update({loss_runner.loss_name: loss_val})
+            #
+            #     training_performance: dict = calc_performance(
+            #         loss_type,
+            #         self.train_args.topk,
+            #         self.model_args.mask_classes,
+            #         model_output,
+            #         targets
+            #     )
+            #     if loss_type == Task.CLS:
+            #         self.training_top1_data_logger.update(training_performance['top1'])
+            #         self.training_topk_data_logger.update(training_performance['topk'])
+            #     if loss_type == Task.SEG:
+            #         self.training_miou_data_logger.update(training_performance['miou'])
 
             self.update_training_performance_to_mlflow('batch_size')
 
@@ -534,12 +568,12 @@ class Trainer:
 
             # Update lr
             if self.scheduler_step_in_batch is True:
-                self.lr_scheduler.step(self.train_args.epoch + curr_step / self.total_step)
+                self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
 
             # Easy info display
-            if curr_step % self.train_args.print_freq == 0:
+            if curr_step % 20 == 0:
                 print(
-                    f'🚀[Training] Epoch:[{self.train_args.epoch}/{self.train_args.max_epoch}] '
+                    f'🚀[Training] Epoch:[{self.train_args.epoch}/{CONFIG("epochs")}] '
                     f'Step:[{curr_step}/{self.total_step}]...'
                 )
 
@@ -646,11 +680,11 @@ class Trainer:
 
     def loss_sum(self, loss_results: dict) -> torch.Tensor:
 
-        if len(loss_results) != len(self.losses_weights):
+        if len(loss_results) != len(self.loss_weights):
             logger.error('len(loss_result)!=len(self.losses_weights)')
 
         ret = 0
-        for kv, weight in zip(loss_results.items(), self.losses_weights):
+        for kv, weight in zip(loss_results.items(), self.loss_weights):
             loss_name, loss_val = kv
             ret += loss_val * weight
 
