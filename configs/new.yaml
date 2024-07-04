@@ -4,7 +4,7 @@ task: multitask  #classification segmentation multitask
 project: v3
 
 #Train setting----------------------------------------------------------------------------------------------------------
-gpu: 0 #-1=cpu
+device: 0 #-1=cpu
 seed: 0
 epochs: 10
 workers: 2
@@ -19,9 +19,10 @@ balanced_batch_sampler: True
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: AdamW
-lr_scheduler: LambdaLR
+cos_lr: True
 lr0: 0.01 # (float) initial learning rate
 lrf: 0.01 # (float) final learning rate (lr0 * lrf)
+momentum: 0.937
 amp: True
 deterministic: True
 pin_memory: True

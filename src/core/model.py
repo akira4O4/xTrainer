@@ -20,8 +20,8 @@ class Model:
         num_classes: Optional[int] = 0,
         mask_classes: Optional[int] = 0,
         pretrained: Optional[bool] = False,
-        model_path: Optional[str] = None,
-        gpu: Optional[int] = 0,  # -1==cpu
+        weight: Optional[str] = None,
+        device: Optional[int] = 0,  # -1==cpu
         strict: Optional[bool] = True,
         map_location: Optional[str] = 'cpu',
         use_ddp: bool = False,
@@ -30,14 +30,14 @@ class Model:
         self._pretrained = pretrained
         self._num_classes = num_classes
         self._mask_classes = mask_classes
-        self._model_path = model_path
+        self._weight = weight
         self._strict = strict
-        self._gpu = gpu
+        self._device = torch.device('cpu')
         self._map_location = map_location
         self._use_ddp = use_ddp
 
-        if gpu != -1 and torch.cuda.is_available():
-            self._device = torch.device(f'cuda:{gpu}')
+        if device != -1 and torch.cuda.is_available():
+            self._device = torch.device(f'cuda:{device}')
         else:
             self._device = torch.device('cpu')
 
@@ -70,10 +70,6 @@ class Model:
     def device(self) -> torch.device:
         return self._device
 
-    @property
-    def gpu(self) -> int:
-        return self._gpu
-
     def set_gpu(self, gpu: int) -> None:
         self._gpu = gpu
         self._device = f'cuda:{gpu}'
@@ -95,7 +91,25 @@ class Model:
         logger.info(f'Move model.to: {self._device}.')
 
     def set_model_path(self, path: str) -> None:
-        self._model_path = path
+        self._weight = path
+
+    def init(self) -> None:
+
+        self.net = self.create_model(
+            self._model_name,
+            num_classes=self._num_classes,
+            mask_classes=self._mask_classes,
+            pretrained=self._pretrained,
+        )
+
+        if osp.exists(self._weight) is True:
+            self.load_weight(self._weight, self._strict, self._map_location)
+            logger.success('Load model done.')
+        else:
+            logger.warning(f'Model path:{self._weight} is not found.')
+
+        logger.info(f'Current device is: {self._device}.')
+        logger.success(f'Build model success.')
 
     @staticmethod
     def create_model(
@@ -160,24 +174,6 @@ class Model:
 
         logger.info(f'Loading [{loading_item}/{total_item}] item to model.')
         logger.success(f'Loading :{weight_path} .')
-
-    def init_model(self) -> None:
-
-        self.net = self.create_model(
-            self._model_name,
-            num_classes=self._num_classes,
-            mask_classes=self._mask_classes,
-            pretrained=self._pretrained,
-        )
-
-        if osp.exists(self._model_path) is True:
-            self.load_weight(self._model_path, self._strict, self._map_location)
-            logger.success('Load model done.')
-        else:
-            logger.warning(f'Model path:{self._model_path} is not found.')
-
-        logger.info(f'Current device is: {self._device}.')
-        logger.success(f'Build model success.')
 
     def save_checkpoint(
         self,

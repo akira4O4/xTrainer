@@ -12,7 +12,7 @@ from tqdm import tqdm
 from loguru import logger
 from torch.utils.data import DataLoader
 from mlflow import log_metric, log_param, set_experiment
-
+from torch import optim
 from src import CONFIG, DEFAULT_WORKSPACE
 from src.utils.util import load_yaml, get_num_of_images, timer, get_time, check_dir
 from .task import Task
@@ -211,45 +211,84 @@ class Trainer:
             mask_classes,
             CONFIG("pretrained"),
             CONFIG('weight'),
-            CONFIG('gpu')
+            CONFIG('device')
         )
-        self.model.init_model()
+        self.model.init()
         self.model.move_to_device()
 
     def init_optimizer(self) -> None:
+        name = CONFIG("optimizer")
+
         args = {
-            "name": CONFIG("optimizer"),
             "params": self.model.parameters,
-            "lr": CONFIG("lr0")
+            "lr": CONFIG("lr0"),
         }
+
+        if name in {"Adam", "Adamax", "AdamW", "NAdam", "RAdam"}:
+            args.update({
+                'betas': (CONFIG('momentum'), 0.999),
+                'weight_decay': 0.0
+            })
+        elif name == "RMSProp":
+            args.update({
+                'momentum': CONFIG('momentum')
+            })
+        elif name == "SGD":
+            args.update({
+                'momentum': CONFIG('momentum'),
+                'nesterov': True
+            })
 
         logger.success(f'Build Optim: {CONFIG("optimizer")}.')
         if CONFIG("amp"):
-            self.optimizer_wrapper = build_amp_optimizer_wrapper(**args)
+            self.optimizer_wrapper = build_amp_optimizer_wrapper(name, **args)
             logger.info('AMP: Open Automatic Mixed Precision(AMP)')
         else:
-            self.optimizer_wrapper = build_optimizer_wrapper(**args)
+            self.optimizer_wrapper = build_optimizer_wrapper(name, **args)
+
+    @staticmethod
+    def _cos_lr_lambda(y1: float = 0.0, y2: float = 1.0, steps: int = 100):
+        return lambda x: max((1 - math.cos(x * math.pi / steps)) / 2, 0) * (y2 - y1) + y1
+
+    @staticmethod
+    def _linear_lr_lambda(epochs: int, lrf: float):
+        return lambda x: max(1 - x / epochs, 0) * (1.0 - lrf) + lrf  # linear
+
+    @staticmethod
+    def _easy_lr_lambda():
+        return lambda x: 1 / (x / 4 + 1),
 
     def init_lr_scheduler(self) -> None:
-        name = CONFIG("lr_scheduler")
-        args = {
-            'optimizer': self.optimizer_wrapper.optimizer,
-        }
-        if name == 'LambdaLR':
-            args.update({
-                'lr_lambda': lambda epoch: 1 / (epoch / 4 + 1),
-                'last_epoch': -1,
-                'verbose': False
-            })
+        # name = CONFIG("lr_scheduler")
+        # args = {
+        #     'optimizer': self.optimizer_wrapper.optimizer,
+        #     'lr_lambda': None,
+        #     'last_epoch': -1,
+        #     'verbose': False
+        # }
 
-        elif name == 'CosineAnnealingWarmRestarts':
-            self.scheduler_step_in_batch = True
-
+        # if name == 'LambdaLR':
+        #     args.update({
+        #         'lr_lambda': lambda epoch: 1 / (epoch / 4 + 1),
+        #         'last_epoch': -1,
+        #         'verbose': False
+        #     })
+        #
+        # elif name == 'CosineAnnealingWarmRestarts':
+        #     self.scheduler_step_in_batch = True
+        #
+        # else:
+        #     ...
+        if CONFIG('cos_lr'):
+            lr_lambda = self._cos_lr_lambda(1, CONFIG('lrf'), CONFIG('epochs'))
         else:
-            ...
+            # lr_lambda = self._easy_lr_lambda()
+            lr_lambda = self._linear_lr_lambda(CONFIG('epochs'), CONFIG('lrf')),
 
-        self.lr_scheduler = build_lr_scheduler(name, **args)
-        logger.success(f'Build lr scheduler: {name} Done.')
+        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer_wrapper.optimizer, lr_lambda=lr_lambda)
+
+        # self.lr_scheduler = build_lr_scheduler(name, **args)
+        # logger.success(f'Build lr scheduler: {name} Done.')
 
     def build_classification_ds_dl(self) -> None:
 
@@ -349,9 +388,9 @@ class Trainer:
         )
 
     def init_loss(self) -> None:
-        # e.g.loss forward=[cls_forward]
-        # e.g.loss forward=[seg_forward]
-        # e.g.loss forward=[cls_forward,seg_forward]
+        # e.g.loss forward=[cls_forward1,...] classification only
+        # e.g.loss forward=[seg_forward1,...] segmentation only
+        # e.g.loss forward=[cls_forward1,...,seg_forward1,...] multi_task
 
         if self.task.CLS:
             self.loss_weights = [1]

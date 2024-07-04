@@ -33,7 +33,7 @@ def init_backends_cudnn(deterministic: bool = False) -> None:
 def build_model(model_args: dict) -> Model:
     warnings.warn("", DeprecationWarning)
     model = Model(**model_args)
-    model.init_model()
+    model.init()
     model.move_to_device()
     return model
 
