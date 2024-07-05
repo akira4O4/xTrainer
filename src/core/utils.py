@@ -2,6 +2,7 @@ import os
 import time
 import json
 import yaml
+import shutil
 
 
 def round4(data):
@@ -67,3 +68,12 @@ def get_time(fmt: str = '%Y%m%d_%H%M%S') -> str:
 
 def error_exit() -> None:
     exit(1)
+
+
+def check_dir(path: str, clean: bool = False):
+    if not os.path.exists(path):
+        os.makedirs(path)
+    else:
+        if clean:
+            shutil.rmtree(path)
+            os.makedirs(path)

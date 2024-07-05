@@ -65,7 +65,7 @@ def build_lr_scheduler(name: str, **kwargs):
     return scheduler
 
 
-def build_loss_forward(name, **kwargs) -> BaseLossForward:
+def build_loss_forward(name: str, **kwargs) -> BaseLossForward:
     loss_forward_class = LOSS_FORWARD_TABLE.get(name)
     assert loss_forward_class is not None
 

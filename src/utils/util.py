@@ -240,7 +240,6 @@ def load_config(config_file: str):
 
 def get_time(fmt: str = '%Y%m%d_%H%M%S') -> str:
     time_str = time.strftime(fmt, time.localtime())
-    # return '2022 - 11 - 14 - (17:35:42)'
     return str(time_str)
 
 

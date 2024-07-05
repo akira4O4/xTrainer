@@ -4,7 +4,7 @@ class Task:
     MT: bool = False
     TASK: str = ''
 
-    def __init__(self, task: str):
+    def __init__(self, task: str):  # noqa
         self.TASK = task
 
         if task.lower() == 'multitask':
