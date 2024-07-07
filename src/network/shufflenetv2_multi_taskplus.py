@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 from typing import Callable, Any, List
-from src.utils.baisc import SPPF, MultiSampleDropout
+from .modules import SPPF, MultiSampleDropout
 
 __all__ = [
     'ShuffleNetV2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0',

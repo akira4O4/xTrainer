@@ -1,12 +1,12 @@
 import numpy as np
-from .datafile import DataFile
+from .config import Config
 import platform
 import torch
 
 with open("VERSION", "r") as f:
     VERSION = f.read().strip()
 
-CONFIG = DataFile()
+CONFIG = Config()
 
 # default val ----------------------------------------------------------------------------------------------------------
 NoArgs = None

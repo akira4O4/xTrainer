@@ -10,7 +10,6 @@ import torch.optim.lr_scheduler as torch_lr_scheduler
 from torch.optim import Optimizer
 from .model import Model
 from .optim import OptimWrapper, AmpOptimWrapper
-from src import lr_scheduler as lr_adjustment
 from .loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 import warnings
 

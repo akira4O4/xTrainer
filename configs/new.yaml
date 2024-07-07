@@ -31,8 +31,8 @@ pin_memory: True
 classification:
   batch: 8
   classes: 3
-  train: 'D:\llf\dataset\danyang\training_data\C2\output\train'
-  val: 'D:\llf\dataset\danyang\training_data\C2\output\val'
+  train: 'D:\dataset\cls\train100\train'
+  val: 'D:\dataset\cls\train100\val'
 
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:

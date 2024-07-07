@@ -1,9 +1,11 @@
 import argparse
 from loguru import logger
 from src import CONFIG, OS
-from src.core.trainer_v3 import Trainer
+from src.trainer_v3 import Trainer
 
 if __name__ == '__main__':
+    logger.info(f'OS: {OS}')
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-cfg',
@@ -12,7 +14,9 @@ if __name__ == '__main__':
         default=r'configs\new.yaml',
         help='CONFIG path'
     )
-    logger.info(f'OS: {OS}')
     args = parser.parse_args()
-    CONFIG.load(args.config)
+
+    CONFIG.set_path(args.config)
+    CONFIG.load()
+
     trainer = Trainer()

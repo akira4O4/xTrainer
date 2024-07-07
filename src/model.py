@@ -1,13 +1,10 @@
 import os
-import warnings
 from typing import Optional
-from collections import OrderedDict
 
 import torch
 from loguru import logger
 
 from src import network
-from src.utils.util import get_time
 
 __all__ = ['Model']
 
@@ -166,45 +163,3 @@ class Model:
         model_save_path = os.path.join(save_path, f"epoch{epoch}.pth")
         torch.save(save_dict, model_save_path)
         logger.success(f'👍 Save weight to: {save_path}.')
-
-    # def remove_ddp_key(self) -> dict:
-    #     warnings.warn("", DeprecationWarning)
-    #     del_count = 0
-    #     del_ddp_key_flag = False
-    #     new_state_dict = OrderedDict()
-    #     for k, v in self.state_dict.items():
-    #         if 'module' in k:
-    #             # k = k[7:]
-    #             k = k.replace('module.', '')
-    #             del_count += 1
-    #             del_ddp_key_flag = True
-    #
-    #         new_state_dict[k] = v
-    #
-    #     if del_ddp_key_flag:
-    #         logger.info(f'Delete num of key(module) of DDP model: {del_count} item.')
-    #
-    #     return new_state_dict
-
-    # def ddp_mode(self, sync_bn: bool = False) -> None:
-    #
-    #     warnings.warn("", DeprecationWarning)
-    #     if self._gpu is None or self._gpu == -1:
-    #         logger.warning(f'Your GPU:{self._gpu}.')
-    #         return
-    #
-    #     if self.net is None:
-    #         logger.error(f'Model is not init.')
-    #         return
-    #
-    #     if sync_bn:
-    #         self.net = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.net)
-    #         logger.info(f'DDP Sync BN Layer.')
-    #     self.net = torch.nn.parallel.DistributedDataParallel(
-    #         self.net,
-    #         device_ids=[self._gpu],
-    #         output_device=self._gpu,
-    #         broadcast_buffers=False,
-    #         #  find_unused_parameters=True
-    #     )
-    #     logger.success(f'Setting DDP Mode.')

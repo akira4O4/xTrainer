@@ -23,12 +23,14 @@ __all__ = [
 class BaseDataset(Dataset, ABC):
     def __init__(
         self,
+        root: str,
         loader_type: str = 'pil',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
     ) -> None:
 
+        self.root = root
         self.support_img_suffix = ('.jpg', '.jpeg', '.png')
         self.support_img_type = ['RGB', 'GRAY']
 
@@ -76,7 +78,6 @@ class BaseDataset(Dataset, ABC):
     def check_image_suffix(self, filename: str) -> bool:
         return filename.lower().endswith(self.support_img_suffix)
 
-    # image loader e.g. PIL or OpenCV
     def pil_loader(self, path: str) -> Image.Image:
         img = Image.open(path)
 
@@ -107,15 +108,6 @@ class BaseDataset(Dataset, ABC):
             return self.pil_loader
 
     @staticmethod
-    def get_dirs(path: str) -> list:
-        dir_names = []
-        for d in os.scandir(path):
-            if d.is_dir():
-                dir_names.append(d.name)
-        dir_names.sort()
-        return dir_names
-
-    @staticmethod
     def get_all_file(path: str) -> list:
         all_data = []
         for root, dirs, files in os.walk(path):
@@ -123,19 +115,14 @@ class BaseDataset(Dataset, ABC):
                 all_data.append(os.path.join(root, file))
         return all_data
 
-    def get_file_by_subfix(self, path: str, subfix: Union[str, list, tuple]) -> list:
-        all_data = self.get_all_file(path)
+    def get_file_by_subfix(self) -> list:
+        all_data = self.get_all_file(self.root)
         data = []
         for file in all_data:
             file_basename = os.path.basename(file)
-            name, ext = os.path.splitext(file_basename)
-
-            if isinstance(subfix, list) or isinstance(subfix, tuple):
-                if ext in subfix:
-                    data.append(file)
-            elif isinstance(subfix, str):
-                if ext == subfix:
-                    data.append(file)
+            name, subfix = os.path.splitext(file_basename)
+            if subfix in self.support_img_suffix:
+                data.append(file)
         return data
 
     @staticmethod
@@ -183,6 +170,7 @@ class ClassificationDataset(BaseDataset):
         img_type: Optional[str] = 'RGB',
     ):
         super(ClassificationDataset, self).__init__(
+            root=root,
             loader_type=loader_type,
             img_type=img_type,
             transform=transform,
@@ -276,6 +264,7 @@ class SegmentationDataSet(BaseDataset):
         img_type: Optional[str] = 'RGB',
     ) -> None:
         super(SegmentationDataSet, self).__init__(
+            root=root,
             loader_type=loader_type,
             img_type=img_type,
             transform=transform,
@@ -286,7 +275,7 @@ class SegmentationDataSet(BaseDataset):
         self.is_training = is_training
 
         self.find_labels()
-        self.samples = self.get_file_by_subfix(self.root, self.support_img_suffix)
+        self.samples = self.get_file_by_subfix()
 
         if expanding_rate != 0:
             self.expanding_data(expanding_rate)
