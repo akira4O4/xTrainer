@@ -174,7 +174,8 @@ MULTICLASS_MODE: str = "multiclass"
 MULTILABEL_MODE: str = "multilabel"
 
 
-class DiceLoss(_Loss):
+# class DiceLoss(_Loss):
+class DiceLoss(nn.Module):
 
     def __init__(
         self,
