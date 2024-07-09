@@ -1,4 +1,22 @@
+import random
+import numpy as np
 import torch
+import torch.backends.cudnn
+
+
+def init_seeds(seed: int = 0) -> None:
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+
+
+def init_backends_cudnn(deterministic: bool = False) -> None:
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def iou(pred: torch.Tensor, target: torch.Tensor):

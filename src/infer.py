@@ -11,10 +11,10 @@ from tqdm import tqdm
 from dataclasses import asdict
 
 from lab.utils.util import load_yaml, color_list, get_images
-from .task import Task, task_convert
+from src.utils.task import Task, task_convert
 from .args import ProjectArgs, TrainArgs, ModelArgs, TestArgs
-from .transforms import ClassificationTransform, SegmentationTransform
-from .model import Model
+from src.core.transforms import ClassificationTransform, SegmentationTransform
+from src.core.model import Model
 
 __all__ = ['Infer']
 

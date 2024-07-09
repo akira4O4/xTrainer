@@ -12,18 +12,17 @@ from torch.utils.data import DataLoader
 from mlflow import log_metric, log_param, set_experiment
 
 from lab.utils.util import load_yaml, get_num_of_images, timer, get_time
-from .task import Task, task_convert
+from src.utils.task import Task, task_convert
 from .args import ProjectArgs, TrainArgs, ModelArgs
-from .builder import build_dir, init_seeds, init_backends_cudnn
-from .builder import build_model, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_loss, build_lr_scheduler
-from .balanced_batch_sampler import BalancedBatchSampler
+from src.core.builder import build_dir, init_seeds, init_backends_cudnn
+from src.core.builder import build_model, build_optimizer_wrapper, build_amp_optimizer_wrapper, build_loss, build_lr_scheduler
+from src.core.balanced_batch_sampler import BalancedBatchSampler
 from .dataset import ClassificationDataset, SegmentationDataSet
-from .transforms import ClassificationTransform, SegmentationTransform
-from .model import Model
-from .optim import AmpOptimWrapper, OptimWrapper
-from .loss_forward import *
-from .performance import calc_performance
-from .data_logger import DataLogger
+from src.core.transforms import ClassificationTransform, SegmentationTransform
+from src.core.model import Model
+from src.core.optim import AmpOptimWrapper, OptimWrapper
+from src.utils.performance import calc_performance
+from src.utils.data_logger import DataLogger
 
 
 class Trainer:

@@ -14,8 +14,8 @@ model: shufflenet_v2_x1_0 #i.e. shufflenet_v2_x1_0 segmentation_shufflenetplus_v
 weight: ''
 pretrained: True
 wh: [ 480,480 ]
-letterbox: true
 balanced_batch_sampler: True
+load_all_data: True
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: AUTO

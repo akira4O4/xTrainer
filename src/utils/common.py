@@ -3,13 +3,16 @@ import time
 import json
 import yaml
 import shutil
+from typing import Optional, List
 
 
-def round4(data):
+def round4(data: float) -> float:
+    assert isinstance(data, float)
     return round(float(data), 4)
 
 
-def round8(data):
+def round8(data: float) -> float:
+    assert isinstance(data, float)
     return round(float(data), 8)
 
 
@@ -35,14 +38,25 @@ def save_yaml(data, save: str) -> None:
         yaml.dump(data=data, stream=f, allow_unicode=True)
 
 
-def get_images(path: str, ext=None) -> list:
-    if ext is None:
-        ext = ['.png', '.jpg']
+def get_images(path: str, ext: Optional[List[str]] = None) -> List[str]:
+    ext = ['.png', '.jpg'] if ext is None else ext
     data = []
+
     for root, dirs, files in os.walk(path):
         for file in files:
             file_name, file_ext = os.path.splitext(file)
             if file_ext in ext:
+                image = os.path.join(root, file)
+                data.append(image)
+    return data
+
+
+def get_json_file(path: str) -> List[str]:
+    data = []
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            name, suffix = os.path.splitext(file)
+            if suffix.lower() == '.json':
                 image = os.path.join(root, file)
                 data.append(image)
     return data
@@ -70,7 +84,7 @@ def error_exit() -> None:
     exit(1)
 
 
-def check_dir(path: str, clean: bool = False):
+def check_dir(path: str, clean: bool = False) -> None:
     if not os.path.exists(path):
         os.makedirs(path)
     else:

@@ -1,32 +1,14 @@
-import os
-import random
-from typing import Optional
+import warnings
+
 import torch
 import torch.cuda
 import torch.backends.cudnn
-import numpy as np
-# from loguru import logger
 import torch.optim.lr_scheduler as torch_lr_scheduler
 from torch.optim import Optimizer
-from .model import Model
-from .optim import OptimWrapper, AmpOptimWrapper
-from .loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
-import warnings
 
-
-def init_seeds(seed: int = 0) -> None:
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-
-
-def init_backends_cudnn(deterministic: bool = False) -> None:
-    if deterministic:
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+from src.core.model import Model
+from src.core.optim import OptimWrapper, AmpOptimWrapper
+from src.core.loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 
 
 def build_model(model_args: dict) -> Model:
