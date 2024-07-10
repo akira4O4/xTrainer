@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Tuple, Union
 
 import cv2
 import torch
@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 from torchvision.transforms import Normalize
 from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms import functional as F
+
 from imgaug import augmenters as ia
 from imgaug import augmenters as iaa
 
@@ -19,61 +21,6 @@ __all__ = [
 ]
 
 
-class LetterBox:
-
-    def __init__(
-        self,
-        new_shape: tuple = (640, 640),  # HW
-        auto: bool = False,
-        scale_fill: bool = False,
-        scaleup: bool = True,
-        center: bool = True,
-        stride: int = 32
-    ):
-        """Initialize LetterBox object with specific parameters."""
-        self.new_shape = new_shape
-        self.auto = auto
-        self.scale_fill = scale_fill
-        self.scaleup = scaleup
-        self.stride = stride
-        self.center = center  # Put the image in the middle or top-left
-
-    def __call__(self, image: np.ndarray) -> np.ndarray:
-        shape = image.shape[:2]  # current shape [height, width]
-
-        # Scale ratio (new / old)
-        r = min(self.new_shape[0] / shape[0], self.new_shape[1] / shape[1])
-        if not self.scaleup:  # only scale down, do not scale up (for better val mAP)
-            r = min(r, 1.0)
-
-        # Compute padding
-        ratio = r, r  # width, height ratios
-        new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
-        dw, dh = self.new_shape[1] - new_unpad[0], self.new_shape[0] - new_unpad[1]  # wh padding
-
-        if self.auto:  # minimum rectangle
-            dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)  # wh padding
-        elif self.scale_fill:  # stretch
-            dw, dh = 0.0, 0.0
-            new_unpad = (self.new_shape[1], self.new_shape[0])
-            ratio = self.new_shape[1] / shape[1], self.new_shape[0] / shape[0]  # width, height ratios
-
-        if self.center:
-            dw /= 2  # divide padding into 2 sides
-            dh /= 2
-
-        if shape[::-1] != new_unpad:  # resize
-            img = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
-
-        top, bottom = int(round(dh - 0.1)) if self.center else 0, int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)) if self.center else 0, int(round(dw + 0.1))
-        img = cv2.copyMakeBorder(
-            image,
-            top, bottom, left, right,
-            cv2.BORDER_CONSTANT,
-            value=(114, 114, 114)
-        )  # add border
-        return img
 
 
 class BaseTransform:

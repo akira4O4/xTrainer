@@ -17,12 +17,12 @@ class BaseDataset(Dataset, ABC):
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
-        load_all_data: Optional[bool] = False
+        preload: Optional[bool] = False
     ) -> None:
 
         self._root = root
         self._wh = wh
-        self._load_all_data = load_all_data
+        self._preload = preload
         self._loader_type = loader_type
         self._loader = self.get_image_loader(loader_type)
         # self._memory: List[Dict] = []
@@ -102,22 +102,28 @@ class BaseDataset(Dataset, ABC):
         elif loader_type == 'pil':
             return self.pil_loader
 
-    def letterbox(
-        self,
-        image_src: np.ndarray,
-        pad_color: Optional[tuple] = None
-    ) -> tuple:
+    def label2idx(self, label: str) -> int:
+        assert len(self._labels) >= 0, 'labels is empty.'
+        assert label in self._labels, 'name not in labels'
+        return self._labels.index(label)
+
+    def idx2label(self, idx: int) -> str:
+        assert len(self._labels) >= 0, 'labels is empty.'
+        assert 0 <= idx <= len(self._labels), '0 <= idx <= len(labels)'
+        return self._labels[idx]
+
+    def letterbox(self, image: np.ndarray, pad_color: Optional[tuple] = None) -> tuple:
 
         pad_color = self._PADDING_COLOR if pad_color is None else pad_color
-        src_h, src_w = image_src.shape[:2]
+        src_h, src_w = image.shape[:2]
         dst_w, dst_h = self._wh
         scale = min(dst_h / src_h, dst_w / src_w)
         pad_h, pad_w = int(round(src_h * scale)), int(round(src_w * scale))
 
-        if image_src.shape[0:2] != (pad_w, pad_h):
-            image_dst = cv2.resize(image_src, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
+        if image.shape[0:2] != (pad_w, pad_h):
+            out = cv2.resize(image, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
         else:
-            image_dst = image_src
+            out = image
 
         top = int((dst_h - pad_h) / 2)
         down = int((dst_h - pad_h + 1) / 2)
@@ -125,7 +131,7 @@ class BaseDataset(Dataset, ABC):
         right = int((dst_w - pad_w + 1) / 2)
 
         # add border
-        image_dst = cv2.copyMakeBorder(image_dst, top, down, left, right, cv2.BORDER_CONSTANT, value=pad_color)
+        out = cv2.copyMakeBorder(out, top, down, left, right, cv2.BORDER_CONSTANT, value=pad_color)
 
         x_offset, y_offset = max(left, right) / dst_w, max(top, down) / dst_h
-        return image_dst, x_offset, y_offset
+        return out, x_offset, y_offset

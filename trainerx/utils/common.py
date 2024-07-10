@@ -116,3 +116,11 @@ def check_size(image: np.ndarray, wh: Tuple[int, int]) -> bool:
 # if input=hw then output=wh
 def exchange_wh(ab: Tuple[int, int]) -> Tuple[int, int]:
     return ab[1], ab[0]
+
+
+def pil_to_np(img: Image.Image) -> np.ndarray:
+    return np.asarray(img) if isinstance(img, Image.Image) else img
+
+
+def pil_to_pil(img: np.ndarray) -> Image.Image:
+    return Image.fromarray(img) if isinstance(img, np.ndarray) else img
