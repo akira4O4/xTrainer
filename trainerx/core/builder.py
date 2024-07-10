@@ -6,9 +6,9 @@ import torch.backends.cudnn
 import torch.optim.lr_scheduler as torch_lr_scheduler
 from torch.optim import Optimizer
 
-from src.core.model import Model
-from src.core.optim import OptimWrapper, AmpOptimWrapper
-from src.core.loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
+from trainerx.core.model import Model
+from trainerx.core.optim import OptimWrapper, AmpOptimWrapper
+from trainerx.core.loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 
 
 def build_model(model_args: dict) -> Model:

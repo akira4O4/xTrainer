@@ -1,6 +1,6 @@
 import os
 from typing import Optional, Any, Union
-from utils import load_yaml, load_json
+from trainerx.utils.common import load_yaml, load_json
 
 
 class Config:

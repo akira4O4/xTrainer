@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.loss.period_loss import PeriodLoss
-from src.loss.dice_loss import DiceLoss
+from trainerx.loss.period_loss import PeriodLoss
+from trainerx.loss.dice_loss import DiceLoss
 
 __all__ = [
     'BaseLossForward',

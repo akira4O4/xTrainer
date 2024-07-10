@@ -10,34 +10,37 @@ from torch import optim
 from torch.utils.data import DataLoader
 from mlflow import log_metric, set_experiment
 
-from src import (
+from trainerx import (
     CONFIG,
     DEFAULT_WORKSPACE,
     DEFAULT_OPTIMIZER
 )
-from src.utils.task import Task
-from src.core.model import Model
-from src.core.loss_forward import BaseLossForward
-from src.utils.performance import calc_performance
-from src.core.optim import AmpOptimWrapper, OptimWrapper
-from src.utils.data_logger import TrainLogger, ValLogger, LossLogger
-from src.core.balanced_batch_sampler import BalancedBatchSampler
-from .dataset import ClassificationDataset, SegmentationDataSet
-from src.core.transforms import (
+from trainerx.utils.task import Task
+from trainerx.core.model import Model
+from trainerx.core.loss_forward import BaseLossForward
+from trainerx.utils.performance import calc_performance
+from trainerx.core.optim import AmpOptimWrapper, OptimWrapper
+from trainerx.utils.data_logger import TrainLogger, ValLogger, LossLogger
+from trainerx.core.balanced_batch_sampler import BalancedBatchSampler
+from trainerx.dataset.segmentation_dataset import SegmentationDataSet
+from trainerx.dataset.classification_dataset import ClassificationDataset
+from trainerx.core.transforms import (
     ValTransform,
     ClsImageTransform,
     ClsTargetTransform,
     SegTargetTransform,
     SegImageTransform
 )
-from src.core.builder import (
-    init_seeds,
-    init_backends_cudnn,
+from trainerx.core.builder import (
     build_loss_forward,
     build_optimizer_wrapper,
     build_amp_optimizer_wrapper
 )
-from .utils import (
+from trainerx.utils.torch_utils import (
+    init_seeds,
+    init_backends_cudnn,
+)
+from trainerx.utils.common import (
     save_yaml,
     error_exit,
     round4,

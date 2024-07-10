@@ -1,7 +1,7 @@
 from typing import Optional
 import numpy as np
 import torch
-from src.utils.task import Task
+from trainerx.utils.task import Task
 from loguru import logger
 
 def generate_matrix(

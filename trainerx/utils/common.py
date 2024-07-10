@@ -3,7 +3,9 @@ import time
 import json
 import yaml
 import shutil
-from typing import Optional, List
+from typing import Optional, List, Tuple, Union
+import numpy as np
+from PIL import Image
 
 
 def round4(data: float) -> float:
@@ -91,3 +93,26 @@ def check_dir(path: str, clean: bool = False) -> None:
         if clean:
             shutil.rmtree(path)
             os.makedirs(path)
+
+
+def get_image_shape(image: Union[np.ndarray, Image.Image]) -> Tuple[int, int]:
+    img_w, img_h = -1, -1
+    if isinstance(image, Image.Image):
+        img_w, img_h = image.size
+    elif isinstance(image, np.ndarray):
+        img_h, img_w = image.shape
+    return img_w, img_h
+
+
+def check_size(image: np.ndarray, wh: Tuple[int, int]) -> bool:
+    img_w, img_h = get_image_shape(image)
+    if img_w != wh[0] or img_h != wh[1]:
+        return False
+    else:
+        return True
+
+
+# if input=wh then output=hw
+# if input=hw then output=wh
+def exchange_wh(ab: Tuple[int, int]) -> Tuple[int, int]:
+    return ab[1], ab[0]

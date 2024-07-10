@@ -1,16 +1,19 @@
-import numpy as np
-from src.utils.config import Config
 import platform
-import torch
 
-with open("VERSION", "r") as f:
-    VERSION = f.read().strip()
+import torch
+import numpy as np
+
+from trainerx.utils.config import Config
+
+try:
+    with open("VERSION", "r") as f:
+        VERSION = f.read().strip()
+except:
+    VERSION = 'NoFoundVersion'
 
 CONFIG = Config()
 
-# default val ----------------------------------------------------------------------------------------------------------
 NoArgs = None
-Default_WorkSpace_Dir = 'workspace'
 DEFAULT_WORKSPACE = 'project'
 DEFAULT_OPTIMIZER = 'AdamW'
 COLOR_LIST = np.random.uniform(0, 255, size=(80, 3))

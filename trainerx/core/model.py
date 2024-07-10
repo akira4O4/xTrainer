@@ -4,7 +4,7 @@ from typing import Optional
 import torch
 from loguru import logger
 
-from src import network
+from trainerx import network
 
 __all__ = ['Model']
 

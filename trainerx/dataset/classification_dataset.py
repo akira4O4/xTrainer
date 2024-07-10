@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 from loguru import logger
 from tqdm import tqdm
-from base_dataset import BaseDataset
+from .base_dataset import BaseDataset
 from ..utils.common import get_images
 
 

@@ -1,6 +1,6 @@
 import random
 from abc import ABC
-from typing import Optional, Callable, List, Union, Dict
+from typing import Optional, Callable, List, Union, Dict, Tuple
 from tqdm import tqdm
 import cv2
 import numpy as np
@@ -12,7 +12,7 @@ class BaseDataset(Dataset, ABC):
     def __init__(
         self,
         root: str,
-        wh: Optional[list] = None,
+        wh: Optional[Tuple[int, int]] = None,
         loader_type: str = 'pil',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
@@ -21,23 +21,23 @@ class BaseDataset(Dataset, ABC):
     ) -> None:
 
         self._root = root
-        self._wh: List[int] = wh
+        self._wh = wh
         self._load_all_data = load_all_data
         self._loader_type = loader_type
-        self._image_loader = self.get_image_loader(loader_type)
+        self._loader = self.get_image_loader(loader_type)
         # self._memory: List[Dict] = []
 
         self._transform = transform
         self._target_transform = target_transform
 
-        self._DEFAULT_SUPPORT_IMG_SUFFIX = ['.jpg', '.jpeg', '.png']
-        self._DEFAULT_SUPPORT_IMG_TYPE = ['RGB', 'GRAY']
-        self._DEFAULT_PADDING_COLOR = (114, 114, 114)
+        self._SUPPORT_IMG_FORMAT = ['.jpg', '.jpeg', '.png']
+        self._SUPPORT_IMG_TYPE = ['RGB', 'GRAY']
+        self._PADDING_COLOR = (114, 114, 114)
 
         self._samples = []
         self._labels: List[str] = []
 
-        assert img_type in self._DEFAULT_SUPPORT_IMG_TYPE, 'Image type is not support.'
+        assert img_type in self._SUPPORT_IMG_TYPE, 'Image type is not support.'
         self.img_type = img_type
 
     @property
@@ -71,7 +71,7 @@ class BaseDataset(Dataset, ABC):
         self._samples = new_data
 
     def check_image_suffix(self, filename: str) -> bool:
-        return filename.lower().endswith(tuple(self._DEFAULT_SUPPORT_IMG_SUFFIX))
+        return filename.lower().endswith(tuple(self._SUPPORT_IMG_FORMAT))
 
     def pil_loader(self, path: str) -> Image.Image:
         img = Image.open(path)
@@ -108,7 +108,7 @@ class BaseDataset(Dataset, ABC):
         pad_color: Optional[tuple] = None
     ) -> tuple:
 
-        pad_color = self._DEFAULT_PADDING_COLOR if pad_color is None else pad_color
+        pad_color = self._PADDING_COLOR if pad_color is None else pad_color
         src_h, src_w = image_src.shape[:2]
         dst_w, dst_h = self._wh
         scale = min(dst_h / src_h, dst_w / src_w)
