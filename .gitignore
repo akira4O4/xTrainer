@@ -10,14 +10,6 @@
 */__pycache__
 lab/augment/__pycache__
 dataset/__pycache__
-lab/loss/__pycache__
-lab/loss/functional/__pycache__
-lab/loss/pytorch_iou/__pycache__
-lab/loss/pytorch_ssim/__pycache__
-lab/loss/__pycache__
-lab/loss/functional/__pycache__
-lab/loss/pytorch_iou/__pycache__
-lab/loss/pytorch_ssim/__pycache__
 lab/lr_scheduler/__pycache__
 lab/network/__pycache__
 trainer/__pycache__
