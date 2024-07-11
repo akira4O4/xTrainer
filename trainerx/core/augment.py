@@ -16,7 +16,7 @@ class Resize:
     def __call__(
         self,
         image: Union[Image.Image, torch.Tensor],
-        target=None
+        target: Union[Image.Image, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         image = F.resize(image, self.size)
         if target is not None:
