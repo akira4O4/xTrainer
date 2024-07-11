@@ -12,8 +12,8 @@ class BaseDataset(Dataset, ABC):
     def __init__(
         self,
         root: str,
-        wh: Optional[Tuple[int, int]] = None,
-        loader_type: str = 'pil',
+        wh: Tuple[int, int],
+        loader_type: Optional[str] = 'pil',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
@@ -25,7 +25,6 @@ class BaseDataset(Dataset, ABC):
         self._preload = preload
         self._loader_type = loader_type
         self._loader = self.get_image_loader(loader_type)
-        # self._memory: List[Dict] = []
 
         self._transform = transform
         self._target_transform = target_transform

@@ -50,8 +50,8 @@ class SegmentationDataSet(BaseDataset):
     def __init__(
         self,
         root: str,
-        wh: Optional[Tuple[int, int]] = None,
-        loader_type: str = 'pil',
+        wh: Tuple[int, int],
+        loader_type: Optional[str] = 'pil',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target

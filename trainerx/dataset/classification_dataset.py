@@ -15,13 +15,13 @@ class ClassificationDataset(BaseDataset):
     def __init__(
         self,
         root: str,
-        wh: Optional[list] = None,
-        loader_type: str = 'pil',
+        wh: Tuple[int, int],
+        loader_type: Optional[str] = 'pil',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         expanding_rate: Optional[int] = 0,
-        load_all_data: Optional[bool] = False
+        preload: Optional[bool] = False
     ):
         super(ClassificationDataset, self).__init__(
             root=root,
@@ -30,7 +30,7 @@ class ClassificationDataset(BaseDataset):
             img_type=img_type,
             transform=transform,
             target_transform=target_transform,
-            load_all_data=load_all_data
+            preload=preload
         )
         self._memory: Dict[str, np.ndarray] = {}
         self.find_labels()
@@ -58,29 +58,29 @@ class ClassificationDataset(BaseDataset):
         for idx in range(self.num_of_label):
             target_path = os.path.join(self._root, self._labels[idx])
 
-            images: List[str] = get_images(target_path, self._DEFAULT_SUPPORT_IMG_SUFFIX)
+            images: List[str] = get_images(target_path, self._SUPPORT_IMG_FORMAT)
 
             self._samples.extend(list(map(lambda x: (x, idx), images)))  # noqa
 
         random.shuffle(self._samples)
 
-        if self._load_all_data:
-            self.load_all_data_to_memory()
+        # if self._load_all_data:
+        #     self.load_all_data_to_memory()
 
     def load_all_data_to_memory(self) -> None:
         logger.info(f'load all data to memory...')
         for path in tqdm(self._samples):
-            image: Union[Image.Image, np.ndarray] = self._image_loader(path)
+            image: Union[Image.Image, np.ndarray] = self._loader(path)
             self._memory[path] = image
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
 
         path, label_idx = self._samples[index]
 
-        if self._load_all_data:
+        if self._preload:
             image = self._memory.get(path)
         else:
-            image: Union[Image.Image, np.ndarray] = self._image_loader(path)
+            image: Union[Image.Image, np.ndarray] = self._loader(path)
 
         img_w: int = -1
         img_h: int = -1
