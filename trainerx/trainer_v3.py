@@ -22,8 +22,8 @@ from trainerx.utils.performance import calc_performance
 from trainerx.core.optim import AmpOptimWrapper, OptimWrapper
 from trainerx.utils.data_logger import TrainLogger, ValLogger, LossLogger
 from trainerx.core.balanced_batch_sampler import BalancedBatchSampler
-from trainerx.dataset.segmentation_dataset import SegmentationDataSet
-from trainerx.dataset.classification_dataset import ClassificationDataset
+from trainerx.dataset.segmentation import SegmentationDataSet
+from trainerx.dataset.classification import ClassificationDataset
 from trainerx.core.transforms import (
     ValTransform,
     ClsImageTransform,

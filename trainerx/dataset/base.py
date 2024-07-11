@@ -22,6 +22,7 @@ class BaseDataset(Dataset, ABC):
 
         self._root = root
         self._wh = wh
+        self._hw = (wh[1], wh[2])
         self._preload = preload
         self._loader_type = loader_type
         self._loader = self.get_image_loader(loader_type)
@@ -57,6 +58,7 @@ class BaseDataset(Dataset, ABC):
     def set_target_transform(self, val) -> None:
         self._target_transform = val
 
+    # TODO: 优化
     def expanding_data(self, rate: int = 0):
         assert len(self._samples) != 0, f'samples is empty.'
 

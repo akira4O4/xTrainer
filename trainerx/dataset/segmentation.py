@@ -8,42 +8,14 @@ from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
-from trainerx.dataset.base_dataset import BaseDataset
+from trainerx.dataset.base import BaseDataset
+from trainerx.dataset import Img, Label
 from trainerx.utils.common import (
     load_json,
     get_images,
     check_size,
-    exchange_wh,
     pil_to_np
 )
-
-'''
-Labelme Data
-
-{
-    "shapes": [
-        {
-           "label": "",
-           "points": [[x,y],[x,y],...]
-        },
-        {...},
-        ...
-    ],
-    "imagePath": ""
-}
-'''
-
-
-class LabelmeData:
-    def __init__(self, metadata: Optional[dict] = None) -> None:
-        if metadata is None:
-            metadata = {}
-
-        self.objects: list = metadata.get('shapes', [])
-        self.image_path: str = metadata.get('imagePath', '')
-        self.num_of_objects = len(self.objects)
-        self.is_background = True if self.num_of_objects == 0 else False
-        self.mask = None  # reload mask
 
 
 class SegmentationDataSet(BaseDataset):
@@ -72,8 +44,8 @@ class SegmentationDataSet(BaseDataset):
 
         self.load_data()
 
-        self.samples_with_label: List[Tuple[str, LabelmeData]] = []
-        self.background_samples: List[Tuple[str, LabelmeData]] = []
+        self.samples_with_label: List[Tuple[Img, Label]] = []
+        self.background_samples: List[Tuple[Img, Label]] = []
         self._samples = self.samples_with_label + self.background_samples
 
         if expanding_rate != 0:
@@ -90,42 +62,44 @@ class SegmentationDataSet(BaseDataset):
     def load_data(self) -> None:
 
         logger.info('loading dataset...')
-        images: List[str] = get_images(self._root, self._SUPPORT_IMG_FORMAT)
+        images_path: List[str] = get_images(self._root, self._SUPPORT_IMG_FORMAT)
 
-        image: str
-        for image in tqdm(images):
+        for image_path in tqdm(images_path):
 
-            label_path: str = self.find_label_path(image)
+            # preload image
+            if self._preload:
+                image = Img(path=image_path, image=self._loader(image_path))
+            else:
+                image = Img(path=image_path)
 
+            label = Label()
+            label_path: str = self.find_label_path(image_path)
             if os.path.exists(label_path):
 
-                data = LabelmeData(metadata=load_json(label_path))
+                label.load_metadata(load_json(label_path))
 
                 # check image path
-                if image != data.image_path:
-                    logger.warning(f'img_path != json.imagePath,{image}')
+                if image_path != label.image_path:
+                    logger.warning(f'img_path != json.imagePath,{image_path}')
                     continue
 
+                # preload mask
+                if self._preload:
+                    label.mask = self.get_mask(label.objects)
+
+                self.samples_with_label.append((image, label))
+
                 # find the all label
-                for obj in data.objects:
+                for obj in label.objects:
                     if obj["label"] not in self._labels:
                         self._labels.append(obj["label"])
 
-                # preload mask
-                # TODO: add preload image
-                if self._preload:
-                    data.mask = self.get_mask(data.objects)
-
-                self.samples_with_label.append((image, data))
-            else:  # background mask
-                data = LabelmeData()
-
+            else:
                 # preload background mask
-                # TODO: add preload image
                 if self._preload:
-                    data.mask = np.zeros((exchange_wh(self._wh)), dtype=np.uint8)
+                    label.mask = np.zeros(self._hw, dtype=np.uint8)
 
-                self.background_samples.append((image, data))
+                self.background_samples.append((image, label))
 
         self._labels.sort()
 
@@ -134,7 +108,7 @@ class SegmentationDataSet(BaseDataset):
 
     def get_mask(self, objects: list) -> np.ndarray:
 
-        mask = np.zeros(exchange_wh(self._wh), dtype=np.uint8)
+        mask = np.zeros(self._hw, dtype=np.uint8)
 
         obj: dict  # obj:{"label":"","points":[]}
         for obj in objects:
@@ -152,14 +126,16 @@ class SegmentationDataSet(BaseDataset):
         cv2.fillConvexPoly(mask, points, color=label_idx)  # noqa
         return mask
 
+    # TODO: Test code
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        img_path, label_data = self._samples[index]
+        img, label = self._samples[index]
+        if self._preload:
+            image = img.image
+        else:
+            image = self._loader(img.path)
 
-        image: Union[Image.Image, np.ndarray] = self._loader(img_path)
-        image: np.ndarray = pil_to_np(image)
-
-        mask: np.ndarray = self.get_mask(label_data.objects) if self._preload else label_data.mask
+        mask: np.ndarray = self.get_mask(label.objects) if self._preload else label.mask
 
         if not check_size(image, self._wh):
             image, x_offset, y_offset = self.letterbox(image)
@@ -167,11 +143,11 @@ class SegmentationDataSet(BaseDataset):
         if self._transform is not None:
             image = self._transform(image)
 
-        if self._target_transform is not None and not label_data.is_background:
+        if self._target_transform is not None and not label.is_background:
             mask = self._target_transform(mask)
 
         mask = mask[None]  # (h, w) -> (1, h, w)
-        return image, mask
+        return image, mask  # noqa
 
     def __len__(self) -> int:
         return len(self._samples)
