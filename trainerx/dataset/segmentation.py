@@ -10,6 +10,7 @@ from tqdm import tqdm
 from trainerx.dataset import Image, Label
 from trainerx.dataset.base import BaseDataset
 from trainerx.core.preprocess import letterbox
+from trainerx.utils.torch_utils import npimage2torch, np2torch
 from trainerx.utils.common import (
     load_json,
     get_images,
@@ -116,6 +117,10 @@ class SegmentationDataSet(BaseDataset):
         mask = np.zeros(self._hw, dtype=np.uint8)
 
         obj: dict  # obj:{"label":"","points":[]}
+
+        if objects is None or objects == []:
+            return mask
+
         for obj in objects:
             # points:[pt1,pt2,...]
             points: list = obj["points"]
@@ -136,26 +141,61 @@ class SegmentationDataSet(BaseDataset):
 
         image, label = self._samples[index]
 
-        im = self._loader(image.path) if self._preload else image.data
-        mask = self.get_mask(label.objects) if self._preload else label.mask
+        im = image.data if self._preload else self._loader(image.path)
+        im = pil_to_np(im)
 
-        if not check_size(im, self._wh):
-            im, x_offset, y_offset = letterbox(im, self._wh)
-
-        if self._transform is not None:
-            im = self._transform(im)
-
-        if self._target_transform is not None and not label.is_background:
-            mask = self._target_transform(mask)
-
-        mask = mask[None]  # (h, w) -> (1, h, w)
-        return im, mask  # noqa
+        mask = label.mask if self._preload else self.get_mask(label.objects)
+        im = cv2.resize(im, (576, 576))
+        mask = cv2.resize(mask, (576, 576))
+        # if not check_size(im, self._wh):
+        #     im, x_offset, y_offset = letterbox(im, self._wh)
+        #
+        # if self._transform is not None:
+        #     im = self._transform(im)
+        #
+        # if self._target_transform is not None and not label.is_background:
+        #     mask = self._target_transform(mask)
+        #
+        # mask = mask[None]  # (h, w) -> (1, h, w)
+        return np2torch(im), np2torch(mask)  # noqa
 
     def __len__(self) -> int:
         return len(self._samples)
 
 
 if __name__ == '__main__':
-    ds = SegmentationDataSet(root=r'D:\llf\dataset\danyang\training_data\E\seg', wh=(960, 960), preload=True)
+    from torch.utils.data import DataLoader
+    import time
+
+    print('build dataset')
+    t0 = time.time()
+    ds = SegmentationDataSet(
+        root=r'D:\llf\dataset\danyang\training_data\E\seg',
+        wh=(576, 576),
+        preload=True
+    )
     print(ds.num_of_label)
     print(ds.labels)
+
+    print('build dataloader')
+    t1 = time.time()
+    dl = DataLoader(
+        dataset=ds,
+        batch_size=8,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=True,
+    )
+    print('get data')
+    t2 = time.time()
+
+    for i in range(3):
+        for item in tqdm(dl):
+            # print(f'get item {i}...')
+            ...
+
+    t3 = time.time()
+    print(f'time ds: {t1 - t0}')
+    print(f'time dl: {t2 - t1}')
+    print(f'time get data: {t3 - t2}')
+    print(f'total time: {t3 - t0}')
