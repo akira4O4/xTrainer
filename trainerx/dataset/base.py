@@ -22,7 +22,7 @@ class BaseDataset(Dataset, ABC):
 
         self._root = root
         self._wh = wh
-        self._hw = (wh[1], wh[2])
+        self._hw = (wh[1], wh[0])
         self._preload = preload
         self._loader_type = loader_type
         self._loader = self.get_image_loader(loader_type)
@@ -112,27 +112,3 @@ class BaseDataset(Dataset, ABC):
         assert len(self._labels) >= 0, 'labels is empty.'
         assert 0 <= idx <= len(self._labels), '0 <= idx <= len(labels)'
         return self._labels[idx]
-
-    def letterbox(self, image: np.ndarray, pad_color: Optional[tuple] = None) -> tuple:
-
-        pad_color = self._PADDING_COLOR if pad_color is None else pad_color
-        src_h, src_w = image.shape[:2]
-        dst_w, dst_h = self._wh
-        scale = min(dst_h / src_h, dst_w / src_w)
-        pad_h, pad_w = int(round(src_h * scale)), int(round(src_w * scale))
-
-        if image.shape[0:2] != (pad_w, pad_h):
-            out = cv2.resize(image, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
-        else:
-            out = image
-
-        top = int((dst_h - pad_h) / 2)
-        down = int((dst_h - pad_h + 1) / 2)
-        left = int((dst_w - pad_w) / 2)
-        right = int((dst_w - pad_w + 1) / 2)
-
-        # add border
-        out = cv2.copyMakeBorder(out, top, down, left, right, cv2.BORDER_CONSTANT, value=pad_color)
-
-        x_offset, y_offset = max(left, right) / dst_w, max(top, down) / dst_h
-        return out, x_offset, y_offset

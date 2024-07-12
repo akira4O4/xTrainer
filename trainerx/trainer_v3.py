@@ -292,7 +292,7 @@ class Trainer:
                 dataset=self.cls_train_dataset,
                 batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('batch'),
                 num_workers=CONFIG('workers'),
-                pin_memory=CONFIG('pin_memory'),
+                pin_memory=True,
                 batch_sampler=balanced_batch_sampler,
                 shuffle=False if CONFIG('balanced_batch_sampler') else True,
                 drop_last=False,
@@ -319,7 +319,7 @@ class Trainer:
                 dataset=self.cls_val_dataset,
                 batch_size=CONFIG('batch'),
                 num_workers=CONFIG('workers'),
-                pin_memory=CONFIG('pin_memory'),
+                pin_memory=True,
                 shuffle=False
             )
 
@@ -347,7 +347,7 @@ class Trainer:
                 batch_size=CONFIG('batch'),
                 shuffle=False,
                 num_workers=CONFIG('workers'),
-                pin_memory=CONFIG('pin_memory'),
+                pin_memory=True,
             )
 
             logger.info(f'Segmentation num of labels: {self.seg_train_dataset.num_of_label}.')
@@ -367,7 +367,7 @@ class Trainer:
                 batch_size=CONFIG('batch'),
                 shuffle=False,
                 num_workers=CONFIG('workers'),
-                pin_memory=CONFIG('pin_memory'),
+                pin_memory=True,
             )
 
             logger.info(f'Segmentation Val data size: {self.seg_val_dataset.data_size}.')

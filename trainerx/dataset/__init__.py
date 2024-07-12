@@ -20,6 +20,7 @@ Labelme Data
 '''
 
 
+# Segmentation label
 @dataclass
 class Label:
     metadata: Optional[dict] = None
@@ -29,7 +30,7 @@ class Label:
     is_background: Optional[int] = False
     mask: Optional[np.ndarray] = None
 
-    def __post_init__(self) -> None:
+    def init(self) -> None:
         if self.metadata is not None:
             self.objects = self.metadata.get('shapes')
             self.image_path = self.metadata.get('imagePath')
@@ -39,17 +40,16 @@ class Label:
 
     def load_metadata(self, val) -> None:
         self.metadata = val
-        self.objects = self.metadata.get('shapes')
-        self.image_path = self.metadata.get('imagePath')
-        self.num_of_objects = len(self.objects)
-        self.is_background = self.num_of_objects == 0
-        self.metadata['imageData'] = None
+        self.init()
+
+    def __post_init__(self) -> None:
+        self.init()
 
 
 @dataclass
-class Img:
+class Image:
     path: Optional[str] = None
-    image: Optional[np.ndarray] = None
+    data: Optional[np.ndarray] = None
     exists: Optional[bool] = False
 
     def __post_init__(self) -> None:

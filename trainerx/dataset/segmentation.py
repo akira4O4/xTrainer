@@ -4,12 +4,12 @@ from typing import Optional, Callable, List, Union, Tuple
 import cv2
 import numpy as np
 import torch
-from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
+from trainerx.dataset import Image, Label
 from trainerx.dataset.base import BaseDataset
-from trainerx.dataset import Img, Label
+from trainerx.core.preprocess import letterbox
 from trainerx.utils.common import (
     load_json,
     get_images,
@@ -42,50 +42,46 @@ class SegmentationDataSet(BaseDataset):
 
         self._labels = ['0_background_']
 
+        self.samples_with_label: List[Tuple[Image, Label]] = []
+        self.background_samples: List[Tuple[Image, Label]] = []
+
+        self.all_image_path: List[str] = get_images(self._root, self._SUPPORT_IMG_FORMAT)
+
         self.load_data()
 
-        self.samples_with_label: List[Tuple[Img, Label]] = []
-        self.background_samples: List[Tuple[Img, Label]] = []
+        if self._preload:
+            self.preload_mask()
+
         self._samples = self.samples_with_label + self.background_samples
 
         if expanding_rate != 0:
             self.expanding_data(expanding_rate)
 
     @staticmethod
-    # find label path from img
     def find_label_path(path: str) -> str:
         basename = os.path.basename(path)
         name, ext = os.path.splitext(basename)
         label_path = path.replace(ext, '.json')
         return label_path
 
+    # Load data path
     def load_data(self) -> None:
-
         logger.info('loading dataset...')
-        images_path: List[str] = get_images(self._root, self._SUPPORT_IMG_FORMAT)
-
-        for image_path in tqdm(images_path):
-
-            # preload image
-            if self._preload:
-                image = Img(path=image_path, image=self._loader(image_path))
-            else:
-                image = Img(path=image_path)
+        for image_path in tqdm(self.all_image_path):
 
             label = Label()
+            image = Image(path=image_path)
+
             label_path: str = self.find_label_path(image_path)
             if os.path.exists(label_path):
 
+                # load and decode json data
                 label.load_metadata(load_json(label_path))
 
                 # check image path
-                if image_path != label.image_path:
+                if os.path.basename(image_path) != label.image_path:
                     logger.warning(f'img_path != json.imagePath,{image_path}')
                     continue
-
-                # preload mask
-                if self._preload:
-                    label.mask = self.get_mask(label.objects)
 
                 self.samples_with_label.append((image, label))
 
@@ -93,18 +89,27 @@ class SegmentationDataSet(BaseDataset):
                 for obj in label.objects:
                     if obj["label"] not in self._labels:
                         self._labels.append(obj["label"])
-
             else:
-                # preload background mask
-                if self._preload:
-                    label.mask = np.zeros(self._hw, dtype=np.uint8)
-
                 self.background_samples.append((image, label))
 
         self._labels.sort()
 
         logger.info(f'samples_with_label: {len(self.samples_with_label)}')
         logger.info(f'background_samples: {len(self.background_samples)}')
+
+    # Preload mask but don`t preprocessing mask
+    def preload_mask(self) -> None:
+        logger.info('Preload mask...')
+
+        image: Image
+        label: Label
+        for image, label in tqdm(self.samples_with_label):
+            image.data = self._loader(image.path)
+            label.mask = self.get_mask(label.objects)
+
+        for image, label in tqdm(self.background_samples):
+            image.data = self._loader(image.path)
+            label.mask = np.zeros(self._hw, dtype=np.uint8)
 
     def get_mask(self, objects: list) -> np.ndarray:
 
@@ -129,29 +134,28 @@ class SegmentationDataSet(BaseDataset):
     # TODO: Test code
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        img, label = self._samples[index]
-        if self._preload:
-            image = img.image
-        else:
-            image = self._loader(img.path)
+        image, label = self._samples[index]
 
-        mask: np.ndarray = self.get_mask(label.objects) if self._preload else label.mask
+        im = self._loader(image.path) if self._preload else image.data
+        mask = self.get_mask(label.objects) if self._preload else label.mask
 
-        if not check_size(image, self._wh):
-            image, x_offset, y_offset = self.letterbox(image)
+        if not check_size(im, self._wh):
+            im, x_offset, y_offset = letterbox(im, self._wh)
 
         if self._transform is not None:
-            image = self._transform(image)
+            im = self._transform(im)
 
         if self._target_transform is not None and not label.is_background:
             mask = self._target_transform(mask)
 
         mask = mask[None]  # (h, w) -> (1, h, w)
-        return image, mask  # noqa
+        return im, mask  # noqa
 
     def __len__(self) -> int:
         return len(self._samples)
 
 
 if __name__ == '__main__':
-    ...
+    ds = SegmentationDataSet(root=r'D:\llf\dataset\danyang\training_data\E\seg', wh=(960, 960), preload=True)
+    print(ds.num_of_label)
+    print(ds.labels)

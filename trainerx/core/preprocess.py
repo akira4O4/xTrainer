@@ -1,4 +1,5 @@
-from typing import Optional
+import random
+from typing import Optional, Tuple
 
 import cv2
 import torch
@@ -75,55 +76,6 @@ class ClsTargetTransform:
         return data
 
 
-class AugKeypoints(torch.nn.Module):  # noqa
-
-    def __init__(self, p, seq_det, convert_float_coord):
-        super().__init__()
-        self.p = p
-        self.seq_det = seq_det.to_deterministic()
-        self.convert_float_coord = convert_float_coord
-
-    def forward(self, img, keypoints):  # noqa
-        """
-        Args:
-            img (PIL Image or Tensor): Image to be equalized.
-
-        Returns:
-            PIL Image or Tensor: Randomly equalized image.
-        """
-        self.seq_det.to_deterministic()
-        if torch.rand(1).item() < self.p:
-
-            if not isinstance(img, np.ndarray):
-                img = np.asarray(img)
-
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
-            new_keypoints = []
-            cur_keypoints = []
-
-            for cur_point in keypoints:
-                cur_keypoints.append(ia.Keypoint(x=cur_point[0], y=cur_point[1]))
-
-            images_aug = self.seq_det.augment_images([img])[0]
-            key_points_on_Image = ia.KeypointsOnImage(cur_keypoints, shape=img.shape)
-            keypoints_aug = self.seq_det.augment_keypoints([key_points_on_Image])[0]
-
-            for i in range(len(key_points_on_Image.keypoints)):
-                point_aug = keypoints_aug.keypoints[i]
-
-                new_keypoints.append((np.array([point_aug.x, point_aug.y])).tolist())
-
-            images_aug = cv2.cvtColor(images_aug, cv2.COLOR_BGR2RGB)
-            images_aug = Image.fromarray(images_aug)
-            return images_aug, new_keypoints
-
-        return img, keypoints
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(p={})'.format(self.p)
-
-
 class SegImageTransform(BaseTransform):
     def __init__(self) -> None:
         super().__init__()
@@ -143,10 +95,118 @@ class SegTargetTransform(BaseTransform):
         return keypoint
 
 
-def letterbox(self, image: np.ndarray, pad_color: Optional[tuple] = None) -> tuple:
-    pad_color = self._PADDING_COLOR if pad_color is None else pad_color
+class RandomHSV:
+    def __init__(
+        self,
+        h_gain: Optional[float] = 0.5,
+        s_gain: Optional[float] = 0.5,
+        v_gain: Optional[float] = 0.5
+    ) -> None:
+        assert h_gain or s_gain or v_gain
+        self.h_gain = h_gain
+        self.s_gain = s_gain
+        self.v_gain = v_gain
+
+    def __call__(self, img: np.ndarray) -> np.ndarray:
+        r = np.random.uniform(-1, 1, 3) * [self.h_gain, self.s_gain, self.v_gain] + 1  # random gains
+        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
+        dtype = img.dtype  # uint8
+
+        x = np.arange(0, 256, dtype=r.dtype)
+        lut_hue = ((x * r[0]) % 180).astype(dtype)
+        lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
+        lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
+
+        im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
+        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)
+
+        return im_hsv
+
+
+class RandomFlip:
+    def __init__(
+        self,
+        p: Optional[float] = 0.5,
+        direction: Optional[str] = "horizontal",
+    ) -> None:
+        assert direction in {"horizontal", "vertical"}, f"Support direction `horizontal` or `vertical`, got {direction}"
+        assert 0 <= p <= 1.0
+        self.p = p
+        self.direction = direction
+
+    def __call__(self, img: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        if self.direction == "vertical" and random.random() < self.p:
+            img = np.flipud(img)
+            mask = np.flipud(mask)
+        if self.direction == "horizontal" and random.random() < self.p:
+            img = np.fliplr(img)
+            mask = np.fliplr(mask)
+        return img, mask
+
+
+class LetterBox:
+    def __init__(
+        self,
+        new_hw: Tuple[int],
+        auto=False,
+        scale_fill=False,
+        only_scaledown=True,
+        center=True,
+        stride=32
+    ):
+        self.new_hw = new_hw
+        self.new_h = new_hw[0]
+        self.new_w = new_hw[1]
+
+        self.auto = auto
+        self.scale_fill = scale_fill
+        self.only_scaledown = only_scaledown
+        self.stride = stride
+        self.center = center  # Put the image in the middle or top-left
+
+    def __call__(self, image: np.ndarray = None):
+
+        ih, iw = image.shape[:2]
+
+        # Scale ratio (new / old)
+        r = min(self.new_h / ih, self.new_w / iw)
+        # only scale down, do not scale up (for better val mAP)
+        if self.only_scaledown:
+            r = min(r, 1.0)
+
+        # Compute padding
+        ratio = r, r  # width, height ratios
+        new_unpad = int(round(iw * r)), int(round(ih * r))
+        dw, dh = iw - new_unpad[0], ih - new_unpad[1]  # wh padding
+
+        if self.auto:  # minimum rectangle
+            dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)  # wh padding
+
+        elif self.scale_fill:  # stretch
+            dw, dh = 0.0, 0.0
+            new_unpad = (self.new_w, self.new_h)
+            ratio = self.new_w / iw, self.new_h / ih  # width, height ratios
+
+        if self.center:
+            dw /= 2  # divide padding into 2 sides
+            dh /= 2
+
+        if shape[::-1] != new_unpad:  # resize
+            image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
+
+        top, bottom = int(round(dh - 0.1)) if self.center else 0, int(round(dh + 0.1))
+        left, right = int(round(dw - 0.1)) if self.center else 0, int(round(dw + 0.1))
+
+        image = cv2.copyMakeBorder(
+            image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
+        )  # add border
+
+        return image
+
+
+def letterbox(image: np.ndarray, wh: Tuple[int, int], pad_color: Optional[tuple] = None) -> tuple:
     src_h, src_w = image.shape[:2]
-    dst_w, dst_h = self._wh
+    dst_w, dst_h = wh
     scale = min(dst_h / src_h, dst_w / src_w)
     pad_h, pad_w = int(round(src_h * scale)), int(round(src_w * scale))
 
