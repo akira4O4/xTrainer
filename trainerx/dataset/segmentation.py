@@ -24,7 +24,7 @@ class SegmentationDataSet(BaseDataset):
         self,
         root: str,
         wh: Tuple[int, int],
-        loader_type: Optional[str] = 'pil',
+        loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
