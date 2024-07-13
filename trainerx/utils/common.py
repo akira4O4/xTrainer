@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import json
 import yaml
@@ -124,3 +125,21 @@ def pil_to_np(img: Image.Image) -> np.ndarray:
 
 def pil_to_pil(img: np.ndarray) -> Image.Image:
     return Image.fromarray(img) if isinstance(img, np.ndarray) else img
+def align_data_size(data1: int, data2: int) -> Tuple[int, int]:
+    assert data1 != 0
+    assert data2 != 0
+
+    expanding_rate1 = 1
+    expanding_rate2 = 1
+
+    if data1 > data2:
+        difference = data1 - data2
+        expanding_rate1 = 0
+    else:
+        difference = data2 - data1
+        expanding_rate2 = 0
+
+    expanding_rate1 *= math.ceil(difference / data1)
+    expanding_rate2 *= math.ceil(difference / data2)
+
+    return expanding_rate1, expanding_rate2

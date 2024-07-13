@@ -1,7 +1,7 @@
 import platform
 
-import torch
 import numpy as np
+import torch
 
 from trainerx.utils.config import Config
 

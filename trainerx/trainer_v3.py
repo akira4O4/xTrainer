@@ -1,104 +1,63 @@
-import os
 import math
-from typing import Union, List, Optional, Tuple, Any
+import os
+from typing import Union, List, Optional, Any
 
-import torch
 import numpy as np
-from tqdm import tqdm
+import torch
 from loguru import logger
+from mlflow import log_metric, set_experiment
 from torch import optim
 from torch.utils.data import DataLoader
-from mlflow import log_metric, set_experiment
-
-from trainerx import (
-    CONFIG,
-    DEFAULT_WORKSPACE,
-    DEFAULT_OPTIMIZER
-)
-from trainerx.utils.task import Task
-from trainerx.core.model import Model
-from trainerx.core.loss_forward import BaseLossForward
-from trainerx.utils.performance import calc_performance
-from trainerx.core.optim import AmpOptimWrapper, OptimWrapper
-from trainerx.utils.data_logger import TrainLogger, ValLogger, LossLogger
-from trainerx.core.balanced_batch_sampler import BalancedBatchSampler
-from trainerx.dataset.segmentation import SegmentationDataSet
-from trainerx.dataset.classification import ClassificationDataset
-from trainerx.core.transforms import (
+from tqdm import tqdm
+from trainerx.core.preprocess import (
     ValTransform,
     ClsImageTransform,
     ClsTargetTransform,
     SegTargetTransform,
     SegImageTransform
 )
+
+from trainerx import (
+    CONFIG,
+    DEFAULT_OPTIMIZER
+)
+from trainerx.core.balanced_batch_sampler import BalancedBatchSampler
 from trainerx.core.builder import (
     build_loss_forward,
     build_optimizer_wrapper,
     build_amp_optimizer_wrapper
 )
-from trainerx.utils.torch_utils import (
-    init_seeds,
-    init_backends_cudnn,
-)
+from trainerx.core.loss_forward import BaseLossForward
+from trainerx.core.model import Model
+from trainerx.core.optim import AmpOptimWrapper, OptimWrapper
+from trainerx.dataset.classification import ClassificationDataset
+from trainerx.dataset.segmentation import SegmentationDataSet
 from trainerx.utils.common import (
     save_yaml,
     error_exit,
     round4,
     round8,
     timer,
-    check_dir
+    check_dir,
+    align_data_size
 )
-
-
-def init_workspace(root: str) -> tuple:
-    if os.path.isdir(root):
-        project_root = root
-    else:  # ./workspace/project
-        project_root = os.path.join(DEFAULT_WORKSPACE, CONFIG('project'))
-
-    check_dir(project_root)
-
-    weight_path = os.path.join(project_root, 'weights')
-    check_dir(weight_path)
-
-    output_path = os.path.join(project_root, 'temp')
-    check_dir(output_path)
-
-    return project_root, weight_path, output_path
-
-
-def init_mlflow(exp_name: str) -> None:
-    if exp_name == '':
-        logger.info(f'MLFlow Experiment Name: Default.')
-    else:
-        set_experiment(exp_name)
-        logger.info(f'MLFlow Experiment Name:{exp_name}.')
-
-
-def align_data_size(data1: int, data2: int) -> Tuple[int, int]:
-    assert data1 != 0
-    assert data2 != 0
-
-    expanding_rate1 = 1
-    expanding_rate2 = 1
-
-    if data1 > data2:
-        difference = data1 - data2
-        expanding_rate1 = 0
-    else:
-        difference = data2 - data1
-        expanding_rate2 = 0
-
-    expanding_rate1 *= math.ceil(difference / data1)
-    expanding_rate2 *= math.ceil(difference / data2)
-
-    return expanding_rate1, expanding_rate2
+from trainerx.utils.data_logger import TrainLogger, ValLogger, LossLogger
+from trainerx.utils.performance import calc_performance
+from trainerx.utils.task import Task
+from trainerx.utils.torch_utils import (
+    init_seeds,
+    init_backends_cudnn,
+)
 
 
 class Trainer:
     def __init__(self):
 
-        self.project_root_path, self.weight_path, self.output_path = init_workspace(CONFIG('project'))
+        self.project_root_path: str = CONFIG('project')
+        self.weight_path: str = ''
+        self.output_path: str = ''
+        self.init_workspace()
+
         self.is_classification: bool = False
         self.is_segmentation: bool = False
         self.is_multi_task: bool = False
@@ -178,8 +137,27 @@ class Trainer:
             self.total_step = len(self.seg_train_dataloader)
 
         # Init MLFlow  -------------------------------------------------------------------------------------------------
-        init_mlflow(CONFIG("mlflow_experiment_name"))
+        self.init_mlflow()
         logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
+
+    def init_workspace(self) -> None:
+        assert os.path.isdir(CONFIG('project')) is True, 'args.project must be dir.'
+
+        check_dir(CONFIG('project'))
+
+        self.weight_path = os.path.join(CONFIG('project'), 'weights')
+        check_dir(self.weight_path)
+
+        self.output_path = os.path.join(CONFIG('project'), 'temp')
+        check_dir(self.output_path)
+
+    @staticmethod
+    def init_mlflow() -> None:
+        if CONFIG('exp_name') == '':
+            logger.info(f'MLFlow Experiment Name: Default.')
+        else:
+            set_experiment(CONFIG('exp_name'))
+            logger.info(f'MLFlow Experiment Name:{CONFIG('exp_name')}.')
 
     def init_model(self) -> None:
         num_classes: int = CONFIG('classification')['classes']
