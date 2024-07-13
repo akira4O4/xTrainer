@@ -51,7 +51,7 @@ class SegmentationDataSet(BaseDataset):
         self.load_data()
 
         if self._preload:
-            self.preload_mask()
+            self.preload()
 
         self._samples = self.samples_with_label + self.background_samples
 
@@ -99,7 +99,7 @@ class SegmentationDataSet(BaseDataset):
         logger.info(f'background_samples: {len(self.background_samples)}')
 
     # Preload mask but don`t preprocessing mask
-    def preload_mask(self) -> None:
+    def preload(self) -> None:
         logger.info('Preload mask...')
 
         image: Image

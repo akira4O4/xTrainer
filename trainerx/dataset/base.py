@@ -1,7 +1,7 @@
 import random
 from abc import ABC
-from typing import Optional, Callable, List, Union, Dict, Tuple
-from tqdm import tqdm
+from typing import Optional, Callable, List, Tuple
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -112,3 +112,6 @@ class BaseDataset(Dataset, ABC):
         assert len(self._labels) >= 0, 'labels is empty.'
         assert 0 <= idx <= len(self._labels), '0 <= idx <= len(labels)'
         return self._labels[idx]
+
+    def preload(self):
+        ...

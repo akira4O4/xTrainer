@@ -2,11 +2,12 @@ import os
 import random
 from typing import Optional, Callable, Tuple, List, Union, Dict
 
-import torch
 import numpy as np
+import torch
 from PIL import Image
 from loguru import logger
 from tqdm import tqdm
+
 from .base import BaseDataset
 from ..utils.common import get_images
 
@@ -67,8 +68,9 @@ class ClassificationDataset(BaseDataset):
         # if self._load_all_data:
         #     self.load_all_data_to_memory()
 
-    def load_all_data_to_memory(self) -> None:
-        logger.info(f'load all data to memory...')
+    # TODO: impl preload function
+    def preload(self) -> None:
+        logger.info(f'preload data ...')
         for path in tqdm(self._samples):
             image: Union[Image.Image, np.ndarray] = self._loader(path)
             self._memory[path] = image
