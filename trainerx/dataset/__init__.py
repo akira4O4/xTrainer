@@ -48,10 +48,9 @@ class SegLabel:
 
 @dataclass
 class Image:
-    path: Optional[str] = None
+    path: Optional[str] = ''
     data: Optional[np.ndarray] = None
     exists: Optional[bool] = False
 
     def __post_init__(self) -> None:
-        if self.path is not None:
-            self.exists = os.path.exists(self.path)
+        self.exists = os.path.exists(self.path)
