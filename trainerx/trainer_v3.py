@@ -9,13 +9,7 @@ from mlflow import log_metric, set_experiment
 from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from trainerx.core.preprocess import (
-    ValTransform,
-    ClsImageTransform,
-    ClsTargetTransform,
-    SegTargetTransform,
-    SegImageTransform
-)
+from trainerx.core.preprocess import *
 
 from trainerx import (
     CONFIG,
@@ -41,7 +35,7 @@ from trainerx.utils.common import (
     check_dir,
     align_size
 )
-from trainerx.utils.data_logger import TrainLogger, ValLogger, LossLogger
+from trainerx.utils.data_tracker import TrainTracker, ValTracker, LossTracker
 from trainerx.utils.performance import calc_performance
 from trainerx.utils.task import Task
 from trainerx.utils.torch_utils import (
@@ -63,9 +57,9 @@ class Trainer:
         self.is_multi_task: bool = False
 
         # Init Data Logger ---------------------------------------------------------------------------------------------
-        self.train_logger = TrainLogger(topk=CONFIG('topk'))  # noqa
-        self.val_logger = ValLogger(topk=CONFIG('topk'))  # noqa
-        self.loss_logger = LossLogger()
+        self.train_tracker = TrainTracker(topk=CONFIG('topk'))  # noqa
+        self.val_tracker = ValTracker(topk=CONFIG('topk'))  # noqa
+        self.loss_trakcer = LossTracker()
 
         # Init work env ------------------------------------------------------------------------------------------------
         init_seeds(CONFIG('seed'))
@@ -99,42 +93,50 @@ class Trainer:
 
         # Init dataset and dataloader ---------------------------------------------------------------------------------
         if self.task.CLS:
-            self.cls_train_dataset: ClassificationDataset = None  # noqa
-            self.cls_val_dataset: ClassificationDataset = None  # noqa
-            self.cls_train_dataloader: DataLoader = None  # noqa
-            self.cls_val_dataloader: DataLoader = None  # noqa
+
+            self.cls_train_ds: ClassificationDataset = None  # noqa
+            self.cls_train_dl: DataLoader = None  # noqa
+
+            self.cls_val_ds: ClassificationDataset = None  # noqa
+            self.cls_val_dl: DataLoader = None  # noqa
+
+            if not os.path.exists(CONFIG('classification')['train']): ...
+            if not os.path.exists(CONFIG('classification')['val']): ...
+
             self.build_classification_ds_dl()
 
-            if CONFIG('classification')['classes'] != self.cls_train_dataset.num_of_label:
+            if CONFIG('classification')['classes'] != self.cls_train_ds.num_of_label:
                 logger.error('classification num of classes setting error.')
                 error_exit()
 
         if self.task.SEG:
-            self.seg_train_dataset: SegmentationDataSet = None  # noqa
-            self.seg_val_dataset: SegmentationDataSet = None  # noqa
-            self.seg_train_dataloader: DataLoader = None  # noqa
-            self.seg_val_dataloader: DataLoader = None  # noqa
+
+            self.seg_train_ds: SegmentationDataSet = None  # noqa
+            self.seg_train_dl: DataLoader = None  # noqa
+
+            self.seg_val_ds: SegmentationDataSet = None  # noqa
+            self.seg_val_dl: DataLoader = None  # noqa
+
             self.build_segmentation_ds_dl()
 
-            if CONFIG('segmentation')['classes'] != self.seg_train_dataset.num_of_label:
+            if CONFIG('segmentation')['classes'] != self.seg_train_ds.num_of_label:
                 logger.error('segmentation num of classes setting error.')
                 error_exit()
 
         # Expand dataset -----------------------------------------------------------------------------------------------
         if self.task.MT:
-            rate1, rate2 = align_size(self.cls_train_dataset.data_size, self.seg_train_dataset.data_size)
-            self.cls_train_dataset.expanding_data(rate1)
-            self.seg_train_dataset.expanding_data(rate2)
-
-            logger.info(f'Expanding classification dataset to: {self.cls_train_dataset.data_size} x{rate1}')
-            logger.info(f'Expanding segmentation dataset to: {self.seg_train_dataset.data_size} x{rate2}')
+            rate1, rate2 = align_size(self.cls_train_ds.real_data_size, self.seg_train_ds.real_data_size)
+            self.cls_train_ds.expanding_data(rate1)
+            self.seg_train_ds.expanding_data(rate2)
+            logger.info(f'Expanding classification dataset to: {self.cls_train_ds.real_data_size}x{rate1}')
+            logger.info(f'Expanding segmentation dataset to: {self.seg_train_ds.real_data_size}x{rate2}')
 
         if self.task.MT:
-            self.total_step = min(len(self.cls_train_dataloader), len(self.seg_train_dataloader))
+            self.total_step = min(len(self.cls_train_dl), len(self.seg_train_dl))
         elif self.task.CLS:
-            self.total_step = len(self.cls_train_dataloader)
+            self.total_step = len(self.cls_train_dl)
         elif self.task.SEG:
-            self.total_step = len(self.seg_train_dataloader)
+            self.total_step = len(self.seg_train_dl)
 
         # Init MLFlow  -------------------------------------------------------------------------------------------------
         self.init_mlflow()
@@ -238,115 +240,97 @@ class Trainer:
 
     def build_classification_ds_dl(self) -> None:
 
-        image_t = ClsImageTransform()
-        target_t = ClsTargetTransform()
-        val_t = ValTransform()
+        # Build Train Dataset --------------------------------------------------------------------------------------
+        self.cls_train_ds = ClassificationDataset(
+            root=CONFIG('classification')['train'],
+            wh=CONFIG('wh'),
+            transform=ClsImageT(),
+            target_transform=ClsTargetT(),
+        )
+        save_yaml(self.cls_train_ds.labels, os.path.join(self.output_path, 'cls_labels.yaml'))
 
-        if not os.path.exists(CONFIG('classification')['train']):
-            logger.warning(f"Don`t found the {CONFIG('classification')['train']}.")
-        else:
-
-            # Build Train Dataset
-            self.cls_train_dataset = ClassificationDataset(
-                root=CONFIG('classification')['train'],
-                wh=CONFIG('wh'),
-                transform=image_t,
-                target_transform=target_t,
+        # Build BalancedBatchSampler -------------------------------------------------------------------------------
+        balanced_batch_sampler = None
+        if CONFIG('balanced_batch_sampler'):
+            balanced_batch_sampler = BalancedBatchSampler(
+                torch.tensor(self.cls_train_ds.targets),
+                n_classes=self.model.num_classes,
+                n_samples=math.ceil(CONFIG('classification')['batch'] / self.model.num_classes)
             )
-            save_yaml(self.cls_train_dataset.labels, os.path.join(self.output_path, 'cls_labels.yaml'))
 
-            # Build BalancedBatchSampler
-            balanced_batch_sampler = None
-            if CONFIG('balanced_batch_sampler'):
-                balanced_batch_sampler = BalancedBatchSampler(
-                    torch.tensor(self.cls_train_dataset.targets),
-                    n_classes=self.model.num_classes,
-                    n_samples=math.ceil(CONFIG('classification')['batch'] / self.model.num_classes)
-                )
+        # Build Train DataLoader -----------------------------------------------------------------------------------
+        self.cls_train_dl = DataLoader(
+            dataset=self.cls_train_ds,
+            batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('batch'),
+            num_workers=CONFIG('workers'),
+            pin_memory=True,
+            batch_sampler=balanced_batch_sampler,
+            shuffle=False if CONFIG('balanced_batch_sampler') else True,
+            drop_last=False,
+            sampler=None
+        )
+        logger.info(f'Classification num of labels: {self.cls_train_ds.num_of_label}.')
+        logger.info(f'Classification Train data size: {self.cls_train_ds.real_data_size}.')
 
-            # Build Train DataLoader
-            self.cls_train_dataloader = DataLoader(
-                dataset=self.cls_train_dataset,
-                batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('batch'),
-                num_workers=CONFIG('workers'),
-                pin_memory=True,
-                batch_sampler=balanced_batch_sampler,
-                shuffle=False if CONFIG('balanced_batch_sampler') else True,
-                drop_last=False,
-                sampler=None
-            )
-            logger.info(f'Classification num of labels: {self.cls_train_dataset.num_of_label}.')
-            logger.info(f'Classification Train data size: {self.cls_train_dataset.data_size}.')
+        # Build Val Dataset --------------------------------------------------------------------------------------------
+        self.cls_val_ds = ClassificationDataset(
+            root=CONFIG('classification')['val'],
+            wh=CONFIG('wh'),
+            transform=ValidateT(),
+            target_transform=ClsTargetT(),
+        )
+        logger.info(f'Classification Val data size: {self.cls_val_ds.real_data_size}.')
 
-        if not os.path.exists(CONFIG('classification')['val']):
-            logger.warning(f"Don`t found the {CONFIG('classification')['val']}.")
-        else:
-            # Build Val Dataset
-            self.cls_val_dataset = ClassificationDataset(
-                root=CONFIG('classification')['val'],
-                wh=CONFIG('wh'),
-                transform=val_t,
-                target_transform=target_t,
-            )
-            logger.info(f'Classification Val data size: {self.cls_val_dataset.data_size}.')
-
-            # Build Val DataLoader
-            self.cls_val_dataloader = DataLoader(
-                dataset=self.cls_val_dataset,
-                batch_size=CONFIG('batch'),
-                num_workers=CONFIG('workers'),
-                pin_memory=True,
-                shuffle=False
-            )
+        # Build Val DataLoader -----------------------------------------------------------------------------------------
+        self.cls_val_dl = DataLoader(
+            dataset=self.cls_val_ds,
+            batch_size=CONFIG('batch'),
+            num_workers=CONFIG('workers'),
+            pin_memory=True,
+            shuffle=False
+        )
 
     def build_segmentation_ds_dl(self) -> None:
-        image_t = SegImageTransform()
-        target_t = SegTargetTransform()
-        val_t = ValTransform()
 
-        if not os.path.exists(CONFIG('segmentation')['val']):
-            logger.warning(f"Don`t found the {CONFIG('segmentation')['train']}.")
-        else:
-            self.seg_train_dataset = SegmentationDataSet(
-                root=CONFIG('segmentation')['train'],
-                transform=image_t,
-                target_transform=target_t,
-            )
-            background_size = len(self.seg_val_dataset.background_samples)
+        self.seg_train_ds = SegmentationDataSet(
+            root=CONFIG('segmentation')['train'],
+            wh=CONFIG('wh'),
+            transform=SegImageT,
+            target_transform=SegTargetT
+        )
+        background_size = len(self.seg_val_ds.background_samples)
 
-            save_yaml(
-                self.seg_train_dataset.labels,
-                os.path.join(self.output_path, 'seg_labels.yaml')
-            )
-            self.seg_train_dataloader = DataLoader(
-                dataset=self.seg_train_dataset,
-                batch_size=CONFIG('batch'),
-                shuffle=False,
-                num_workers=CONFIG('workers'),
-                pin_memory=True,
-            )
+        save_yaml(
+            self.seg_train_ds.labels,
+            os.path.join(self.output_path, 'seg_labels.yaml')
+        )
+        self.seg_train_dl = DataLoader(
+            dataset=self.seg_train_ds,
+            batch_size=CONFIG('batch'),
+            shuffle=False,
+            num_workers=CONFIG('workers'),
+            pin_memory=True,
+        )
 
-            logger.info(f'Segmentation num of labels: {self.seg_train_dataset.num_of_label}.')
-            logger.info(
-                f'Segmentation Train data size: {self.seg_train_dataset.data_size} (background:{background_size}).')
+        logger.info(f'Segmentation num of labels: {self.seg_train_ds.num_of_label}.')
+        logger.info(
+            f'Segmentation Train data size: {self.seg_train_ds.real_data_size} (background:{background_size}).')
 
-        if not os.path.exists(CONFIG('segmentation')['val']):
-            logger.warning(f"Don`t found the {CONFIG('segmentation')['val']}.")
-        else:
-            self.seg_val_dataset = SegmentationDataSet(
-                root=CONFIG('segmentation')['val'],
-                transform=val_t,
-                target_transform=target_t,
-            )
-            self.seg_val_dataloader = DataLoader(
-                dataset=self.seg_val_dataset,
-                batch_size=CONFIG('batch'),
-                shuffle=False,
-                num_workers=CONFIG('workers'),
-                pin_memory=True,
-            )
+        self.seg_val_ds = SegmentationDataSet(
+            root=CONFIG('segmentation')['val'],
+            wh=CONFIG('wh'),
+            transform=ValidateT,
+            target_transform=SegTargetT
+        )
+        self.seg_val_dl = DataLoader(
+            dataset=self.seg_val_ds,
+            batch_size=CONFIG('batch'),
+            shuffle=False,
+            num_workers=CONFIG('workers'),
+            pin_memory=True,
+        )
 
-            logger.info(f'Segmentation Val data size: {self.seg_val_dataset.data_size}.')
+        logger.info(f'Segmentation Val data size: {self.seg_val_ds.real_data_size}.')
 
     def init_loss(self) -> None:
         if self.task.CLS:
@@ -447,9 +431,9 @@ class Trainer:
 
         dataloaders: List[DataLoader] = []
         if self.task.CLS:
-            dataloaders.append(self.cls_train_dataloader)
+            dataloaders.append(self.cls_train_dl)
         if self.task.SEG:
-            dataloaders.append(self.seg_train_dataloader)
+            dataloaders.append(self.seg_train_dl)
 
         # Update lr
         if self.scheduler_step_in_batch is False:
@@ -604,7 +588,7 @@ class Trainer:
 
     def classification_val(self) -> None:
 
-        for data in tqdm(self.cls_val_dataloader):
+        for data in tqdm(self.cls_val_dl):
             images, targets = data
             images = self.move_to_device(images)
             targets = self.move_to_device(targets)
@@ -623,7 +607,7 @@ class Trainer:
         log_metric(f'Val Epoch Top{self.train_args.topk}', self.val_topk_data_logger.avg)
 
     def segmentation_val(self) -> None:
-        for data in tqdm(self.seg_val_dataloader):
+        for data in tqdm(self.seg_val_dl):
             images, targets = data
             images = self.move_to_device(images)
             targets = self.move_to_device(targets)

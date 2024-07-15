@@ -4,95 +4,17 @@ from typing import Optional, Tuple
 import cv2
 import torch
 import numpy as np
-from PIL import Image
-from torchvision.transforms import Normalize
-from torchvision.transforms import Compose, ToTensor
-from torchvision.transforms import functional as F
-
-from imgaug import augmenters as ia
+import torchvision.transforms as T
 from imgaug import augmenters as iaa
 
 __all__ = [
     'BaseTransform',
-    'ValTransform',
-    'ClsImageTransform',
-    'ClsTargetTransform',
-    'SegImageTransform',
-    'SegTargetTransform'
+    'ValidateT',
+    'ClsImageT',
+    'ClsTargetT',
+    'SegImageT',
+    'SegTargetT'
 ]
-
-
-class BaseTransform:
-    def __init__(self) -> None:
-        self._mean = [0.485, 0.456, 0.406]
-        self._std = [0.229, 0.224, 0.225]
-
-        self._ops = [
-            ToTensor(),
-            Normalize(mean=self._mean, std=self._std)
-        ]
-
-    def get_compose(self):
-        return Compose(self._ops)
-
-
-class ValTransform(BaseTransform):
-    def __init__(self):
-        super(ValTransform, self).__init__()
-
-    def __call__(self, img: np.ndarray) -> torch.Tensor:
-        assert type(img) == np.ndarray
-        t = self.get_compose()
-        img = t(img)
-        return img
-
-
-class ClsImageTransform(BaseTransform):
-    def __init__(self):
-        super().__init__()
-        self.iaa_aug_seq = iaa.Sequential(
-            [
-                iaa.SomeOf((0, 1), [iaa.Flipud(0.7), iaa.Fliplr(0.7)]),
-                iaa.MultiplyHue((0.9, 1.1)),
-                iaa.MultiplySaturation((0.9, 1.1)),
-                iaa.SomeOf((0, 1), [iaa.Add((-10, 20)), iaa.Multiply((0.8, 1.2))]),
-            ]
-        )
-
-    def __call__(self, img: np.ndarray) -> torch.Tensor:
-        assert type(img) == np.ndarray
-
-        img = self.iaa_aug_seq.augment_image(img)
-        t = self.get_compose()
-        img = t(img)
-        return img
-
-
-class ClsTargetTransform:
-    def __init__(self) -> None:
-        ...
-
-    def __call__(self, data):
-        return data
-
-
-class SegImageTransform(BaseTransform):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def __call__(self, img: np.ndarray) -> torch.Tensor:
-        assert type(img) == np.ndarray
-        t = self.get_compose()
-        img = t(img)
-        return img
-
-
-class SegTargetTransform(BaseTransform):
-    def __init__(self) -> None:
-        super().__init__()
-
-    def __call__(self, keypoint):
-        return keypoint
 
 
 class RandomHSV:
@@ -134,94 +56,169 @@ class RandomFlip:
         self.p = p
         self.direction = direction
 
-    def __call__(self, img: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def __call__(
+        self,
+        image: np.ndarray,
+        target: Optional[np.ndarray] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
         if self.direction == "vertical" and random.random() < self.p:
-            img = np.flipud(img)
-            mask = np.flipud(mask)
+            image = np.flipud(image)
+            target = np.flipud(image) if target is not None else target
+
         if self.direction == "horizontal" and random.random() < self.p:
-            img = np.fliplr(img)
-            mask = np.fliplr(mask)
-        return img, mask
+            image = np.fliplr(image)
+            target = np.fliplr(image) if target is not None else target
+
+        return image, target
 
 
 class LetterBox:
     def __init__(
         self,
-        new_hw: Tuple[int],
-        auto=False,
-        scale_fill=False,
+        wh: Tuple[int],
         only_scaledown=True,
-        center=True,
-        stride=32
     ):
-        self.new_hw = new_hw
-        self.new_h = new_hw[0]
-        self.new_w = new_hw[1]
-
-        self.auto = auto
-        self.scale_fill = scale_fill
+        self.new_w = wh[0]
+        self.new_h = wh[1]
         self.only_scaledown = only_scaledown
-        self.stride = stride
-        self.center = center  # Put the image in the middle or top-left
 
-    def __call__(self, image: np.ndarray = None):
+    def __call__(self, image: np.ndarray = None) -> np.ndarray:
 
         ih, iw = image.shape[:2]
 
-        # Scale ratio (new / old)
+        # Min scale ratio (new / old)
         r = min(self.new_h / ih, self.new_w / iw)
+
         # only scale down, do not scale up (for better val mAP)
         if self.only_scaledown:
             r = min(r, 1.0)
 
         # Compute padding
-        ratio = r, r  # width, height ratios
-        new_unpad = int(round(iw * r)), int(round(ih * r))
-        dw, dh = iw - new_unpad[0], ih - new_unpad[1]  # wh padding
+        # ratio = r, r  # width, height ratios
+        pad_w, pad_h = int(round(iw * r)), int(round(ih * r))
+        dw, dh = iw - pad_w, ih - pad_h  # wh padding
 
-        if self.auto:  # minimum rectangle
-            dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)  # wh padding
+        dw /= 2
+        dh /= 2
 
-        elif self.scale_fill:  # stretch
-            dw, dh = 0.0, 0.0
-            new_unpad = (self.new_w, self.new_h)
-            ratio = self.new_w / iw, self.new_h / ih  # width, height ratios
+        if [ih, iw] != [pad_h, pad_w]:  # resize
+            image = cv2.resize(image, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
 
-        if self.center:
-            dw /= 2  # divide padding into 2 sides
-            dh /= 2
-
-        if shape[::-1] != new_unpad:  # resize
-            image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
-
-        top, bottom = int(round(dh - 0.1)) if self.center else 0, int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)) if self.center else 0, int(round(dw + 0.1))
+        top = int(round(dh - 0.1))
+        bottom = int(round(dh + 0.1))
+        left = int(round(dw - 0.1))
+        right = int(round(dw + 0.1))
 
         image = cv2.copyMakeBorder(
-            image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
-        )  # add border
+            image,
+            top, bottom,
+            left, right,
+            cv2.BORDER_CONSTANT,
+            value=(114, 114, 114)
+        )
 
         return image
 
 
-def letterbox(image: np.ndarray, wh: Tuple[int, int], pad_color: Optional[tuple] = None) -> tuple:
-    src_h, src_w = image.shape[:2]
-    dst_w, dst_h = wh
-    scale = min(dst_h / src_h, dst_w / src_w)
-    pad_h, pad_w = int(round(src_h * scale)), int(round(src_w * scale))
+class ImgAugT:
+    def __init__(self):
+        self.t = iaa.Sequential(
+            [
+                iaa.SomeOf(
+                    (0, 1),
+                    [
+                        iaa.Flipud(0.7),
+                        iaa.Fliplr(0.7)
+                    ]
+                ),
+                iaa.MultiplyHue((0.9, 1.1)),
+                iaa.MultiplySaturation((0.9, 1.1)),
+                iaa.SomeOf(
+                    (0, 1),
+                    [
+                        iaa.Add((-10, 20)),
+                        iaa.Multiply((0.8, 1.2))
+                    ]
+                )
+            ]
+        )
 
-    if image.shape[0:2] != (pad_w, pad_h):
-        out = cv2.resize(image, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
-    else:
-        out = image
+    def __call__(self, image: np.ndarray) -> np.ndarray:
+        return self.t(image)
 
-    top = int((dst_h - pad_h) / 2)
-    down = int((dst_h - pad_h + 1) / 2)
-    left = int((dst_w - pad_w) / 2)
-    right = int((dst_w - pad_w + 1) / 2)
 
-    # add border
-    out = cv2.copyMakeBorder(out, top, down, left, right, cv2.BORDER_CONSTANT, value=pad_color)
+class BaseTransform:
+    def __init__(self) -> None:
+        self._mean = [0.485, 0.456, 0.406]
+        self._std = [0.229, 0.224, 0.225]
+        self._ops = []
+        self._default_ops = [
+            T.ToTensor(),
+            T.Normalize(mean=self._mean, std=self._std)
+        ]
 
-    x_offset, y_offset = max(left, right) / dst_w, max(top, down) / dst_h
-    return out, x_offset, y_offset
+    def get_compose(self) -> T.Compose:
+        return T.Compose(self._ops)
+
+    def __call__(self, image) -> torch.Tensor:
+        t = self.get_compose()
+        return t(image)
+
+
+class ValidateT(BaseTransform):
+    ...
+
+
+class ClsImageT(BaseTransform):
+    def __init__(self):
+        super().__init__()
+        self.iaa_t = ImgAugT()
+
+        self._ops = [
+            RandomHSV(),
+            RandomFlip()
+        ]
+        self._ops.extend(self._default_ops)
+
+        self.t = self.get_compose()
+
+    def __call__(self, image) -> torch.Tensor:
+        img = self.iaa_t(image)
+        img = self.t(img)
+        return img
+
+
+class ClsTargetT(BaseTransform):
+    def __init__(self) -> None:
+        super().__init__()
+        ...
+
+    def __call__(self, data):
+        return data
+
+
+# TODO: re design
+class SegImageT(BaseTransform):
+    def __init__(self) -> None:
+        super().__init__()
+        self._ops = [RandomHSV()]
+        self._ops.extend(self._default_ops)
+
+    def __call__(self, image) -> torch.Tensor:
+        t = self.get_compose()
+        image = t(image)
+        return image
+
+
+# TODO: re design
+class SegTargetT(BaseTransform):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __call__(self, data) -> torch.Tensor:
+        return data
+
+
+if __name__ == '__main__':
+    r = np.random.uniform(-1, 1, 3) * [0.5, 0.5, 0.5] + 1
+    print(r)

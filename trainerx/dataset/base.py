@@ -1,4 +1,4 @@
-import random
+import os
 from abc import ABC
 from typing import Optional, Callable, List, Tuple
 
@@ -19,6 +19,8 @@ class BaseDataset(Dataset, ABC):
         target_transform: Optional[Callable] = None,  # to target
         is_preload: Optional[bool] = False
     ) -> None:
+
+        assert os.path.exists(root) is True, f'root is not found.'
 
         self._root = root
         self._wh = wh

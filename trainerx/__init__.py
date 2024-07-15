@@ -13,6 +13,7 @@ except:
 
 CONFIG = Config()
 
+TopK = 1
 NoArgs = None
 DEFAULT_WORKSPACE = 'project'
 DEFAULT_OPTIMIZER = 'AdamW'
