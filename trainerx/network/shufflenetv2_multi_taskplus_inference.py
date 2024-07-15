@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 from typing import Callable, Any, List
-from lab.utils.baisc import SPPF, MultiSampleDropout
+from modules import SPPF, MultiSampleDropout
 
 __all__ = [
     'ShuffleNetV2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0',
@@ -36,10 +36,10 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
 
 class InvertedResidual(nn.Module):
     def __init__(
-            self,
-            inp: int,
-            oup: int,
-            stride: int
+        self,
+        inp: int,
+        oup: int,
+        stride: int
     ) -> None:
         super(InvertedResidual, self).__init__()
 
@@ -75,12 +75,12 @@ class InvertedResidual(nn.Module):
 
     @staticmethod
     def depthwise_conv(
-            i: int,
-            o: int,
-            kernel_size: int,
-            stride: int = 1,
-            padding: int = 0,
-            bias: bool = False
+        i: int,
+        o: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        bias: bool = False
     ) -> nn.Conv2d:
         return nn.Conv2d(i, o, kernel_size, stride, padding, bias=bias, groups=i)
 
@@ -325,13 +325,13 @@ class MaskBranch(nn.Module):
 
 class ShuffleNetV2(nn.Module):
     def __init__(
-            self,
-            stages_repeats: List[int],
-            stages_out_channels: List[int],
-            num_classes: int = 1000,
-            mask_classes: int = 1,
-            inverted_residual: Callable[..., nn.Module] = InvertedResidual,
-            **kwargs
+        self,
+        stages_repeats: List[int],
+        stages_out_channels: List[int],
+        num_classes: int = 1000,
+        mask_classes: int = 1,
+        inverted_residual: Callable[..., nn.Module] = InvertedResidual,
+        **kwargs
     ) -> None:
         super(ShuffleNetV2, self).__init__()
 
@@ -357,7 +357,7 @@ class ShuffleNetV2(nn.Module):
         self.stage4: nn.Sequential
         stage_names = ['stage{}'.format(i) for i in [2, 3, 4]]
         for name, repeats, output_channels in zip(
-                stage_names, stages_repeats, self._stage_out_channels[1:]):
+            stage_names, stages_repeats, self._stage_out_channels[1:]):
             seq = [inverted_residual(input_channels, output_channels, 2)]
             for i in range(repeats - 1):
                 seq.append(inverted_residual(output_channels, output_channels, 1))

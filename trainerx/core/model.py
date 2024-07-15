@@ -5,6 +5,7 @@ import torch
 from loguru import logger
 
 from trainerx import network
+from trainerx.utils.common import error_exit
 
 __all__ = ['Model']
 
@@ -105,17 +106,23 @@ class Model:
         self.move_to_device()
 
     def build_model(self) -> None:
-        net = network.__dict__.get(self.model_name)
+        net = network.__dict__.get(self.model_name, None)
+
+        if net is None:
+            from torchvision import models
+            net = models.__dict__.get(self.model_name, None)
+
         if net is None:
             logger.error(f'Don`t get the model:{self.model_name}.')
-            exit()
+            error_exit()
 
-        self._net = net(
-            num_classes=self._num_classes,
-            mask_classes=self._mask_classes,
-            pretrained=self._pretrained,
-            input_channels=3,
-        )
+        net_args = {
+            'num_classes': self._num_classes,
+            'mask_classes': self._mask_classes,
+            'pretrained': self._pretrained,
+            'input_channels': 3,
+        }
+        self._net = net(**net_args)
 
     def load_weight(self) -> None:
 
