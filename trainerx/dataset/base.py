@@ -17,13 +17,13 @@ class BaseDataset(Dataset, ABC):
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
-        preload: Optional[bool] = False
+        is_preload: Optional[bool] = False
     ) -> None:
 
         self._root = root
         self._wh = wh
         self._hw = (wh[1], wh[0])
-        self._preload = preload
+        self._is_preload = is_preload
         self._loader_type = loader_type
         self._loader = self.get_image_loader(loader_type)
 
@@ -35,6 +35,7 @@ class BaseDataset(Dataset, ABC):
         self._PADDING_COLOR = (114, 114, 114)
 
         self._samples = []
+        self._samples_map: List[int] = []
         self._labels: List[str] = []
 
         assert img_type in self._SUPPORT_IMG_TYPE, 'Image type is not support.'
@@ -49,7 +50,7 @@ class BaseDataset(Dataset, ABC):
         return len(self._labels)
 
     @property
-    def data_size(self) -> int:
+    def real_data_size(self) -> int:
         return len(self._samples)
 
     def set_transform(self, val) -> None:
@@ -58,21 +59,10 @@ class BaseDataset(Dataset, ABC):
     def set_target_transform(self, val) -> None:
         self._target_transform = val
 
-    # TODO: 优化
-    def expanding_data(self, rate: int = 0):
-        assert len(self._samples) != 0, f'samples is empty.'
-
-        if rate == 0:
-            return
-
-        new_data = []
-        for i in range(rate):
-            new_data += self._samples
-        random.shuffle(new_data)
-        self._samples = new_data
-
-    def check_image_suffix(self, filename: str) -> bool:
-        return filename.lower().endswith(tuple(self._SUPPORT_IMG_FORMAT))
+    def expanding_data(self, rate: int = 0) -> None:
+        assert len(self._samples_map) != 0, f'Data samples is empty.'
+        assert rate != 0, f'rate == 0.'
+        self._samples_map *= rate
 
     def pil_loader(self, path: str) -> Image.Image:
         img = Image.open(path)

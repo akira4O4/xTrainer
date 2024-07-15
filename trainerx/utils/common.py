@@ -125,21 +125,37 @@ def pil_to_np(img: Image.Image) -> np.ndarray:
 
 def pil_to_pil(img: np.ndarray) -> Image.Image:
     return Image.fromarray(img) if isinstance(img, np.ndarray) else img
-def align_data_size(data1: int, data2: int) -> Tuple[int, int]:
-    assert data1 != 0
-    assert data2 != 0
 
-    expanding_rate1 = 1
-    expanding_rate2 = 1
 
-    if data1 > data2:
-        difference = data1 - data2
-        expanding_rate1 = 0
+def align_size(size1: int, size2: int) -> Tuple[int, int]:
+    assert size1 != 0
+    assert size2 != 0
+
+    if size1 == size2:
+        return 1, 1
+
+    data = [size1, size2]
+    exp_r1 = 1
+    exp_r2 = 1
+
+    max_idx = np.argmax([size1, size2])
+    min_idx = np.argmin([size1, size2])
+    r = math.ceil(data[max_idx] / data[min_idx])
+
+    if size1 > size2:
+        exp_r1 = 1
+        exp_r2 *= r
     else:
-        difference = data2 - data1
-        expanding_rate2 = 0
+        exp_r1 *= r
+        exp_r2 = 1
 
-    expanding_rate1 *= math.ceil(difference / data1)
-    expanding_rate2 *= math.ceil(difference / data2)
+    return exp_r1, exp_r2
 
-    return expanding_rate1, expanding_rate2
+
+if __name__ == '__main__':
+    size1 = 12
+    size2 = 7300
+    r1, r2 = align_data_size(size1, size2)
+    print('size1:', size1, 'size2:', size2)
+    print('r1:', r1, 'r2:', r2)
+    print(size1 * r1, size2 * r2)

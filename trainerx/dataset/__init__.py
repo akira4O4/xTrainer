@@ -22,7 +22,7 @@ Labelme Data
 
 # Segmentation label
 @dataclass
-class Label:
+class SegLabel:
     metadata: Optional[dict] = None
     objects: Optional[list] = None
     image_path: Optional[str] = ''

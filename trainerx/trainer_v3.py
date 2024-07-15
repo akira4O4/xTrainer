@@ -39,7 +39,7 @@ from trainerx.utils.common import (
     round8,
     timer,
     check_dir,
-    align_data_size
+    align_size
 )
 from trainerx.utils.data_logger import TrainLogger, ValLogger, LossLogger
 from trainerx.utils.performance import calc_performance
@@ -122,7 +122,7 @@ class Trainer:
 
         # Expand dataset -----------------------------------------------------------------------------------------------
         if self.task.MT:
-            rate1, rate2 = align_data_size(self.cls_train_dataset.data_size, self.seg_train_dataset.data_size)
+            rate1, rate2 = align_size(self.cls_train_dataset.data_size, self.seg_train_dataset.data_size)
             self.cls_train_dataset.expanding_data(rate1)
             self.seg_train_dataset.expanding_data(rate2)
 
@@ -157,7 +157,7 @@ class Trainer:
             logger.info(f'MLFlow Experiment Name: Default.')
         else:
             set_experiment(CONFIG('exp_name'))
-            logger.info(f'MLFlow Experiment Name:{CONFIG('exp_name')}.')
+            logger.info(f'MLFlow Experiment Name:{CONFIG("exp_name")}.')
 
     def init_model(self) -> None:
         num_classes: int = CONFIG('classification')['classes']
@@ -252,7 +252,6 @@ class Trainer:
                 wh=CONFIG('wh'),
                 transform=image_t,
                 target_transform=target_t,
-                letterbox=CONFIG('letterbox')
             )
             save_yaml(self.cls_train_dataset.labels, os.path.join(self.output_path, 'cls_labels.yaml'))
 
@@ -288,7 +287,6 @@ class Trainer:
                 wh=CONFIG('wh'),
                 transform=val_t,
                 target_transform=target_t,
-                letterbox=CONFIG('letterbox')
             )
             logger.info(f'Classification Val data size: {self.cls_val_dataset.data_size}.')
 

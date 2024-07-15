@@ -7,7 +7,7 @@ import torch
 from loguru import logger
 from tqdm import tqdm
 
-from trainerx.dataset import Image, Label
+from trainerx.dataset import Image, SegLabel
 from trainerx.dataset.base import BaseDataset
 from trainerx.core.preprocess import letterbox
 from trainerx.utils.torch_utils import npimage2torch, np2torch
@@ -28,8 +28,8 @@ class SegmentationDataSet(BaseDataset):
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
-        expanding_rate: Optional[int] = 0,
-        preload: Optional[bool] = False
+        expanding_rate: Optional[int] = 1,
+        is_preload: Optional[bool] = False
     ) -> None:
         super(SegmentationDataSet, self).__init__(
             root=root,
@@ -38,25 +38,25 @@ class SegmentationDataSet(BaseDataset):
             img_type=img_type,
             transform=transform,
             target_transform=target_transform,
-            preload=preload
+            is_preload=is_preload
         )
 
         self._labels = ['0_background_']
 
-        self.samples_with_label: List[Tuple[Image, Label]] = []
-        self.background_samples: List[Tuple[Image, Label]] = []
+        self.samples_with_label: List[Tuple[Image, SegLabel]] = []
+        self.background_samples: List[Tuple[Image, SegLabel]] = []
 
         self.all_image_path: List[str] = get_images(self._root, self._SUPPORT_IMG_FORMAT)
 
         self.load_data()
 
-        if self._preload:
+        if self._is_preload:
             self.preload()
 
         self._samples = self.samples_with_label + self.background_samples
+        self._samples_map: List[int] = list(range(len(self._samples)))
 
-        if expanding_rate != 0:
-            self.expanding_data(expanding_rate)
+        self.expanding_data(expanding_rate)
 
     @staticmethod
     def find_label_path(path: str) -> str:
@@ -70,7 +70,7 @@ class SegmentationDataSet(BaseDataset):
         logger.info('loading dataset...')
         for image_path in tqdm(self.all_image_path):
 
-            label = Label()
+            label = SegLabel()
             image = Image(path=image_path)
 
             label_path: str = self.find_label_path(image_path)
@@ -103,7 +103,7 @@ class SegmentationDataSet(BaseDataset):
         logger.info('Preload mask...')
 
         image: Image
-        label: Label
+        label: SegLabel
         for image, label in tqdm(self.samples_with_label):
             image.data = self._loader(image.path)
             label.mask = self.get_mask(label.objects)
@@ -138,13 +138,16 @@ class SegmentationDataSet(BaseDataset):
 
     # TODO: Test code
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        sample_idx = self._samples_map[index]
 
-        image, label = self._samples[index]
+        image: Image
+        label: SegLabel
+        image, label = self._samples[sample_idx]
 
-        im = image.data if self._preload else self._loader(image.path)
+        im = image.data if self._is_preload else self._loader(image.path)
         im = pil_to_np(im)
 
-        mask = label.mask if self._preload else self.get_mask(label.objects)
+        mask = label.mask if self._is_preload else self.get_mask(label.objects)
         im = cv2.resize(im, (576, 576))
         mask = cv2.resize(mask, (576, 576))
         # if not check_size(im, self._wh):
