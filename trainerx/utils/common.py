@@ -113,12 +113,6 @@ def check_size(image: np.ndarray, wh: Tuple[int, int]) -> bool:
         return True
 
 
-# if input=wh then output=hw
-# if input=hw then output=wh
-def exchange_wh(ab: Tuple[int, int]) -> Tuple[int, int]:
-    return ab[1], ab[0]
-
-
 def pil_to_np(img: Image.Image) -> np.ndarray:
     return np.asarray(img) if isinstance(img, Image.Image) else img
 
@@ -150,12 +144,3 @@ def align_size(size1: int, size2: int) -> Tuple[int, int]:
         exp_r2 = 1
 
     return exp_r1, exp_r2
-
-
-if __name__ == '__main__':
-    size1 = 12
-    size2 = 7300
-    r1, r2 = align_data_size(size1, size2)
-    print('size1:', size1, 'size2:', size2)
-    print('r1:', r1, 'r2:', r2)
-    print(size1 * r1, size2 * r2)
