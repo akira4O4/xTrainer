@@ -8,14 +8,18 @@ import torchvision.transforms as T
 from imgaug import augmenters as iaa
 
 __all__ = [
-    'BaseTransform',
+    'BaseT',
     'ValidateT',
     'ClsImageT',
     'ClsTargetT',
     'SegImageT',
-    'SegTargetT'
+    'SegTargetT',
+    'letterbox',
+    'LetterBox'
 ]
 
+
+# Augmentation Transform -----------------------------------------------------------------------------------------------
 
 class RandomHSV:
     def __init__(
@@ -72,52 +76,58 @@ class RandomFlip:
         return image, target
 
 
+def letterbox(
+    image: np.ndarray,
+    wh: Tuple[int, int],
+    only_scaledown: Optional[bool] = True
+) -> np.ndarray:
+    ih, iw = image.shape[:2]
+
+    new_w, new_h = wh[0], wh[1]
+    # Min scale ratio (new / old)
+    r = min(new_h / ih, new_w / iw)
+
+    # only scale down, do not scale up (for better val mAP)
+    if only_scaledown:
+        r = min(r, 1.0)
+
+    # Compute padding
+    # ratio = r, r  # width, height ratios
+    pad_w, pad_h = int(round(iw * r)), int(round(ih * r))
+    dw, dh = iw - pad_w, ih - pad_h  # wh padding
+
+    dw /= 2
+    dh /= 2
+
+    if [ih, iw] != [pad_h, pad_w]:  # resize
+        image = cv2.resize(image, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
+
+    top = int(round(dh - 0.1))
+    bottom = int(round(dh + 0.1))
+    left = int(round(dw - 0.1))
+    right = int(round(dw + 0.1))
+
+    image = cv2.copyMakeBorder(
+        image,
+        top, bottom,
+        left, right,
+        cv2.BORDER_CONSTANT,
+        value=(114, 114, 114)
+    )
+    return image
+
+
 class LetterBox:
     def __init__(
         self,
-        wh: Tuple[int],
+        wh: Tuple[int, int],
         only_scaledown=True,
     ):
-        self.new_w = wh[0]
-        self.new_h = wh[1]
+        self.wh = wh
         self.only_scaledown = only_scaledown
 
     def __call__(self, image: np.ndarray = None) -> np.ndarray:
-
-        ih, iw = image.shape[:2]
-
-        # Min scale ratio (new / old)
-        r = min(self.new_h / ih, self.new_w / iw)
-
-        # only scale down, do not scale up (for better val mAP)
-        if self.only_scaledown:
-            r = min(r, 1.0)
-
-        # Compute padding
-        # ratio = r, r  # width, height ratios
-        pad_w, pad_h = int(round(iw * r)), int(round(ih * r))
-        dw, dh = iw - pad_w, ih - pad_h  # wh padding
-
-        dw /= 2
-        dh /= 2
-
-        if [ih, iw] != [pad_h, pad_w]:  # resize
-            image = cv2.resize(image, (pad_w, pad_h), interpolation=cv2.INTER_LINEAR)
-
-        top = int(round(dh - 0.1))
-        bottom = int(round(dh + 0.1))
-        left = int(round(dw - 0.1))
-        right = int(round(dw + 0.1))
-
-        image = cv2.copyMakeBorder(
-            image,
-            top, bottom,
-            left, right,
-            cv2.BORDER_CONSTANT,
-            value=(114, 114, 114)
-        )
-
-        return image
+        return letterbox(image, self.wh, self.only_scaledown)
 
 
 class ImgAugT:
@@ -147,7 +157,9 @@ class ImgAugT:
         return self.t(image)
 
 
-class BaseTransform:
+# Base Transform -------------------------------------------------------------------------------------------------------
+
+class BaseT:
     def __init__(self) -> None:
         self._mean = [0.485, 0.456, 0.406]
         self._std = [0.229, 0.224, 0.225]
@@ -165,30 +177,20 @@ class BaseTransform:
         return t(image)
 
 
-class ValidateT(BaseTransform):
+class ValidateT(BaseT):
     ...
 
 
-class ClsImageT(BaseTransform):
+# Test Transform -------------------------------------------------------------------------------------------------------
+class ImageT(BaseT):
     def __init__(self):
         super().__init__()
-        self.iaa_t = ImgAugT()
-
-        self._ops = [
-            RandomHSV(),
-            RandomFlip()
-        ]
-        self._ops.extend(self._default_ops)
-
-        self.t = self.get_compose()
 
     def __call__(self, image) -> torch.Tensor:
-        img = self.iaa_t(image)
-        img = self.t(img)
-        return img
+        ...
 
 
-class ClsTargetT(BaseTransform):
+class TargetT(BaseT):
     def __init__(self) -> None:
         super().__init__()
         ...
@@ -197,26 +199,58 @@ class ClsTargetT(BaseTransform):
         return data
 
 
+# Classification Transform ---------------------------------------------------------------------------------------------
+class ClsImageT(BaseT):
+    def __init__(self):
+        super().__init__()
+
+        self._ops = [
+            # ImgAugT(),
+            RandomHSV(),
+            RandomFlip()
+        ]
+        self._ops.extend(self._default_ops)
+
+        self.t = self.get_compose()
+
+    def __call__(self, image: np.ndarray) -> torch.Tensor:
+        img = self.t(image)
+        return img
+
+
+class ClsTargetT(BaseT):
+    def __init__(self) -> None:
+        super().__init__()
+        ...
+
+    def __call__(self, data):
+        return data
+
+
+# Segmentation Transform -----------------------------------------------------------------------------------------------
 # TODO: re design
-class SegImageT(BaseTransform):
+class SegImageT(BaseT):
     def __init__(self) -> None:
         super().__init__()
         self._ops = [RandomHSV()]
         self._ops.extend(self._default_ops)
+        self.t = self.get_compose()
 
     def __call__(self, image) -> torch.Tensor:
-        t = self.get_compose()
-        image = t(image)
+        image = self.t(image)
         return image
 
 
 # TODO: re design
-class SegTargetT(BaseTransform):
+class SegTargetT(BaseT):
     def __init__(self) -> None:
         super().__init__()
+        self._ops.extend(self._default_ops)
+        self.t = self.get_compose()
 
-    def __call__(self, data) -> torch.Tensor:
-        return data
+    def __call__(self, image) -> torch.Tensor:
+        image = self.t(image)
+        return image
 
 
 if __name__ == '__main__':

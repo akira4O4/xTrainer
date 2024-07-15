@@ -8,9 +8,9 @@ from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
-from trainerx.utils.common import get_images
-from trainerx.dataset.base import BaseDataset
 from trainerx.dataset import Image
+from trainerx.dataset.base import BaseDataset
+from trainerx.utils.common import get_images
 from trainerx.core.preprocess import letterbox
 
 
@@ -53,6 +53,7 @@ class ClassificationDataset(BaseDataset):
         self.targets = [s[1] for s in self._samples]
         if len(self._samples) == 0:
             logger.warning(f"Found 0 files in sub folders of: {self._root}\n")
+        # self.letterbox = letterbox(self._wh)
 
     def find_labels(self) -> None:
         for d in os.scandir(self._root):
@@ -99,9 +100,8 @@ class ClassificationDataset(BaseDataset):
                 # PIL.Image -> numpy.ndarray
                 im = np.asarray(im)  # noqa
 
-            im, _, _ = letterbox(im, self._wh)
+            im = letterbox(im, self._wh, True)
 
-        im: torch.Tensor
         if self._transform is not None:
             im = self._transform(im)
 

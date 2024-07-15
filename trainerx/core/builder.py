@@ -11,15 +11,6 @@ from trainerx.core.optim import OptimWrapper, AmpOptimWrapper
 from trainerx.core.loss_forward import BaseLossForward, LOSS_FORWARD_TABLE
 
 
-def build_model(model_args: dict) -> Model:
-    warnings.warn("", DeprecationWarning)
-    model = Model(**model_args)
-    model.init()
-    model.move_to_device()
-    return model
-
-
-# kwargs=official args
 def build_optimizer(name: str, **kwargs) -> Optimizer:
     optim = torch.optim.__dict__.get(name)
     assert optim is not None

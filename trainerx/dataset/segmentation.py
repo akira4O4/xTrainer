@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 from trainerx.dataset import Image, SegLabel
 from trainerx.dataset.base import BaseDataset
-from trainerx.core.preprocess import letterbox
 from trainerx.utils.torch_utils import npimage2torch, np2torch
 from trainerx.utils.common import (
     load_json,
@@ -164,41 +163,3 @@ class SegmentationDataSet(BaseDataset):
 
     def __len__(self) -> int:
         return len(self._samples)
-
-
-if __name__ == '__main__':
-    from torch.utils.data import DataLoader
-    import time
-
-    print('build dataset')
-    t0 = time.time()
-    ds = SegmentationDataSet(
-        root=r'D:\llf\dataset\danyang\training_data\E\seg',
-        wh=(576, 576),
-        preload=True
-    )
-    print(ds.num_of_label)
-    print(ds.labels)
-
-    print('build dataloader')
-    t1 = time.time()
-    dl = DataLoader(
-        dataset=ds,
-        batch_size=8,
-        shuffle=True,
-        num_workers=2,
-        pin_memory=True,
-    )
-    print('get data')
-    t2 = time.time()
-
-    for i in range(3):
-        for item in tqdm(dl):
-            # print(f'get item {i}...')
-            ...
-
-    t3 = time.time()
-    print(f'time ds: {t1 - t0}')
-    print(f'time dl: {t2 - t1}')
-    print(f'time get data: {t3 - t2}')
-    print(f'total time: {t3 - t0}')
