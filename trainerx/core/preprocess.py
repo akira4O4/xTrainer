@@ -204,7 +204,7 @@ class TargetT(BaseT):
 
 # Classification Transform ---------------------------------------------------------------------------------------------
 class ClsImageT(BaseT):
-    def __init__(self, imgsz: int):
+    def __init__(self, imgsz: Tuple[int, int]):  # hw
         self.imgsz = imgsz
         super().__init__()
 

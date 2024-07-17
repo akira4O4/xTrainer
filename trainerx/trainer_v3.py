@@ -244,7 +244,7 @@ class Trainer:
         self.cls_train_ds = ClassificationDataset(
             root=CONFIG('classification')['train'],
             wh=CONFIG('wh'),
-            transform=ClsImageT(),
+            transform=ClsImageT(tuple(CONFIG('wh'))),
             target_transform=ClsTargetT(),
         )
         save_yaml(self.cls_train_ds.labels, os.path.join(self.output_path, 'cls_labels.yaml'))
