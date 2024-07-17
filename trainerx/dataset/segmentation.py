@@ -9,13 +9,14 @@ from tqdm import tqdm
 
 from trainerx.dataset import Image, SegLabel
 from trainerx.dataset.base import BaseDataset
-from trainerx.core.preprocess import letterbox
+from trainerx.core.preprocess import LetterBox
 from trainerx.utils.torch_utils import npimage2torch, np2torch
 from trainerx.utils.common import (
     load_json,
     get_images,
-    check_size,
-    pil_to_np
+    get_image_shape,
+    np2pil,
+    pil2np
 )
 
 
@@ -27,7 +28,7 @@ class SegmentationDataSet(BaseDataset):
         loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
-        target_transform: Optional[Callable] = None,  # to target
+        # target_transform: Optional[Callable] = None,  # to target
         expanding_rate: Optional[int] = 1,
         is_preload: Optional[bool] = False
     ) -> None:
@@ -37,7 +38,7 @@ class SegmentationDataSet(BaseDataset):
             loader_type=loader_type,
             img_type=img_type,
             transform=transform,
-            target_transform=target_transform,
+            # target_transform=target_transform,
             is_preload=is_preload
         )
 
@@ -57,6 +58,7 @@ class SegmentationDataSet(BaseDataset):
         self._samples_map: List[int] = list(range(len(self._samples)))
 
         self.expanding_data(expanding_rate)
+        self.letterbox = LetterBox(wh)
 
     @staticmethod
     def find_label_path(path: str) -> str:
@@ -147,17 +149,14 @@ class SegmentationDataSet(BaseDataset):
         im = image.data if self._is_preload else self._loader(image.path)
         mask = label.mask if self._is_preload else self.get_mask(label.objects)
 
-        # if not check_size(im, self._wh):
-        #     im, x_offset, y_offset = letterbox(im, self._wh)
-        #
-        # if self._transform is not None:
-        #     im = self._transform(im)
-        #
-        # if self._target_transform is not None and not label.is_background:
-        #     mask = self._target_transform(mask)
-        #
-        # mask = mask[None]  # (h, w) -> (1, h, w)
-        return None, None
+        img_h, img_w = get_image_shape(im)
+        assert img_w > 0 and img_h > 0, f'Error: img_w or img_h <=0'
+
+        # input.type=[Image.Image,torch.Tensor]
+        im, mask = self._transform((im, mask))
+
+        mask = mask[None]  # (h, w) -> (1, h, w)
+        return im, mask
 
     def __len__(self) -> int:
         return len(self._samples)

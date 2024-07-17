@@ -7,17 +7,7 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 from imgaug import augmenters as iaa
-
-__all__ = [
-    'BaseT',
-    'ValidateT',
-    'ClsImageT',
-    'ClsTargetT',
-    'SegImageT',
-    'SegTargetT',
-    'letterbox',
-    'LetterBox'
-]
+from trainerx.utils.common import np2pil
 
 
 # Augmentation Transform -----------------------------------------------------------------------------------------------
@@ -34,10 +24,14 @@ class RandomHSV:
         self.s_gain = s_gain
         self.v_gain = v_gain
 
-    def __call__(self, img: np.ndarray) -> np.ndarray:
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+        image, mask = data
+
+        assert image is not None, 'image is None.'
+
         r = np.random.uniform(-1, 1, 3) * [self.h_gain, self.s_gain, self.v_gain] + 1  # random gains
-        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
-        dtype = img.dtype  # uint8
+        hue, sat, val = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2HSV))
+        dtype = image.dtype  # uint8
 
         x = np.arange(0, 256, dtype=r.dtype)
         lut_hue = ((x * r[0]) % 180).astype(dtype)
@@ -45,42 +39,89 @@ class RandomHSV:
         lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
 
         im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)
+        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=image)
 
-        return im_hsv
+        return im_hsv, mask
 
 
 class RandomFlip:
-    def __init__(
-        self,
-        p: Optional[float] = 0.5,
-        direction: Optional[str] = "horizontal",
-    ) -> None:
+    def __init__(self, p: Optional[float] = 0.5, direction: Optional[str] = "horizontal", ) -> None:
         assert direction in {"horizontal", "vertical"}, f"Support direction `horizontal` or `vertical`, got {direction}"
         assert 0 <= p <= 1.0
         self.p = p
         self.direction = direction
 
-    def __call__(
-        self,
-        image: np.ndarray,
-        target: Optional[np.ndarray] = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+        image, mask = data
+        assert image is not None, 'image is None.'
+        assert mask is not None, 'mask is None'
         if self.direction == "vertical" and random.random() < self.p:
             image = np.flipud(image)
-            target = np.flipud(image) if target is not None else target
+            mask = np.flipud(mask)
 
         if self.direction == "horizontal" and random.random() < self.p:
             image = np.fliplr(image)
-            target = np.fliplr(image) if target is not None else target
+            mask = np.fliplr(mask)
 
-        return image, target
+        return image, mask
+
+
+def resize(image: np.ndarray, wh: Tuple[int, int], only_scaledown=True):
+    ih, iw = image.shape[:2]
+    new_w, new_h = wh[0], wh[1]
+
+    if only_scaledown:
+        if (wh[1] / ih) > 1:
+            new_h = ih
+        if (wh[0] / iw) > 1:
+            new_w = iw
+
+    image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    return image
+
+
+class Resize:
+    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+        self.wh = wh
+        self.only_scaledown = only_scaledown
+
+    def __call__(self, image: np.ndarray) -> np.ndarray:
+        assert image is not None, 'image is None.'
+
+        ih, iw = image.shape[:2]
+
+        if (iw, ih) == self.wh:
+            return image
+
+        image = resize(image, self.wh, self.only_scaledown)
+        return image
+
+
+class SegResize:
+    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+        self.wh = wh
+        self.only_scaledown = only_scaledown
+
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+        image, mask = data
+        assert image is not None, 'image is None.'
+        assert mask is not None, 'mask is None'
+
+        ih, iw = image.shape[:2]
+
+        if (iw, ih) == self.wh:
+            return image, mask
+
+        image = resize(image, self.wh, self.only_scaledown)
+        mask = resize(image, self.wh, self.only_scaledown)
+        return image, mask
 
 
 def letterbox(
     image: np.ndarray,
     wh: Tuple[int, int],
-    only_scaledown: Optional[bool] = True
+    only_scaledown: Optional[bool] = True,
+    pad_value: Tuple[int, int, int] = None
 ) -> np.ndarray:
     assert isinstance(image, np.ndarray) is True, 'input image.type must be np.ndarray.'
     ih, iw = image.shape[:2]
@@ -114,22 +155,58 @@ def letterbox(
         top, bottom,
         left, right,
         cv2.BORDER_CONSTANT,
-        value=(114, 114, 114)
+        value=(114, 114, 114) if pad_value is None else pad_value
     )
     return image
 
 
 class LetterBox:
-    def __init__(
-        self,
-        wh: Tuple[int, int],
-        only_scaledown=True,
-    ):
+    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
         self.wh = wh
         self.only_scaledown = only_scaledown
 
-    def __call__(self, image: np.ndarray = None) -> np.ndarray:
-        return letterbox(image, self.wh, self.only_scaledown)
+    def __call__(self, image: np.ndarray) -> np.ndarray:
+        assert image is not None, 'image is None.'
+
+        ih, iw = image.shape[:2]
+
+        if (iw, ih) == self.wh:
+            return image
+
+        image = letterbox(image, self.wh, self.only_scaledown)
+        return image
+
+
+class SegLetterBox:
+    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+        self.wh = wh
+        self.only_scaledown = only_scaledown
+
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+        image, mask = data
+        assert image is not None, 'image is None.'
+        assert mask is not None, 'mask is None'
+
+        ih, iw = image.shape[:2]
+
+        if (iw, ih) == self.wh:
+            return image, mask
+
+        image = letterbox(image, self.wh, self.only_scaledown)
+        mask = letterbox(mask, self.wh, self.only_scaledown, (0, 0, 0))
+        return image, mask
+
+
+class NP2PIL:
+    def __init__(self):
+        ...
+
+    def __call__(
+        self,
+        data: Tuple[np.ndarray, np.ndarray]
+    ) -> Tuple[Image.Image, Image.Image]:
+        image, mask = data
+        return np2pil(image), np2pil(mask)
 
 
 class ImgAugT:
@@ -168,8 +245,7 @@ class BaseT:
         self._ops = []
         self._default_ops = [
             T.ToTensor(),
-            T.Normalize(mean=self._mean, std=self._std),
-            T.RandomErasing(p=0.4, inplace=True)
+            T.Normalize(mean=self._mean, std=self._std)
         ]
 
     def get_compose(self) -> T.Compose:
@@ -181,35 +257,48 @@ class BaseT:
 
 
 class ValidateT(BaseT):
-    ...
-
-
-# Test Transform -------------------------------------------------------------------------------------------------------
-class ImageT(BaseT):
-    def __init__(self):
+    def __init__(self, wh: Tuple[int, int]) -> None:
         super().__init__()
+        assert wh is not None, 'imgsz is not None.'
+        self._ops = [
+            NP2PIL(),
+            LetterBox(wh)
+        ]
+        self._ops += self._default_ops
+        self.t = self.get_compose()
 
     def __call__(self, image) -> torch.Tensor:
+        image = self.t(image)
         return image
 
 
-class TargetT(BaseT):
-    def __init__(self) -> None:
+class SegValidateT(BaseT):
+    def __init__(self, wh: Tuple[int, int]) -> None:
         super().__init__()
-        ...
+        assert wh is not None, 'imgsz is not None.'
+        self._ops = [
+            NP2PIL(),
+            SegLetterBox(wh)
+        ]
+        self._ops += self._default_ops
+        self.t = self.get_compose()
 
-    def __call__(self, target) -> torch.Tensor:
-        return target
+    def __call__(self, data) -> Tuple[torch.Tensor, torch.Tensor]:
+        image, mask = data
+        image = self.t((image, mask))
+        return image, mask
 
 
 # Classification Transform ---------------------------------------------------------------------------------------------
 class ClsImageT(BaseT):
-    def __init__(self, imgsz: Tuple[int, int]):  # hw
-        self.imgsz = imgsz
+    def __init__(self, wh: Tuple[int, int]):  # hw
         super().__init__()
-
+        assert wh is not None, 'imgsz is not None.'
+        hw = (wh[1], wh[0])
         self._ops = [
-            T.RandomResizedCrop(self.imgsz),
+            NP2PIL(),
+            LetterBox(wh),
+            T.RandomResizedCrop(hw),
             T.RandomHorizontalFlip(),
             T.RandomVerticalFlip(),
             T.RandomErasing(inplace=True),
@@ -235,31 +324,21 @@ class ClsTargetT(BaseT):
 
 
 # Segmentation Transform -----------------------------------------------------------------------------------------------
-# TODO: re design
 class SegImageT(BaseT):
-    def __init__(self) -> None:
+    def __init__(self, wh: Tuple[int, int]) -> None:
         super().__init__()
-        self._ops = [RandomHSV()]
-        self._ops.extend(self._default_ops)
+        assert wh is not None, 'imgsz is not None.'
+        self._ops = [
+            NP2PIL(),
+            SegLetterBox(wh),
+            RandomHSV(),
+            RandomFlip(direction="vertical"),
+            RandomFlip(direction="horizontal"),
+        ]
+        self._ops += self._default_ops
         self.t = self.get_compose()
 
-    def __call__(self, image) -> torch.Tensor:
-        image = self.t(image)
-        return image
-
-
-# TODO: re design
-class SegTargetT(BaseT):
-    def __init__(self) -> None:
-        super().__init__()
-        self._ops.extend(self._default_ops)
-        self.t = self.get_compose()
-
-    def __call__(self, image) -> torch.Tensor:
-        image = self.t(image)
-        return image
-
-
-if __name__ == '__main__':
-    r = np.random.uniform(-1, 1, 3) * [0.5, 0.5, 0.5] + 1
-    print(r)
+    def __call__(self, data) -> Tuple[torch.Tensor, torch.Tensor]:
+        image, mask = data
+        image, mask = self.t((image, mask))
+        return image, mask

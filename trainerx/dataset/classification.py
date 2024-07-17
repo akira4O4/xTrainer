@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from trainerx.dataset import Image
 from trainerx.dataset.base import BaseDataset
-from trainerx.utils.common import get_images, np2pil, pil2np
+from trainerx.utils.common import get_images, np2pil, pil2np, get_image_shape
 from trainerx.core.preprocess import letterbox
 
 
@@ -85,21 +85,6 @@ class ClassificationDataset(BaseDataset):
 
         im = image.data if self._is_preload else self._loader(image.path)
 
-        img_w: int = -1
-        img_h: int = -1
-
-        if isinstance(im, Image.Image):
-            img_w, img_h = im.size
-        elif isinstance(im, np.ndarray):
-            img_h, img_w = im.shape
-
-        assert img_w > 0 and img_h > 0, f'Error: img_w or img_h <=0'
-
-        if img_h != self._wh[1] or img_w != self._wh[0]:
-            im = pil2np(im)
-            im = letterbox(im, self._wh)
-
-        im = np2pil(im)
         if self._transform is not None:
             im = self._transform(im)
 

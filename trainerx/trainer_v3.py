@@ -296,8 +296,8 @@ class Trainer:
             root=CONFIG('segmentation')['train'],
             wh=CONFIG('wh'),
             transform=SegImageT,
-            target_transform=SegTargetT
         )
+
         background_size = len(self.seg_val_ds.background_samples)
 
         save_yaml(
@@ -320,7 +320,6 @@ class Trainer:
             root=CONFIG('segmentation')['val'],
             wh=CONFIG('wh'),
             transform=ValidateT,
-            target_transform=SegTargetT
         )
         self.seg_val_dl = DataLoader(
             dataset=self.seg_val_ds,
