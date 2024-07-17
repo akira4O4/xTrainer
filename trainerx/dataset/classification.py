@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from trainerx.dataset import Image
 from trainerx.dataset.base import BaseDataset
-from trainerx.utils.common import get_images
+from trainerx.utils.common import get_images, np2pil, pil2np
 from trainerx.core.preprocess import letterbox
 
 
@@ -19,7 +19,7 @@ class ClassificationDataset(BaseDataset):
         self,
         root: str,
         wh: Tuple[int, int],
-        loader_type: Optional[str] = 'pil',
+        loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
@@ -96,12 +96,10 @@ class ClassificationDataset(BaseDataset):
         assert img_w > 0 and img_h > 0, f'Error: img_w or img_h <=0'
 
         if img_h != self._wh[1] or img_w != self._wh[0]:
-            if isinstance(im, Image.Image):
-                # PIL.Image -> numpy.ndarray
-                im = np.asarray(im)  # noqa
+            im = pil2np(im)
+            im = letterbox(im, self._wh)
 
-            im = letterbox(im, self._wh, True)
-
+        im = np2pil(im)
         if self._transform is not None:
             im = self._transform(im)
 

@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from trainerx.dataset import Image, SegLabel
 from trainerx.dataset.base import BaseDataset
+from trainerx.core.preprocess import letterbox
 from trainerx.utils.torch_utils import npimage2torch, np2torch
 from trainerx.utils.common import (
     load_json,
@@ -144,11 +145,8 @@ class SegmentationDataSet(BaseDataset):
         image, label = self._samples[sample_idx]
 
         im = image.data if self._is_preload else self._loader(image.path)
-        im = pil_to_np(im)
-
         mask = label.mask if self._is_preload else self.get_mask(label.objects)
-        im = cv2.resize(im, (576, 576))
-        mask = cv2.resize(mask, (576, 576))
+
         # if not check_size(im, self._wh):
         #     im, x_offset, y_offset = letterbox(im, self._wh)
         #
@@ -159,7 +157,7 @@ class SegmentationDataSet(BaseDataset):
         #     mask = self._target_transform(mask)
         #
         # mask = mask[None]  # (h, w) -> (1, h, w)
-        return np2torch(im), np2torch(mask)  # noqa
+        return None, None
 
     def __len__(self) -> int:
         return len(self._samples)

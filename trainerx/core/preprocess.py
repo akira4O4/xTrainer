@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 import cv2
 import torch
 import numpy as np
+from PIL import Image
 import torchvision.transforms as T
 from imgaug import augmenters as iaa
 
@@ -81,6 +82,7 @@ def letterbox(
     wh: Tuple[int, int],
     only_scaledown: Optional[bool] = True
 ) -> np.ndarray:
+    assert isinstance(image, np.ndarray) is True, 'input image.type must be np.ndarray.'
     ih, iw = image.shape[:2]
 
     new_w, new_h = wh[0], wh[1]
@@ -166,7 +168,8 @@ class BaseT:
         self._ops = []
         self._default_ops = [
             T.ToTensor(),
-            T.Normalize(mean=self._mean, std=self._std)
+            T.Normalize(mean=self._mean, std=self._std),
+            T.RandomErasing(p=0.4, inplace=True)
         ]
 
     def get_compose(self) -> T.Compose:
@@ -187,7 +190,7 @@ class ImageT(BaseT):
         super().__init__()
 
     def __call__(self, image) -> torch.Tensor:
-        ...
+        return image
 
 
 class TargetT(BaseT):
@@ -195,21 +198,25 @@ class TargetT(BaseT):
         super().__init__()
         ...
 
-    def __call__(self, data):
-        return data
+    def __call__(self, target) -> torch.Tensor:
+        return target
 
 
 # Classification Transform ---------------------------------------------------------------------------------------------
 class ClsImageT(BaseT):
-    def __init__(self):
+    def __init__(self, imgsz: int):
+        self.imgsz = imgsz
         super().__init__()
 
         self._ops = [
-            # ImgAugT(),
-            RandomHSV(),
-            RandomFlip()
+            T.RandomResizedCrop(self.imgsz),
+            T.RandomHorizontalFlip(),
+            T.RandomVerticalFlip(),
+            T.RandomErasing(inplace=True),
+            T.RandAugment(interpolation=Image.BILINEAR),
+            T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.7, hue=0.015),
         ]
-        self._ops.extend(self._default_ops)
+        self._ops += self._default_ops
 
         self.t = self.get_compose()
 

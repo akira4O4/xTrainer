@@ -113,12 +113,18 @@ def check_size(image: np.ndarray, wh: Tuple[int, int]) -> bool:
         return True
 
 
-def pil_to_np(img: Image.Image) -> np.ndarray:
-    return np.asarray(img) if isinstance(img, Image.Image) else img
+def pil2np(img: Image.Image) -> np.ndarray:
+    if isinstance(img, np.ndarray):
+        return img
+
+    return np.asarray(img)
 
 
-def pil_to_pil(img: np.ndarray) -> Image.Image:
-    return Image.fromarray(img) if isinstance(img, np.ndarray) else img
+def np2pil(img: np.ndarray) -> Image.Image:
+    if isinstance(img, Image.Image):
+        return img
+
+    return Image.fromarray(img)
 
 
 def align_size(size1: int, size2: int) -> Tuple[int, int]:
