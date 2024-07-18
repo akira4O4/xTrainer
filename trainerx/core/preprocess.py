@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 
-from augment.transforms import (
+from trainerx.augment.transforms import (
     RandomFlip,
     RandomHSV,
     SegLetterBox,
@@ -13,7 +13,6 @@ from augment.transforms import (
     LetterBox,
     ToTensor,
     Normalize
-
 )
 
 
