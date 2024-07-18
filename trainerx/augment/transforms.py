@@ -18,9 +18,14 @@ from .functional import (
 
 
 class NP2PIL:
-    def __init__(self):
-        ...
+    def __call__(
+        self,
+        image: np.ndarray
+    ) -> Image.Image:
+        return np2pil(image)
 
+
+class SegNP2PIL:
     def __call__(
         self,
         data: Tuple[np.ndarray, np.ndarray]

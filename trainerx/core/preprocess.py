@@ -10,6 +10,7 @@ from trainerx.augment.transforms import (
     RandomHSV,
     SegLetterBox,
     NP2PIL,
+    SegNP2PIL,
     LetterBox,
     ToTensor,
     Normalize
@@ -96,7 +97,7 @@ class SegImageT(BaseT):
             RandomHSV(),
             RandomFlip(direction="vertical"),
             RandomFlip(direction="horizontal"),
-            NP2PIL(),
+            SegNP2PIL(),
             ToTensor(),
             Normalize()
         ]
