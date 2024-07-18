@@ -8,9 +8,7 @@ import torchvision.transforms as T
 from trainerx.augment.transforms import (
     RandomFlip,
     RandomHSV,
-    SegLetterBox,
     NP2PIL,
-    SegNP2PIL,
     LetterBox,
     ToTensor,
     Normalize
@@ -93,11 +91,11 @@ class SegImageT(BaseT):
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self._ops = [
-            SegLetterBox(wh),
+            LetterBox(wh),
             RandomHSV(),
             RandomFlip(direction="vertical"),
             RandomFlip(direction="horizontal"),
-            SegNP2PIL(),
+            NP2PIL(),
             ToTensor(),
             Normalize()
         ]
@@ -116,7 +114,7 @@ class SegValT(BaseT):
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self._ops = [
-            SegLetterBox(wh),
+            LetterBox(wh),
             NP2PIL(),
             ToTensor(),
             Normalize()

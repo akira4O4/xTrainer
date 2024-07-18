@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Tuple, Union, overload
 import random
 import cv2
 import torch
@@ -18,6 +18,14 @@ from .functional import (
 
 
 class NP2PIL:
+    @overload
+    def __call__(
+        self,
+        data: Tuple[np.ndarray, np.ndarray]
+    ) -> Tuple[Image.Image, Image.Image]:
+        image, mask = data
+        return np2pil(image), np2pil(mask)
+
     def __call__(
         self,
         image: np.ndarray
@@ -25,13 +33,13 @@ class NP2PIL:
         return np2pil(image)
 
 
-class SegNP2PIL:
-    def __call__(
-        self,
-        data: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[Image.Image, Image.Image]:
-        image, mask = data
-        return np2pil(image), np2pil(mask)
+# class SegNP2PIL:
+#     def __call__(
+#         self,
+#         data: Tuple[np.ndarray, np.ndarray]
+#     ) -> Tuple[Image.Image, Image.Image]:
+#         image, mask = data
+#         return np2pil(image), np2pil(mask)
 
 
 class RandomHSV:
@@ -77,24 +85,11 @@ class Resize:
         self.wh = wh
         self.only_scaledown = only_scaledown
 
-    def __call__(self, image: np.ndarray) -> np.ndarray:
-        assert image is not None, 'image is None.'
-
-        ih, iw = image.shape[:2]
-
-        if (iw, ih) == self.wh:
-            return image
-
-        image = resize(image, self.wh, self.only_scaledown)
-        return image
-
-
-class SegResize:
-    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
-        self.wh = wh
-        self.only_scaledown = only_scaledown
-
-    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    @overload
+    def __call__(
+        self,
+        data: Tuple[np.ndarray, np.ndarray]
+    ) -> Tuple[np.ndarray, np.ndarray]:
         image, mask = data
         assert image is not None, 'image is None.'
         assert mask is not None, 'mask is None'
@@ -108,12 +103,6 @@ class SegResize:
         mask = resize(image, self.wh, self.only_scaledown)
         return image, mask
 
-
-class LetterBox:
-    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
-        self.wh = wh
-        self.only_scaledown = only_scaledown
-
     def __call__(self, image: np.ndarray) -> np.ndarray:
         assert image is not None, 'image is None.'
 
@@ -122,15 +111,36 @@ class LetterBox:
         if (iw, ih) == self.wh:
             return image
 
-        image = letterbox(image, self.wh, self.only_scaledown)
+        image = resize(image, self.wh, self.only_scaledown)
         return image
 
 
-class SegLetterBox:
+# class SegResize:
+#     def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+#         self.wh = wh
+#         self.only_scaledown = only_scaledown
+#
+#     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+#         image, mask = data
+#         assert image is not None, 'image is None.'
+#         assert mask is not None, 'mask is None'
+#
+#         ih, iw = image.shape[:2]
+#
+#         if (iw, ih) == self.wh:
+#             return image, mask
+#
+#         image = resize(image, self.wh, self.only_scaledown)
+#         mask = resize(image, self.wh, self.only_scaledown)
+#         return image, mask
+
+
+class LetterBox:
     def __init__(self, wh: Tuple[int, int], only_scaledown=True):
         self.wh = wh
         self.only_scaledown = only_scaledown
 
+    @overload
     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         image, mask = data
         assert image is not None, 'image is None.'
@@ -144,6 +154,37 @@ class SegLetterBox:
         image = letterbox(image, self.wh, self.only_scaledown)
         mask = letterbox(mask, self.wh, self.only_scaledown, (0, 0, 0))
         return image, mask
+
+    def __call__(self, image: np.ndarray) -> np.ndarray:
+        assert image is not None, 'image is None.'
+
+        ih, iw = image.shape[:2]
+
+        if (iw, ih) == self.wh:
+            return image
+
+        image = letterbox(image, self.wh, self.only_scaledown)
+        return image
+
+
+# class SegLetterBox:
+#     def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+#         self.wh = wh
+#         self.only_scaledown = only_scaledown
+#
+#     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+#         image, mask = data
+#         assert image is not None, 'image is None.'
+#         assert mask is not None, 'mask is None'
+#
+#         ih, iw = image.shape[:2]
+#
+#         if (iw, ih) == self.wh:
+#             return image, mask
+#
+#         image = letterbox(image, self.wh, self.only_scaledown)
+#         mask = letterbox(mask, self.wh, self.only_scaledown, (0, 0, 0))
+#         return image, mask
 
 
 class ImgAugT:
