@@ -101,7 +101,7 @@ def get_image_shape(image: Union[np.ndarray, Image.Image]) -> Tuple[int, int]:
     if isinstance(image, Image.Image):
         img_w, img_h = image.size
     elif isinstance(image, np.ndarray):
-        img_h, img_w = image.shape
+        img_h, img_w, c = image.shape
     return img_w, img_h
 
 
@@ -150,3 +150,33 @@ def align_size(size1: int, size2: int) -> Tuple[int, int]:
         exp_r2 = 1
 
     return exp_r1, exp_r2
+
+
+def chw2hwc(image: np.ndarray) -> np.ndarray:
+    assert len(image.shape) == 3, f'input shape must be (c,h,w)'
+    return image.transpose(1, 2, 0)
+
+
+def hwc2chw(image: np.ndarray) -> np.ndarray:
+    assert len(image.shape) == 3, f'input shape must be (h,w,c)'
+    return image.transpose(2, 0, 1)
+
+
+def hw_to_1hw(image: np.ndarray) -> np.ndarray:
+    assert len(image.shape) == 2, f'input shape must be (h,w)'
+    return image[None]
+
+
+def hw_to_hw1(image: np.ndarray) -> np.ndarray:
+    assert len(image.shape) == 2, f'input shape must be (h,w)'
+    return image[:, :, None]
+
+
+def safe_round(arr: np.ndarray, n: int = 0) -> np.ndarray:
+    flag = np.where(arr >= 0, 1, -1)
+    arr = np.abs(arr)
+    arr10 = arr * 10 ** (n + 1)
+    arr20 = np.floor(arr10)
+    arr30 = np.where(arr20 % 10 == 5, (arr20 + 1) / 10 ** (n + 1), arr20 / 10 ** (n + 1))
+    result = np.around(arr30, n)
+    return result * flag

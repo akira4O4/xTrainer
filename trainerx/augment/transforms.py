@@ -7,7 +7,7 @@ from PIL import Image
 
 from torchvision.transforms import functional as F
 from imgaug import augmenters as iaa
-from trainerx.utils.common import np2pil
+from trainerx.utils.common import np2pil, hwc2chw
 from .functional import (
     random_hsv,
     random_flip,
@@ -18,28 +18,20 @@ from .functional import (
 
 
 class NP2PIL:
-    @overload
-    def __call__(
-        self,
-        data: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[Image.Image, Image.Image]:
+    @staticmethod
+    def _call_2(data: Tuple[np.ndarray, np.ndarray]) -> Tuple[Image.Image, Image.Image]:
         image, mask = data
         return np2pil(image), np2pil(mask)
 
-    def __call__(
-        self,
-        image: np.ndarray
-    ) -> Image.Image:
+    @staticmethod
+    def _call_1(image: np.ndarray) -> Image.Image:
         return np2pil(image)
 
-
-# class SegNP2PIL:
-#     def __call__(
-#         self,
-#         data: Tuple[np.ndarray, np.ndarray]
-#     ) -> Tuple[Image.Image, Image.Image]:
-#         image, mask = data
-#         return np2pil(image), np2pil(mask)
+    def __call__(self, data):
+        if type(data) == np.ndarray:
+            return self._call_1(data)
+        elif type(data) == tuple:
+            return self._call_2(data)
 
 
 class RandomHSV:
@@ -85,11 +77,7 @@ class Resize:
         self.wh = wh
         self.only_scaledown = only_scaledown
 
-    @overload
-    def __call__(
-        self,
-        data: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _call_2(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         image, mask = data
         assert image is not None, 'image is None.'
         assert mask is not None, 'mask is None'
@@ -100,10 +88,10 @@ class Resize:
             return image, mask
 
         image = resize(image, self.wh, self.only_scaledown)
-        mask = resize(image, self.wh, self.only_scaledown)
+        # mask = resize(image, self.wh, self.only_scaledown)
         return image, mask
 
-    def __call__(self, image: np.ndarray) -> np.ndarray:
+    def _call_1(self, image: np.ndarray) -> np.ndarray:
         assert image is not None, 'image is None.'
 
         ih, iw = image.shape[:2]
@@ -114,25 +102,11 @@ class Resize:
         image = resize(image, self.wh, self.only_scaledown)
         return image
 
-
-# class SegResize:
-#     def __init__(self, wh: Tuple[int, int], only_scaledown=True):
-#         self.wh = wh
-#         self.only_scaledown = only_scaledown
-#
-#     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-#         image, mask = data
-#         assert image is not None, 'image is None.'
-#         assert mask is not None, 'mask is None'
-#
-#         ih, iw = image.shape[:2]
-#
-#         if (iw, ih) == self.wh:
-#             return image, mask
-#
-#         image = resize(image, self.wh, self.only_scaledown)
-#         mask = resize(image, self.wh, self.only_scaledown)
-#         return image, mask
+    def __call__(self, data):
+        if type(data) == np.ndarray:
+            return self._call_1(data)
+        elif type(data) == tuple:
+            return self._call_2(data)
 
 
 class LetterBox:
@@ -140,22 +114,8 @@ class LetterBox:
         self.wh = wh
         self.only_scaledown = only_scaledown
 
-    @overload
-    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        image, mask = data
-        assert image is not None, 'image is None.'
-        assert mask is not None, 'mask is None'
+    def _call_1(self, image: np.ndarray) -> np.ndarray:
 
-        ih, iw = image.shape[:2]
-
-        if (iw, ih) == self.wh:
-            return image, mask
-
-        image = letterbox(image, self.wh, self.only_scaledown)
-        mask = letterbox(mask, self.wh, self.only_scaledown, (0, 0, 0))
-        return image, mask
-
-    def __call__(self, image: np.ndarray) -> np.ndarray:
         assert image is not None, 'image is None.'
 
         ih, iw = image.shape[:2]
@@ -166,25 +126,26 @@ class LetterBox:
         image = letterbox(image, self.wh, self.only_scaledown)
         return image
 
+    def _call_2(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+        image, mask = data
+        assert image is not None, 'image is None.'
+        assert mask is not None, 'mask is None'
 
-# class SegLetterBox:
-#     def __init__(self, wh: Tuple[int, int], only_scaledown=True):
-#         self.wh = wh
-#         self.only_scaledown = only_scaledown
-#
-#     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-#         image, mask = data
-#         assert image is not None, 'image is None.'
-#         assert mask is not None, 'mask is None'
-#
-#         ih, iw = image.shape[:2]
-#
-#         if (iw, ih) == self.wh:
-#             return image, mask
-#
-#         image = letterbox(image, self.wh, self.only_scaledown)
-#         mask = letterbox(mask, self.wh, self.only_scaledown, (0, 0, 0))
-#         return image, mask
+        ih, iw = image.shape[:2]
+
+        if (iw, ih) == self.wh:
+            return image, mask
+
+        image = letterbox(image, self.wh, self.only_scaledown)
+        return image, mask
+
+    # data: (np.ndarray,np.ndarray)
+    # data: np.ndarray
+    def __call__(self, data):
+        if type(data) == np.ndarray:
+            return self._call_1(data)
+        elif type(data) == tuple:
+            return self._call_2(data)
 
 
 class ImgAugT:
@@ -221,8 +182,16 @@ class ToTensor:
 
     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = data
-        image = to_tensor(image, self.half)
-        mask = to_tensor(mask, self.half)
+
+        image = np.ascontiguousarray(image)
+        mask = np.ascontiguousarray(mask)
+
+        image = F.to_tensor(image)
+        image = image.half() if self.half else image.float()
+
+        mask = hwc2chw(mask)
+        mask = torch.from_numpy(mask)
+
         return image, mask
 
 
@@ -238,5 +207,4 @@ class Normalize:
     def __call__(self, data: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = data
         image = F.normalize(image, mean=self.mean, std=self.std)
-        mask = F.normalize(mask, mean=self.mean, std=self.std)
         return image, mask

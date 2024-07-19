@@ -10,13 +10,15 @@ from tqdm import tqdm
 from trainerx.dataset import Image, SegLabel
 from trainerx.dataset.base import BaseDataset
 from trainerx.core.preprocess import LetterBox
-from trainerx.utils.torch_utils import npimage2torch, np2torch
 from trainerx.utils.common import (
     load_json,
     get_images,
     get_image_shape,
     np2pil,
-    pil2np
+    pil2np,
+    hw_to_hw1,
+    hw_to_1hw,
+    safe_round
 )
 
 
@@ -106,39 +108,49 @@ class SegmentationDataSet(BaseDataset):
 
         image: Image
         label: SegLabel
+
         for image, label in tqdm(self.samples_with_label):
             image.data = self._loader(image.path)
-            label.mask = self.get_mask(label.objects)
+            ih, iw = get_image_shape(image)
+            label.mask = self.get_mask(label.objects, (ih, iw))
 
         for image, label in tqdm(self.background_samples):
             image.data = self._loader(image.path)
-            label.mask = np.zeros(self._hw, dtype=np.uint8)
+            label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
-    def get_mask(self, objects: list) -> np.ndarray:
+    # Return mask shape=(input_h,input_w,1,np.uint8)
+    def get_mask(self, objects: list, image_hw: Tuple[int, int]) -> np.ndarray:
 
-        mask = np.zeros(self._hw, dtype=np.uint8)
-
-        obj: dict  # obj:{"label":"","points":[]}
+        ih, iw = image_hw[0], image_hw[0]  # image hw
+        oh, ow = self._wh[1], self._wh[1]  # input hw
 
         if objects is None or objects == []:
-            return mask
+            return np.zeros((oh, ow, 1), dtype=np.uint8)
 
+        mask = np.zeros((oh, ow), dtype=np.uint8)
         for obj in objects:
-            # points:[pt1,pt2,...]
-            points: list = obj["points"]
+            # points:[[x,y],[x,y],...]
+
+            points = np.array(obj["points"], dtype=float)
+            points /= np.array([iw, ih], dtype=float)  # x/iw y/ih
+            points *= np.array([ow, oh], dtype=float)  # x*ow y*oh
+            points = safe_round(points)
+
             label: str = obj['label']
             mask = self.polygon2mask(mask, points, self.label2idx(label))
+
+        mask = hw_to_hw1(mask)
+
         return mask
 
     @staticmethod
-    def polygon2mask(mask: np.ndarray, points: list, label_idx: Optional[int] = 0) -> np.ndarray:
-        # points=[[x,y],[x,y],...]
+    def polygon2mask(mask: np.ndarray, points: np.ndarray, label_idx: Optional[int] = 0) -> np.ndarray:
         assert 255 >= label_idx >= 0, '255 >= label_idx >= 0'
-        points = np.asarray(points, dtype=np.int32)
+        if points.dtype != np.int32:
+            points = points.astype(np.int32)
         cv2.fillConvexPoly(mask, points, color=label_idx)  # noqa
         return mask
 
-    # TODO: Test code
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         sample_idx = self._samples_map[index]
 
@@ -147,16 +159,47 @@ class SegmentationDataSet(BaseDataset):
         image, label = self._samples[sample_idx]
 
         im = image.data if self._is_preload else self._loader(image.path)
-        mask = label.mask if self._is_preload else self.get_mask(label.objects)
-
+        h, w = get_image_shape(im)
+        mask = label.mask if self._is_preload else self.get_mask(label.objects, (h, w))
         img_h, img_w = get_image_shape(im)
         assert img_w > 0 and img_h > 0, f'Error: img_w or img_h <=0'
 
         # input.type=[Image.Image,torch.Tensor]
-        im, mask = self._transform((im, mask))
+        data = (im, mask)
+        im, mask = self._transform(data)
 
-        mask = mask[None]  # (h, w) -> (1, h, w)
         return im, mask
 
     def __len__(self) -> int:
         return len(self._samples)
+
+
+if __name__ == '__main__':
+    from trainerx.core.preprocess import SegImageT
+    from torch.utils.data import DataLoader
+    from time import time
+    import cv2
+
+    wh = (224, 224)
+    ds = SegmentationDataSet(
+        root=r'C:\Users\Lee Linfeng\Desktop\temp\20240518-bad-F',
+        wh=wh,
+        is_preload=True,
+        transform=SegImageT(wh),
+    )
+    # image, mask = ds[0]
+    # mask *= 100
+    # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+    # print(image.shape)
+    # print(mask.shape)
+    # cv2.imwrite('im.jpg', image)
+    # cv2.imwrite('mask.jpg', mask)
+
+    t1 = time()
+    dl = DataLoader(ds, batch_size=8)
+    for imgs, target in dl:
+        print(imgs.shape)
+        print(target.shape)
+
+    t2 = time()
+    print(t2 - t1)

@@ -108,11 +108,11 @@ def letterbox(
 
 
 def to_tensor(
-    image: np.ndarray,
+    data: np.ndarray,
     half: Optional[bool] = False
 ) -> torch.Tensor:
-    im = np.ascontiguousarray(image.transpose((2, 0, 1))[::-1])  # HWC to CHW -> BGR to RGB -> contiguous
-    im = torch.from_numpy(im)  # to torch
-    im = im.half() if half else im.float()  # uint8 to fp16/32
-    im /= 255.0  # 0-255 to 0.0-1.0
-    return im
+    data = np.ascontiguousarray(data)
+    data = torch.from_numpy(data)  # to torch
+    data = data.half() if half else data.float()
+    data /= 255.0  # 0-255 to 0.0-1.0
+    return data

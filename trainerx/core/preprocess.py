@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import numpy as np
@@ -87,7 +87,7 @@ class ClsValT(BaseT):
 
 # Segmentation Transform -----------------------------------------------------------------------------------------------
 class SegImageT(BaseT):
-    def __init__(self, wh: Tuple[int, int]) -> None:
+    def __init__(self, wh: Tuple[int, int], half: Optional[bool] = False) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self.ops = [
@@ -95,16 +95,12 @@ class SegImageT(BaseT):
             RandomHSV(),
             RandomFlip(direction="vertical"),
             RandomFlip(direction="horizontal"),
-            NP2PIL(),
-            ToTensor(),
+            ToTensor(half),
             Normalize()
         ]
         self.t = self.gen_compose()
 
-    def __call__(
-        self,
-        data: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = self.t(data)
         return image, mask
 
@@ -115,7 +111,6 @@ class SegValT(BaseT):
         assert wh is not None, 'imgsz is not None.'
         self.ops = [
             LetterBox(wh),
-            NP2PIL(),
             ToTensor(),
             Normalize()
         ]
