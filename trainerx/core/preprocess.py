@@ -19,16 +19,16 @@ from trainerx.augment.transforms import (
 
 class BaseT:
     def __init__(self) -> None:
-        self._mean = [0.485, 0.456, 0.406]
-        self._std = [0.229, 0.224, 0.225]
-        self._ops = []
-        self._default_ops = [
+        self.mean = [0.485, 0.456, 0.406]
+        self.std = [0.229, 0.224, 0.225]
+        self.ops = []
+        self.default_ops = [
             T.ToTensor(),
-            T.Normalize(mean=self._mean, std=self._std)
+            T.Normalize(mean=self.mean, std=self.std)
         ]
 
     def gen_compose(self) -> T.Compose:
-        return T.Compose(self._ops)
+        return T.Compose(self.ops)
 
     def __call__(self, image) -> torch.Tensor:
         t = self.gen_compose()
@@ -41,17 +41,17 @@ class ClsImageT(BaseT):
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         hw = (wh[1], wh[0])
-        self._ops = [
+        self.ops = [
             LetterBox(wh),
             NP2PIL(),
             T.RandomResizedCrop(hw),
             T.RandomHorizontalFlip(),
             T.RandomVerticalFlip(),
-            T.RandomErasing(inplace=True),
             T.RandAugment(interpolation=Image.BILINEAR),  # noqa
             T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.7, hue=0.015),
         ]
-        self._ops += self._default_ops
+        self.ops += self.default_ops
+        self.ops += [T.RandomErasing(inplace=True)]
 
         self.t = self.gen_compose()
 
@@ -73,11 +73,11 @@ class ClsValT(BaseT):
     def __init__(self, wh: Tuple[int, int]) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
-        self._ops = [
+        self.ops = [
             LetterBox(wh),
             NP2PIL()
         ]
-        self._ops += self._default_ops
+        self.ops += self.default_ops
         self.t = self.gen_compose()
 
     def __call__(self, image) -> torch.Tensor:
@@ -90,7 +90,7 @@ class SegImageT(BaseT):
     def __init__(self, wh: Tuple[int, int]) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
-        self._ops = [
+        self.ops = [
             LetterBox(wh),
             RandomHSV(),
             RandomFlip(direction="vertical"),
@@ -113,7 +113,7 @@ class SegValT(BaseT):
     def __init__(self, wh: Tuple[int, int]) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
-        self._ops = [
+        self.ops = [
             LetterBox(wh),
             NP2PIL(),
             ToTensor(),

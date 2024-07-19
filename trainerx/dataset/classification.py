@@ -10,8 +10,7 @@ from tqdm import tqdm
 
 from trainerx.dataset import Image
 from trainerx.dataset.base import BaseDataset
-from trainerx.utils.common import get_images, np2pil, pil2np, get_image_shape
-from trainerx.core.preprocess import letterbox
+from trainerx.utils.common import get_images
 
 
 class ClassificationDataset(BaseDataset):
@@ -95,3 +94,27 @@ class ClassificationDataset(BaseDataset):
 
     def __len__(self) -> int:
         return len(self._samples_map)
+
+
+if __name__ == '__main__':
+    from trainerx.core.preprocess import ClsImageT, ClsTargetT
+    from torch.utils.data import DataLoader
+    from time import time
+    import cv2
+
+    wh = (224, 224)
+    t1 = time()
+    ds = ClassificationDataset(
+        root=r'D:\llf\dataset\danyang\training_data\G\classification\nc3\train\2_youwu',
+        wh=wh,
+        # is_preload=True,
+        transform=ClsImageT(wh),
+        target_transform=ClsTargetT()
+    )
+    dl = DataLoader(ds, 8)
+    for imgs, target in dl:
+        print(imgs.shape)
+        print(target)
+
+    t2 = time()
+    print(t2 - t1)
