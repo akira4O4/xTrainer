@@ -40,3 +40,7 @@ class BalancedBatchSampler:
 
     def __len__(self):
         return self.n_dataset // self.batch_size  # return num of batch
+
+
+if __name__ == '__main__':
+    ...

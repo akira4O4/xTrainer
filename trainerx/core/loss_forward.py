@@ -20,13 +20,13 @@ __all__ = [
 class BaseLossForward:
     def __init__(
         self,
-        model_output: Optional[torch.Tensor] = None,
-        targets: Optional[torch.Tensor] = None,
+        model_output: torch.Tensor,
+        targets: torch.Tensor,
     ):
         self._model_output = model_output
         self._targets = targets
-        self.loss = None
-        self._loss_val: float = -1.0
+        self.loss = None  # loss instance
+        self._loss_val = -1.0
         self._loss_name = ''
 
     @property
@@ -37,19 +37,9 @@ class BaseLossForward:
     def loss_name(self) -> str:
         return self._loss_name
 
-    @property
-    def model_output(self):
-        return self._model_output
-
-    # @model_output.setter
     def set_model_output(self, val) -> None:
         self._model_output = val
 
-    @property
-    def targets(self):
-        return self._targets
-
-    # @targets.setter
     def set_targets(self, val) -> None:
         self._targets = val
 
@@ -63,8 +53,8 @@ class BaseLossForward:
 class CrossEntropyLossForward(BaseLossForward):
     def __init__(
         self,
-        model_output: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
-        targets: Optional[torch.Tensor] = None,
+        model_output: torch.Tensor,
+        targets: torch.Tensor,
         **kwargs
     ):
         super().__init__(model_output, targets)
@@ -75,6 +65,8 @@ class CrossEntropyLossForward(BaseLossForward):
         self.loss = nn.CrossEntropyLoss(**self.kwargs)
         logger.success('Build CrossEntropyLoss Done.')
 
+    def forward(self):
+        loss = self.loss(self._model_output, self._targets)
     def run(self):
         _loss: float = 0.0
 
@@ -189,3 +181,6 @@ LOSS_FORWARD_TABLE = {
     'PeriodLoss': PeriodLossForward,
     'DiceLoss': DiceLossForward,
 }
+
+if __name__ == '__main__':
+    ...

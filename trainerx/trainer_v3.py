@@ -9,7 +9,13 @@ from mlflow import log_metric, set_experiment
 from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from trainerx.core.preprocess import *
+from trainerx.core.preprocess import (
+    ClsImageT,
+    ClsTargetT,
+    ClsValT,
+    SegImageT,
+    SegValT
+)
 
 from trainerx import (
     CONFIG,
@@ -35,7 +41,11 @@ from trainerx.utils.common import (
     check_dir,
     align_size
 )
-from trainerx.utils.data_tracker import TrainTracker, ValTracker, LossTracker
+from trainerx.utils.data_tracker import (
+    TrainTracker,
+    ValTracker,
+    LossTracker
+)
 from trainerx.utils.performance import calc_performance
 from trainerx.utils.task import Task
 from trainerx.utils.torch_utils import (
@@ -276,7 +286,7 @@ class Trainer:
         self.cls_val_ds = ClassificationDataset(
             root=CONFIG('classification')['val'],
             wh=CONFIG('wh'),
-            transform=ValidateT(),
+            transform=ClsValT(tuple(CONFIG('wh'))),
             target_transform=ClsTargetT(),
         )
         logger.info(f'Classification Val data size: {self.cls_val_ds.real_data_size}.')
@@ -295,7 +305,7 @@ class Trainer:
         self.seg_train_ds = SegmentationDataSet(
             root=CONFIG('segmentation')['train'],
             wh=CONFIG('wh'),
-            transform=SegImageT,
+            transform=SegImageT(tuple(CONFIG('wh'))),
         )
 
         background_size = len(self.seg_val_ds.background_samples)
@@ -319,7 +329,7 @@ class Trainer:
         self.seg_val_ds = SegmentationDataSet(
             root=CONFIG('segmentation')['val'],
             wh=CONFIG('wh'),
-            transform=ValidateT,
+            transform=SegValT(tuple(CONFIG('wh'))),
         )
         self.seg_val_dl = DataLoader(
             dataset=self.seg_val_ds,
