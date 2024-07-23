@@ -30,7 +30,7 @@ class SegLabel:
     is_background: Optional[int] = False
     mask: Optional[np.ndarray] = None
 
-    def init(self) -> None:
+    def _decode(self) -> None:
         if self.metadata is not None:
             self.objects = self.metadata.get('shapes')
             self.image_path = self.metadata.get('imagePath')
@@ -40,10 +40,10 @@ class SegLabel:
 
     def load_metadata(self, val) -> None:
         self.metadata = val
-        self.init()
+        self._decode()
 
     def __post_init__(self) -> None:
-        self.init()
+        self._decode()
 
 
 @dataclass
