@@ -360,29 +360,16 @@ class Trainer:
 
     def forward_with_train(self, images: torch.Tensor) -> Any:
 
-        if images is None:
-            logger.error('Images is None')
-            error_exit()
-
-        if not self.model.training:
-            self.model.train()
-
+        assert images is not None, 'Input image is None.'
+        self.model.train()
         model_output = self.model(images)
-
         return model_output
 
     def forward_with_val(self, images: torch.Tensor) -> Any:
-
-        if images is None:
-            logger.error('Images is None')
-            error_exit()
-
-        if self.model.training:
-            self.model.eval()
-
+        assert images is not None, 'Input image is None.'
+        self.model.eval()
         with torch.no_grad():
             model_output = self.model(images)
-
         return model_output
 
     def move_to_device(self, data: torch.Tensor) -> torch.Tensor:
@@ -415,24 +402,15 @@ class Trainer:
                         best_weight_info = {}
 
                         if self.task.MT:
-                            best_weight_info.update({'Top1#': round4(self.val_top1_data_logger.avg)})
+                            best_weight_info.update({'Top1#': round4()})
 
                         if self.task.MT:
-                            best_weight_info.update({'MIoU#': round4(self.val_miou_data_logger.avg)})
-                        self.val_top1_data_logger.reset()
-                        self.val_topk_data_logger.reset()
-                        self.val_miou_data_logger.reset()
-
-                    # self.model.save_checkpoint(
-                    #     save_path=self.weights_dir,
-                    #     epoch=curr_epoch,
-                    # )
+                            best_weight_info.update({'MIoU#': round4()})
 
     @timer
     def train(self) -> None:
 
-        if not self.model.training:
-            self.model.train()
+        self.model.train()
 
         self.optimizer_wrapper.step()
         self.curr_lr = round8(self.optimizer_wrapper.lr[0])

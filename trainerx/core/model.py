@@ -2,6 +2,7 @@ import os
 from typing import Optional
 
 import torch
+import torchvision
 from loguru import logger
 
 from trainerx import network
@@ -93,17 +94,22 @@ class Model:
     def eval(self) -> None:
         self._net.eval()
 
-    def move_to_device(self) -> None:
+    def to_device(self) -> None:
         self._net.to(self._device)
-        logger.info(f'Move model.to: {self._device}.')
+        logger.info(f'Model.device: {self._device}.')
 
     def set_weight(self, path: str) -> None:
         self._weight = path
 
+    def set_net(self, val) -> None:
+        self._net = val
+
     def init(self) -> None:
         self.build_model()
+
         self.load_weight()
-        self.move_to_device()
+
+        self.to_device()
 
     def build_model(self) -> None:
         net = network.__dict__.get(self.model_name, None)
@@ -118,13 +124,29 @@ class Model:
 
         net_args = {
             'num_classes': self._num_classes,
-            'mask_classes': self._mask_classes,
-            'pretrained': self._pretrained,
-            'input_channels': 3,
+            # 'input_channels': 3,
         }
+
+        if self._mask_classes != 0:
+            net_args['mask_classes'] = self._mask_classes
+
+        tv_version = torchvision.__version__.split('.')
+
+        if tv_version[1] < '13':
+            net_args['pretrained'] = self._pretrained
+        else:
+            net_args['weights'] = self._pretrained
+            # net_args['weights'] = None
+
         self._net = net(**net_args)
+        logger.info('Build Model Done.')
 
     def load_weight(self) -> None:
+        if self._weight is None:
+            logger.warning('Preload Weight Is None.')
+            return
+
+        assert os.path.exists(self._weight) is True, f'Input weight: {self._weight} is not found.'
 
         weight = torch.load(self._weight, map_location=self._map_location)
         weight_state_dict = weight.get('state_dict')
@@ -157,10 +179,15 @@ class Model:
     def save_checkpoint(
         self,
         save_path: str,
-        **kwargs,
+        **kwargs,  # Other info
     ) -> None:
 
-        save_dict = {"state_dict": self.state_dict}
+        save_dict = {
+            "state_dict": self.state_dict,
+            'model_name': self._model_name,
+            'num_classes': self._num_classes,
+            'mask_classes': self._mask_classes,
+        }
 
         if kwargs != {}:
             save_dict.update(kwargs)
@@ -170,3 +197,8 @@ class Model:
         model_save_path = os.path.join(save_path, f"epoch{epoch}.pth")
         torch.save(save_dict, model_save_path)
         logger.success(f'👍 Save weight to: {save_path}.')
+
+
+if __name__ == '__main__':
+    model = Model('resnet18', num_classes=2, pretrained=False)
+    model.init()
