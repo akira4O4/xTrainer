@@ -2,20 +2,23 @@ class Task:
     CLS: bool = False
     SEG: bool = False
     MT: bool = False
-    TASK: str = ''
 
     def __init__(self, task: str):  # noqa
         self.TASK = task
 
         if task.lower() == 'multitask':
             self.MT = True
-            self.CLS = True
-            self.SEG = True
+            # self.CLS = False
+            # self.SEG = False
 
         elif task.lower() == 'classification':
+            # self.MT = False
             self.CLS = True
+            # self.SEG = False
 
         elif task.lower() == 'segmentation':
+            # self.MT = False
+            # self.CLS = False
             self.SEG = True
 
     def __str__(self) -> str:

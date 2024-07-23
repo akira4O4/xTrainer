@@ -4,6 +4,7 @@ import torch
 from trainerx.utils.task import Task
 from loguru import logger
 
+
 def generate_matrix(
     classes: int,
     output: torch.Tensor,

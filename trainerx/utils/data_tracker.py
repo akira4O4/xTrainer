@@ -17,7 +17,7 @@ class DataTracker:
         self._val = val
 
     def __len__(self) -> int:
-        return len(self._metadata)
+        return self.size
 
     @property
     def size(self) -> int:
@@ -28,12 +28,12 @@ class DataTracker:
         return self._metadata
 
     @property
-    def sum(self) -> np.ndarray:
-        return np.sum(self._metadata)
+    def sum(self):  # return type: (int ,float)
+        return np.sum(self._metadata).tolist()
 
     @property
-    def avg(self) -> np.ndarray:
-        return np.mean(self._metadata)
+    def avg(self):  # return type: float
+        return np.mean(self._metadata).tolist()
 
     @property
     def val(self):
@@ -56,9 +56,9 @@ class ValTracker:
         self.miou = DataTracker(f'Val MIoU')  # noqa
 
 
-class LossTracker:
-    def __init__(self, name: str = 'Loss'):
-        self.name = name
-        self.cross_entropy_loss = DataTracker('CrossEntropy Loss')
-        self.period_loss = DataTracker('Period Loss')
-        self.dice_loss = DataTracker('Dice Loss')
+# class LossTracker:
+#     def __init__(self, name: str = 'Loss'):
+#         self.name = name
+#         self.cross_entropy_loss = DataTracker('CrossEntropy Loss')
+#         self.period_loss = DataTracker('Period Loss')
+#         self.dice_loss = DataTracker('Dice Loss')

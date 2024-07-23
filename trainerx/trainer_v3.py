@@ -27,9 +27,8 @@ from trainerx.core.builder import (
     build_optimizer_wrapper,
     build_amp_optimizer_wrapper
 )
-from trainerx.core.loss_forward import BaseLossForward
 from trainerx.core.model import Model
-from trainerx.core.optim import AmpOptimWrapper, OptimWrapper
+from trainerx.core.optim import AMPOptimWrapper, OptimWrapper
 from trainerx.dataset.classification import ClassificationDataset
 from trainerx.dataset.segmentation import SegmentationDataSet
 from trainerx.utils.common import (
@@ -56,6 +55,8 @@ from trainerx.utils.torch_utils import (
 
 class Trainer:
     def __init__(self):
+
+        self.epoch = 0
 
         self.project_root_path: str = CONFIG('project')
         self.weight_path: str = ''
@@ -87,7 +88,7 @@ class Trainer:
         self.init_model()
 
         # Init Optimizer ----------------------------------------------------------------------------------------------
-        self.optimizer_wrapper: Union[OptimWrapper, AmpOptimWrapper] = None  # noqa
+        self.optimizer: Union[OptimWrapper, AMPOptimWrapper] = None  # noqa
         self.init_optimizer()
 
         # Init Lr Scheduler -------------------------------------------------------------------------------------------
@@ -97,7 +98,7 @@ class Trainer:
         self.init_lr_scheduler()
 
         # Init loss ---------------------------------------------------------------------------------------------------
-        self.loss_forwards: List[BaseLossForward] = []
+        self.loss_forwards = []
         self.loss_weights: List[float] = []
         self.init_loss()
 
@@ -219,10 +220,10 @@ class Trainer:
             })
 
         if CONFIG("amp"):
-            self.optimizer_wrapper = build_amp_optimizer_wrapper(name, **args)
+            self.optimizer = build_amp_optimizer_wrapper(name, **args)
             logger.info('AMP: Open Automatic Mixed Precision(AMP)')
         else:
-            self.optimizer_wrapper = build_optimizer_wrapper(name, **args)
+            self.optimizer = build_optimizer_wrapper(name, **args)
 
         logger.success(f'Build Optim: {name}.')
 
@@ -246,7 +247,7 @@ class Trainer:
             # lr_lambda = self._easy_lr_lambda()
             lr_lambda = self._linear_lr_lambda(CONFIG('epochs'), CONFIG('lrf')),
 
-        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer_wrapper.optimizer, lr_lambda=lr_lambda)
+        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer.optimizer, lr_lambda=lr_lambda)
 
     def build_classification_ds_dl(self) -> None:
 
@@ -341,6 +342,7 @@ class Trainer:
 
         logger.info(f'Segmentation Val data size: {self.seg_val_ds.real_data_size}.')
 
+    # TODO: Bugfix
     def init_loss(self) -> None:
         if self.task.CLS:
             self.loss_weights = [1]
@@ -358,29 +360,14 @@ class Trainer:
         assert len(self.loss_weights) == len(self.loss_forwards)
         logger.info(f'loss weights: {self.loss_weights}.')
 
-    def forward_with_train(self, images: torch.Tensor) -> Any:
-
-        assert images is not None, 'Input image is None.'
-        self.model.train()
-        model_output = self.model(images)
-        return model_output
-
-    def forward_with_val(self, images: torch.Tensor) -> Any:
-        assert images is not None, 'Input image is None.'
-        self.model.eval()
-        with torch.no_grad():
-            model_output = self.model(images)
-        return model_output
-
-    def move_to_device(self, data: torch.Tensor) -> torch.Tensor:
+    def to_device(self, data: torch.Tensor) -> torch.Tensor:
         if self.model.is_cpu:
             return data
         else:
             return data.cuda(self.model.device, non_blocking=True)
 
     def run(self) -> None:
-        curr_epoch = 0
-        while curr_epoch < CONFIG('epochs'):
+        while self.epoch < CONFIG('epochs'):
 
             # n*train -> k*val -> n*train->...
             flow: dict
@@ -389,31 +376,24 @@ class Trainer:
                 run_one_epoch = getattr(self, mode)
 
                 for _ in range(times):
-                    if curr_epoch >= CONFIG('epochs'):
+                    if self.epoch >= CONFIG('epochs'):
                         break
 
                     run_one_epoch()  # train() or val()
 
                     if mode == 'train':
-                        curr_epoch += 1
-                        log_metric('Epoch', curr_epoch)
+                        self.epoch += 1
+                        log_metric('Epoch', self.epoch)
 
                     elif mode == 'val':
-                        best_weight_info = {}
-
-                        if self.task.MT:
-                            best_weight_info.update({'Top1#': round4()})
-
-                        if self.task.MT:
-                            best_weight_info.update({'MIoU#': round4()})
+                        ...
 
     @timer
     def train(self) -> None:
 
         self.model.train()
 
-        self.optimizer_wrapper.step()
-        self.curr_lr = round8(self.optimizer_wrapper.lr[0])
+        self.curr_lr = round8(sum(self.optimizer.lrs) / len(self.optimizer.lrs))
         log_metric('Lr', self.curr_lr)
 
         dataloaders: List[DataLoader] = []
@@ -423,8 +403,8 @@ class Trainer:
             dataloaders.append(self.seg_train_dl)
 
         # Update lr
-        if self.scheduler_step_in_batch is False:
-            self.lr_scheduler.step()
+        # # if self.scheduler_step_in_batch is False:
+        #     self.lr_scheduler.step()
 
         datas: tuple
         for curr_step, datas in enumerate(zip(*dataloaders)):
@@ -442,15 +422,13 @@ class Trainer:
                 input_data = seg_data
 
             images, targets = input_data
-            images = self.move_to_device(images)
-            targets = self.move_to_device(targets)
+            images = self.to_device(images)
+            targets = self.to_device(targets)
 
             # Train ----------------------------------------------------------------------------------------------------
-            if CONFIG('amp'):
-                with self.optimizer_wrapper.optim_context():
-                    model_output = self.forward_with_train(images)
-            else:
-                model_output = self.forward_with_train(images)
+            pred = None  # model output
+            with self.optimizer.context():
+                pred = self.model(images)
 
             # Calc loss ------------------------------------------------------------------------------------------------
             loss_result = {}
@@ -458,66 +436,11 @@ class Trainer:
                 loss_forward.set_model_output(model_output)
                 loss_forward.set_targets(targets)
 
-                if CONFIG('amp'):
-                    with self.optimizer_wrapper.optim_context():
-                        loss_val = forward.run()  # noqa
-                else:
+                with self.optimizer.context():
                     loss_val = forward.run()  # noqa
 
                 assert not torch.any(torch.isnan(loss_val))
                 loss_result.update({loss_forward.loss_name: loss_val})
-
-            # curr_task=classification or segmentation
-            # for loss_type in self.loss_args.keys():
-            #
-            #     # Get the classification data or segmentation data
-            #     if loss_type == Task.CLS.value:
-            #         input_data = cls_data
-            #     elif loss_type == Task.SEG.value:
-            #         input_data = seg_data
-            #
-            #     loss_type = task_convert(loss_type)
-            #
-            #     # Move to device
-            #     images, targets = input_data
-            #     images = self.move_to_device(images)
-            #     targets = self.move_to_device(targets)
-            #
-            #     # AMP training
-            #     if self.train_args.amp:
-            #         with self.optimizer_wrapper.optim_context():
-            #             model_output = self.forward_with_train(images)
-            #     else:
-            #         model_output = self.forward_with_train(images)
-            #
-            #     # Loss forward
-            #     # loss1->loss2->...
-            #     loss_runner: BaseLossRunner
-            #     for loss_runner in self.losses[loss_type.value]:
-            #         loss_runner.model_output = model_output
-            #         loss_runner.targets = targets
-            #
-            #         if self.train_args.amp:
-            #             with self.optimizer_wrapper.optim_context():
-            #                 loss_val = loss_runner.forward()  # noqa
-            #         else:
-            #             loss_val = loss_runner.forward()  # noqa
-            #
-            #         assert not torch.any(torch.isnan(loss_val))
-            #         loss_results.update({loss_runner.loss_name: loss_val})
-            #
-            #     training_performance: dict = calc_performance(
-            #         loss_type,
-            #         self.train_args.topk,
-            #         self.model_args.mask_classes,
-            #         model_output,
-            #         targets
-            #     )
-            #     if loss_type == Task.CLS:
-            #         self.training_top1_data_logger.update(training_performance['top1'])
-            #         self.training_topk_data_logger.update(training_performance['topk'])
-            #     if loss_type == Task.SEG:
-            #         self.training_miou_data_logger.update(training_performance['miou'])
 
             self.update_training_performance_to_mlflow('batch_size')
 
@@ -526,12 +449,12 @@ class Trainer:
 
             if self.is_accumulation:
                 loss_sum = loss_sum / self.train_args.accumulation_steps
-                self.optimizer_wrapper.loss_backward(loss_sum)
+                self.optimizer.loss_backward(loss_sum)
 
                 if (curr_step + 1) % self.train_args.accumulation_steps == 0:
-                    self.optimizer_wrapper.step_update_zero()
+                    self.optimizer.step_update_zero()
             else:
-                self.optimizer_wrapper.backward_step_update_zero(loss_sum)
+                self.optimizer.backward_step_update_zero(loss_sum)
 
             self.update_training_loss_to_mlflow(loss_results, 'batch_size')
             log_metric('Sum of Loss', self.to_constant(loss_sum))
@@ -552,6 +475,16 @@ class Trainer:
         self.training_top1_data_logger.reset()
         self.training_topk_data_logger.reset()
         self.training_miou_data_logger.reset()
+
+    def _classification_train(self, images: torch.Tensor, target: torch.Tensor):
+        pred = None  # model output
+        with self.optimizer.context():
+            pred = self.model(images)
+
+    def _segmentation_train(self, images: torch.Tensor, target: torch.Tensor):
+        pred = None  # model output
+        with self.optimizer.context():
+            pred = self.model(images)
 
     @timer
     def val(self):
@@ -577,8 +510,8 @@ class Trainer:
 
         for data in tqdm(self.cls_val_dl):
             images, targets = data
-            images = self.move_to_device(images)
-            targets = self.move_to_device(targets)
+            images = self.to_device(images)
+            targets = self.to_device(targets)
 
             model_output = self.forward_with_val(images)
             performance: dict = calc_performance(
@@ -596,8 +529,8 @@ class Trainer:
     def segmentation_val(self) -> None:
         for data in tqdm(self.seg_val_dl):
             images, targets = data
-            images = self.move_to_device(images)
-            targets = self.move_to_device(targets)
+            images = self.to_device(images)
+            targets = self.to_device(targets)
 
             model_output = self.forward_with_val(images)
             performance: dict = calc_performance(
