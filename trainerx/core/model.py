@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 import torchvision
@@ -45,8 +45,14 @@ class Model:
 
         self._net = None
 
-    def __call__(self, images: torch.Tensor) -> torch.Tensor:
-        return self._net(images)
+    def __call__(self, images: torch.Tensor) -> Any:
+
+        if self.training:
+            return self._net(images)
+
+        else:
+            with torch.no_grad():
+                return self._net(images)
 
     @property
     def training(self) -> bool:
