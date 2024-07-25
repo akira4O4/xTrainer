@@ -17,19 +17,6 @@ wh: [ 480,480 ]
 balanced_batch_sampler: True
 load_all_data: True
 
-#Hyperparameters--------------------------------------------------------------------------------------------------------
-optimizer: AUTO
-cos_lr: True
-lr0: 0.01 # (float) initial learning rate
-lrf: 0.01 # (float) final learning rate (lr0 * lrf)
-momentum: 0.937
-amp: True
-deterministic: True
-#FocalLoss alpha gamma
-alpha: null
-gamma: 0
-loss_weights: [ 1,1 ] #[classification.weight segmentation.weight]
-
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
   batch: 8
@@ -43,6 +30,21 @@ segmentation:
   classes: 6
   train: 'D:\llf\dataset\danyang\training_data\E\seg'
   val: 'D:\llf\dataset\danyang\training_data\E\seg'
+
+#Hyperparameters--------------------------------------------------------------------------------------------------------
+optimizer: AUTO
+cos_lr: True
+lr0: 0.01 # (float) initial learning rate
+lrf: 0.01 # (float) final learning rate (lr0 * lrf)
+momentum: 0.937
+amp: True
+deterministic: True
+#FocalLoss alpha gamma
+alpha: null
+gamma: 0
+loss_weights: [ 1,1 ] #[classification.weight segmentation.weight]
+
+
 
 #Test setting-----------------------------------------------------------------------------------------------------------
 test: ''
