@@ -9,6 +9,7 @@ from mlflow import log_metric, set_experiment
 from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from trainerx.core.lr_scheduler import LRSchedulerWrapper
 from trainerx.core.preprocess import (
     ClsImageT,
     ClsTargetT,
@@ -43,10 +44,11 @@ from trainerx.utils.common import (
 from trainerx.utils.data_tracker import (
     TrainTracker,
     ValTracker,
-    LossTracker
+    # LossTracker
 )
 from trainerx.utils.performance import calc_performance
 from trainerx.utils.task import Task
+from trainerx.core.loss import ClassificationLoss, SegmentationLoss
 from trainerx.utils.torch_utils import (
     init_seeds,
     init_backends_cudnn,
@@ -63,14 +65,10 @@ class Trainer:
         self.output_path: str = ''
         self.init_workspace()
 
-        self.is_classification: bool = False
-        self.is_segmentation: bool = False
-        self.is_multi_task: bool = False
-
         # Init Data Logger ---------------------------------------------------------------------------------------------
         self.train_tracker = TrainTracker(topk=CONFIG('topk'))  # noqa
         self.val_tracker = ValTracker(topk=CONFIG('topk'))  # noqa
-        self.loss_trakcer = LossTracker()
+        # self.loss_trakcer = LossTracker()
 
         # Init work env ------------------------------------------------------------------------------------------------
         init_seeds(CONFIG('seed'))
@@ -93,18 +91,18 @@ class Trainer:
 
         # Init Lr Scheduler -------------------------------------------------------------------------------------------
         self.curr_lr = 0
-        self.lr_scheduler = None
+        self.lr_scheduler: LRSchedulerWrapper = None  # noqa
         self.scheduler_step_in_batch = False
         self.init_lr_scheduler()
 
         # Init loss ---------------------------------------------------------------------------------------------------
-        self.loss_forwards = []
-        self.loss_weights: List[float] = []
+        self.classification_loss = None
+        self.segmentation_loss = None
+        self.loss_weights: List[int] = CONFIG('loss_weights')
         self.init_loss()
 
         # Init dataset and dataloader ---------------------------------------------------------------------------------
-        if self.task.CLS:
-
+        if self.task.CLS or self.task.MT:
             self.cls_train_ds: ClassificationDataset = None  # noqa
             self.cls_train_dl: DataLoader = None  # noqa
 
@@ -120,7 +118,7 @@ class Trainer:
                 logger.error('classification num of classes setting error.')
                 error_exit()
 
-        if self.task.SEG:
+        if self.task.SEG or self.task.MT:
 
             self.seg_train_ds: SegmentationDataSet = None  # noqa
             self.seg_train_dl: DataLoader = None  # noqa
@@ -200,7 +198,10 @@ class Trainer:
             name = DEFAULT_OPTIMIZER
 
         args = {
-            "params": self.model.parameters,
+            "params": [{
+                'params': self.model.parameters,
+                'initial_lr': CONFIG('lr0')
+            }],
             "lr": CONFIG("lr0"),
         }
 
@@ -227,27 +228,13 @@ class Trainer:
 
         logger.success(f'Build Optim: {name}.')
 
-    @staticmethod
-    def _cos_lr_lambda(y1: float = 0.0, y2: float = 1.0, steps: int = 100):
-        return lambda x: max((1 - math.cos(x * math.pi / steps)) / 2, 0) * (y2 - y1) + y1
-
-    @staticmethod
-    def _linear_lr_lambda(epochs: int, lrf: float):
-        return lambda x: max(1 - x / epochs, 0) * (1.0 - lrf) + lrf  # linear
-
-    @staticmethod
-    def _easy_lr_lambda():
-        return lambda x: 1 / (x / 4 + 1),
-
     def init_lr_scheduler(self) -> None:
-
-        if CONFIG('cos_lr'):
-            lr_lambda = self._cos_lr_lambda(1, CONFIG('lrf'), CONFIG('epochs'))
-        else:
-            # lr_lambda = self._easy_lr_lambda()
-            lr_lambda = self._linear_lr_lambda(CONFIG('epochs'), CONFIG('lrf')),
-
-        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer.optimizer, lr_lambda=lr_lambda)
+        self.lr_scheduler = LRSchedulerWrapper(
+            self.optimizer.optimizer,
+            lrf=CONFIG('lrf'),
+            epochs=CONFIG('epochs'),
+            cos_lr=CONFIG('cos_lr')
+        )
 
     def build_classification_ds_dl(self) -> None:
 
@@ -342,23 +329,17 @@ class Trainer:
 
         logger.info(f'Segmentation Val data size: {self.seg_val_ds.real_data_size}.')
 
-    # TODO: Bugfix
     def init_loss(self) -> None:
-        if self.task.CLS:
-            self.loss_weights = [1]
-            self.loss_forwards.append(build_loss_forward('CrossEntropyLoss'))
 
-        if self.task.SEG:
-            self.loss_weights.extend([1, 0.5])
-            self.loss_forwards.extend(
-                [
-                    build_loss_forward('PeriodLoss', weight=[1] * self.model.mask_classes, device=self.model.device),
-                    build_loss_forward('DiceLoss')
-                ]
-            )
+        if self.task.CLS or self.task.MT:
+            alpha = CONFIG('alpha') if not CONFIG('alpha') else [1] * self.model.num_classes
+            alpha = torch.tensor(alpha, dtype=torch.float)
+            self.classification_loss = ClassificationLoss(alpha=alpha, gamma=CONFIG('gamma'))
+            logger.info('Build Classification Loss.')
 
-        assert len(self.loss_weights) == len(self.loss_forwards)
-        logger.info(f'loss weights: {self.loss_weights}.')
+        if self.task.SEG or self.task.MT:
+            self.segmentation_loss = SegmentationLoss()
+            logger.info('Build Segmentation Loss.')
 
     def to_device(self, data: torch.Tensor) -> torch.Tensor:
         if self.model.is_cpu:
@@ -397,14 +378,10 @@ class Trainer:
         log_metric('Lr', self.curr_lr)
 
         dataloaders: List[DataLoader] = []
-        if self.task.CLS:
+        if self.task.CLS or self.task.MT:
             dataloaders.append(self.cls_train_dl)
-        if self.task.SEG:
+        if self.task.SEG or self.task.MT:
             dataloaders.append(self.seg_train_dl)
-
-        # Update lr
-        # # if self.scheduler_step_in_batch is False:
-        #     self.lr_scheduler.step()
 
         datas: tuple
         for curr_step, datas in enumerate(zip(*dataloaders)):
@@ -414,7 +391,6 @@ class Trainer:
                 cls_data = seg_data = datas[0]  # cls or seg training
 
             input_data = None
-            # loss_results = {}  # [loss_res1,loss_res2,...]
             if self.task.CLS:
                 input_data = cls_data
 
@@ -426,65 +402,48 @@ class Trainer:
             targets = self.to_device(targets)
 
             # Train ----------------------------------------------------------------------------------------------------
-            pred = None  # model output
+            cls_loss = self._classification_train(images, targets)
+            seg_loss = self._segmentation_train(images, targets)
+
+            final_loss = self.loss_sum([cls_loss, seg_loss])
+
+            # self.update_training_performance_to_mlflow('batch_size')
+
+            # loss backward
+            # optimizer step
+            # optimizer zero_grad
             with self.optimizer.context():
-                pred = self.model(images)
+                self.optimizer(final_loss)  # auto update
 
-            # Calc loss ------------------------------------------------------------------------------------------------
-            loss_result = {}
-            for loss_forward in self.loss_forwards:
-                loss_forward.set_model_output(model_output)
-                loss_forward.set_targets(targets)
+            self.lr_scheduler()  # auto update
 
-                with self.optimizer.context():
-                    loss_val = forward.run()  # noqa
-
-                assert not torch.any(torch.isnan(loss_val))
-                loss_result.update({loss_forward.loss_name: loss_val})
-
-            self.update_training_performance_to_mlflow('batch_size')
-
-            # Update optimizer
-            loss_sum = self.loss_sum(loss_results)
-
-            if self.is_accumulation:
-                loss_sum = loss_sum / self.train_args.accumulation_steps
-                self.optimizer.loss_backward(loss_sum)
-
-                if (curr_step + 1) % self.train_args.accumulation_steps == 0:
-                    self.optimizer.step_update_zero()
-            else:
-                self.optimizer.backward_step_update_zero(loss_sum)
-
-            self.update_training_loss_to_mlflow(loss_results, 'batch_size')
-            log_metric('Sum of Loss', self.to_constant(loss_sum))
-
-            # Update lr
-            if self.scheduler_step_in_batch is True:
-                self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
+            # if self.scheduler_step_in_batch is True:
+            #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
 
             # Easy info display
             if curr_step % 20 == 0:
                 print(
-                    f'🚀[Training] Epoch:[{self.train_args.epoch}/{CONFIG("epochs")}] '
+                    f'🚀[Training] Epoch:[{self.epoch}/{CONFIG("epochs")}] '
                     f'Step:[{curr_step}/{self.total_step}]...'
                 )
 
-        self.update_training_performance_to_mlflow('epoch')
-        self.update_training_loss_to_mlflow(batch_or_epoch='epoch')
-        self.training_top1_data_logger.reset()
-        self.training_topk_data_logger.reset()
-        self.training_miou_data_logger.reset()
+        # self.update_training_performance_to_mlflow('epoch')
+        # self.update_training_loss_to_mlflow(batch_or_epoch='epoch')
+        # self.training_top1_data_logger.reset()
+        # self.training_topk_data_logger.reset()
+        # self.training_miou_data_logger.reset()
 
     def _classification_train(self, images: torch.Tensor, target: torch.Tensor):
-        pred = None  # model output
         with self.optimizer.context():
             pred = self.model(images)
+            loss = self.classification_loss(pred, target)  # noqa
+        return loss
 
     def _segmentation_train(self, images: torch.Tensor, target: torch.Tensor):
-        pred = None  # model output
         with self.optimizer.context():
             pred = self.model(images)
+            loss = self.segmentation_loss(pred, target)  # noqa
+        return loss
 
     @timer
     def val(self):
@@ -581,15 +540,14 @@ class Trainer:
             log_metric(f'Training Epoch Top{self.train_args.topk}', self.training_topk_data_logger.avg)
             log_metric('Training Epoch MIoU', self.training_miou_data_logger.avg)
 
-    def loss_sum(self, loss_results: dict) -> torch.Tensor:
+    def loss_sum(self, losses: list) -> torch.Tensor:
 
-        if len(loss_results) != len(self.loss_weights):
+        if len(losses) != len(self.loss_weights):
             logger.error('len(loss_result)!=len(self.losses_weights)')
 
         ret = 0
-        for kv, weight in zip(loss_results.items(), self.loss_weights):
-            loss_name, loss_val = kv
-            ret += loss_val * weight
+        for loss, weight in zip(losses, self.loss_weights):
+            ret += loss * weight
 
         return ret  # noqa
 

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
+import shutil
 
 '''
 pt=softmax(x)
@@ -11,55 +12,9 @@ gamma负责降低简单样本的损失值, hardcase的预测的分数低，easyc
 '''
 
 
-class FocalLoss(nn.Module):
-    def __init__(
-        self,
-        alpha: Optional[torch.Tensor] = None,
-        gamma: Optional[float] = 1
-    ):
-        super(FocalLoss, self).__init__()
-        self.gamma = gamma
-        self.alpha = alpha  # [nc,]
-
-    def focal_loss_impl(
-        self,
-        pred: torch.Tensor,  # no softmax
-        target: torch.Tensor,
-    ) -> torch.Tensor:
-        # pred [bs, nc]  or  [bs, nc, X1, X2, ...]
-        # target [bs, ]  or  [bs, X1, X2, ...]
-        bs, nc = pred.shape[:2]  # batch size and number of categories
-        if pred.dim() > 2:
-            # e.g. pred.shape is [bs, nc, X1, X2]
-            pred = pred.reshape(bs, nc, -1)  # [bs, nc, X1, X2] => [bs, nc, X1*X2]
-            pred = pred.transpose(1, 2)  # [bs, nc, X1*X2] => [bs, X1*X2, nc]
-            pred = pred.reshape(-1, nc)  # [bs, X1*X2, nc] => [bs*X1*X2, nc]   set N = bs*X1*X2
-
-        target = target.reshape(-1)  # [N, ]
-
-        log_p = torch.log_softmax(pred, dim=-1)  # [N, nc]
-        log_p = log_p.gather(1, target[:, None]).squeeze()  # [N,]
-        p = torch.exp(log_p)  # [N,]
-
-        if self.alpha is None:
-            self.alpha = torch.ones((nc,), dtype=torch.float, device=pred.device)
-
-        self.alpha = self.alpha.gather(0, target)  # [N,]
-
-        loss = -1 * self.alpha * torch.pow(1 - p, self.gamma) * log_p
-        return loss.sum() / self.alpha.sum()
-
-    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        return self.focal_loss_impl(pred, target)
-
-
 class MultiClassFocalLossWithAlpha(nn.Module):
     def __init__(self, alpha=None, gamma=2, reduction='mean'):
-        """
-        :param alpha: 权重系数列表，三分类中第0类权重0.2，第1类权重0.3，第2类权重0.5
-        :param gamma: 困难样本挖掘的gamma
-        :param reduction:
-        """
+
         super(MultiClassFocalLossWithAlpha, self).__init__()
         if alpha is None:
             alpha = [0.2, 0.3, 0.5]
@@ -80,6 +35,60 @@ class MultiClassFocalLossWithAlpha(nn.Module):
         if self.reduction == "sum":
             return torch.sum(focal_loss)
         return focal_loss
+
+
+class FocalLoss(nn.Module):
+    def __init__(
+        self,
+        alpha: Optional[torch.Tensor] = None,
+        gamma=0  # type:(int,float)
+    ):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha  # [nc,]
+
+    # classification prediction.shape=(bs,nc) target.shape=(bs,1)
+    # segmentation prediction.shape=(bs,1,h,w) target.shape=(bs,1,h,w)
+    def focal_loss_impl(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # pred (bs, nc)  or  (bs, nc, X1, X2, ...)
+        # target (bs, )  or  (bs, X1, X2, ...)
+        bs, nc = pred.shape[:2]  # batch size and number of categories
+        if pred.dim() > 2:
+            # e.g. pred.shape is (bs, nc, X1, X2]
+            pred = pred.reshape(bs, nc, -1)  # (bs, nc, X1, X2) => (bs, nc, X1*X2)
+            pred = pred.transpose(1, 2)  # (bs, nc, X1*X2) => (bs, X1*X2, nc)
+            pred = pred.reshape(-1, nc)  # (bs, X1*X2, nc) => (bs*X1*X2, nc)   set N = bs*X1*X2
+
+        target = target.reshape(-1)  # (N, )
+
+        log_p = torch.log_softmax(pred, dim=-1)  # (N, nc)
+        log_p = log_p.gather(1, target[:, None]).squeeze()  # (N,)
+        p = torch.exp(log_p)  # (N,)
+
+        if self.alpha is None:
+            self.alpha = torch.ones((nc,), dtype=torch.float, device=pred.device)
+
+        self.alpha = self.alpha.gather(0, target)  # [N,]
+
+        loss = -1 * self.alpha * torch.pow(1 - p, self.gamma) * log_p
+        return loss.sum() / self.alpha.sum()
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        return self.focal_loss_impl(pred, target)
+
+
+class ClassificationLoss(FocalLoss):
+    def __init__(
+        self,
+        alpha: Optional[torch.Tensor] = None,
+        gamma=0  # type:(int,float)
+    ):
+        super().__init__(alpha, gamma)
+
+
+class SegmentationLoss:
+    def __init__(self):
+        ...
 
 
 if __name__ == "__main__":

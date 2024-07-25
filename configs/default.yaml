@@ -25,6 +25,10 @@ lrf: 0.01 # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
 amp: True
 deterministic: True
+#FocalLoss alpha gamma
+alpha: null
+gamma: 0
+loss_weights: [ 1,1 ] #[classification.weight segmentation.weight]
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
