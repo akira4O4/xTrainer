@@ -11,6 +11,15 @@ from trainerx.utils.common import error_exit
 __all__ = ['Model']
 
 
+# class CheckPoint:
+#     def __init__(self, weight: str):
+#         assert os.path.exists(weight) is True, 'weight path is not found.'
+#         self._weight: dict = torch.load(weight, map_location='cpu')
+#
+#     def __call__(self, key: str):
+#         return self._weight.get(key, None)
+
+
 class Model:
     def __init__(
         self,
@@ -20,39 +29,23 @@ class Model:
         pretrained: Optional[bool] = False,
         weight: Optional[str] = None,
         device: Optional[int] = 0,  # -1==cpu
-        strict: Optional[bool] = True,
+        strict: Optional[bool] = False,
         map_location: Optional[str] = 'cpu',
     ):
         self._is_gpu = False
-        self._is_cpu = True
         self._model_name = model_name
         self._pretrained = pretrained
         self._num_classes = num_classes
         self._mask_classes = mask_classes
         self._weight = weight
+        self._checkpoint = {}
         self._strict = strict
         self._device = torch.device('cpu')
         self._map_location = map_location
 
-        if device != -1 and torch.cuda.is_available():
-            self._device = torch.device(f'cuda:{device}')
-            self._is_gpu = True
-            self._is_cpu = False
-        else:
-            self._device = torch.device('cpu')
-            self._is_gpu = False
-            self._is_cpu = True
+        self.set_device(device)
 
         self._net = None
-
-    def __call__(self, images: torch.Tensor) -> Any:
-
-        if self.training:
-            return self._net(images)
-
-        else:
-            with torch.no_grad():
-                return self._net(images)
 
     @property
     def training(self) -> bool:
@@ -78,21 +71,41 @@ class Model:
     def device(self) -> torch.device:
         return self._device
 
-    @property
-    def is_cpu(self) -> bool:
-        return self._is_cpu
+    def set_device(self, idx: int) -> None:
+        if torch.cuda.is_available() is False:
+            self._device = torch.device(f'cpu')
+            self._is_gpu = False
+
+        elif idx == -1:
+            self._device = torch.device(f'cpu')
+            self._is_gpu = False
+
+        else:
+            self._device = torch.device(f'cuda:{idx}')
+            self._is_gpu = True
+
+        logger.info(f'Change device to {self._device}')
 
     @property
     def is_gpu(self) -> bool:
         return self._is_gpu
 
-    def set_gpu(self, gpu: int) -> None:
-        self._device = f'cuda:{gpu}'
-        logger.info(f'Change device to {self._device}')
+    @property
+    def checkpoint(self) -> dict:
+        return self._checkpoint
 
     @property
     def parameters(self):
         return self._net.parameters()
+
+    def __call__(self, images: torch.Tensor) -> Any:
+
+        if self.training:
+            return self._net(images)
+
+        else:
+            with torch.no_grad():
+                return self._net(images)
 
     def train(self) -> None:
         self._net.train()
@@ -130,13 +143,12 @@ class Model:
 
         net_args = {
             'num_classes': self._num_classes,
-            # 'input_channels': 3,
         }
 
         if self._mask_classes != 0:
             net_args['mask_classes'] = self._mask_classes
 
-        tv_version = torchvision.__version__.split('.')
+        tv_version = torchvision.__version__.split('.')  # 0.13.1=['0','13','1']
 
         if tv_version[1] < '13':
             net_args['pretrained'] = self._pretrained
@@ -148,45 +160,36 @@ class Model:
         logger.info('Build Model Done.')
 
     def load_weight(self) -> None:
-        if self._weight is None:
-            logger.warning('Preload Weight Is None.')
+
+        if (self._weight is None) or (os.path.exists(self._weight) is False):
+            logger.warning('Weight is not found.')
             return
 
-        assert os.path.exists(self._weight) is True, f'Input weight: {self._weight} is not found.'
-
-        weight = torch.load(self._weight, map_location=self._map_location)
-        weight_state_dict = weight.get('state_dict')
-
-        model_state_dict = self._net.state_dict()
+        self._checkpoint = torch.load(self._weight, map_location=self._map_location)
+        weight_state_dict = self.checkpoint.get('state_dict', None)
 
         if weight_state_dict is None:
-            logger.error(f'weight do not found the state_dict.')
+            logger.error('Weight.state_dict is not found.')
             return
+
+        model_state_dict = self._net.state_dict()
 
         total_item = 0
         loading_item = 0
 
-        for k, v in weight_state_dict.items():
+        for net_kv, weight_kv in zip(model_state_dict, weight_state_dict):
             total_item += 1
 
-            if 'module' in k:  # DDP model
-                k = k[7:]
-
-            if k in model_state_dict.keys():
-                if v.shape == model_state_dict[k].shape:
-                    model_state_dict[k] = v
-                    loading_item += 1
+            if net_kv[1].shape == weight_kv[1].shape:
+                net_kv[1] = weight_kv[1]
+                loading_item += 1
 
         self._net.load_state_dict(model_state_dict, strict=self._strict)
 
         logger.info(f'Loading :{self._weight}.')
         logger.info(f'Loading [{loading_item}/{total_item}] item to model.')
 
-    def save_checkpoint(
-        self,
-        save_path: str,
-        **kwargs,  # Other info
-    ) -> None:
+    def save_checkpoint(self, save_path: str, **kwargs) -> None:
 
         save_dict = {
             "state_dict": self.state_dict,
@@ -206,5 +209,10 @@ class Model:
 
 
 if __name__ == '__main__':
-    model = Model('resnet18', num_classes=2, pretrained=False)
+    model = Model(
+        'resnet18',
+        num_classes=2,
+        pretrained=False,
+        device=0
+    )
     model.init()

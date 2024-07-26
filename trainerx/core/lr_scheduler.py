@@ -61,5 +61,6 @@ if __name__ == '__main__':
 
     for i in range(9):
         print("lr of epoch", i, "=>", scheduler.func().get_last_lr())
+        print("lr of epoch", i, "=>", optimizer.param_groups[0]['lr'])
         optimizer.step()
         scheduler()
