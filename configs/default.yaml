@@ -1,7 +1,7 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
 task: multitask  #classification segmentation multitask
-project: v3
+project: v3project #project_path or project_name
 
 #Train setting----------------------------------------------------------------------------------------------------------
 device: 0 #-1=cpu
