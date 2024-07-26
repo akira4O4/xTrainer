@@ -189,24 +189,6 @@ class Model:
         logger.info(f'Loading :{self._weight}.')
         logger.info(f'Loading [{loading_item}/{total_item}] item to model.')
 
-    def save_checkpoint(self, save_path: str, **kwargs) -> None:
-
-        save_dict = {
-            "state_dict": self.state_dict,
-            'model_name': self._model_name,
-            'num_classes': self._num_classes,
-            'mask_classes': self._mask_classes,
-        }
-
-        if kwargs != {}:
-            save_dict.update(kwargs)
-
-        epoch = kwargs.get('epoch', 0)
-
-        model_save_path = os.path.join(save_path, f"epoch{epoch}.pth")
-        torch.save(save_dict, model_save_path)
-        logger.success(f'👍 Save weight to: {save_path}.')
-
 
 if __name__ == '__main__':
     model = Model(
@@ -216,3 +198,7 @@ if __name__ == '__main__':
         device=0
     )
     model.init()
+    model.train()
+    print(model.training)
+    model.eval()
+    print(model.training)

@@ -1,7 +1,7 @@
 import math
 import os
 from typing import Union, List, Optional, Any
-
+from copy import deepcopy
 import numpy as np
 import torch
 from loguru import logger
@@ -52,6 +52,7 @@ from trainerx.core.loss import ClassificationLoss, SegmentationLoss
 from trainerx.utils.torch_utils import (
     init_seeds,
     init_backends_cudnn,
+    convert_optimizer_state_dict_to_fp16
 )
 
 
@@ -409,13 +410,13 @@ class Trainer:
 
             final_loss = self.loss_sum([cls_loss, seg_loss])
 
-            # loss backward
-            # optimizer step
-            # optimizer zero_grad
+            # 1.loss backward
+            # 2.optimizer step
+            # 3.optimizer zero_grad
             with self.optimizer.context():
-                self.optimizer(final_loss)  # auto update
+                self.optimizer(final_loss)  # auto running
 
-            self.lr_scheduler()  # auto update
+            self.lr_scheduler()  # auto running
 
             # if self.scheduler_step_in_batch is True:
             #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
@@ -426,12 +427,6 @@ class Trainer:
                     f'🚀[Training] Epoch:[{self.epoch}/{CONFIG("epochs")}] '
                     f'Step:[{curr_step}/{self.total_step}]...'
                 )
-
-        # self.update_training_performance_to_mlflow('epoch')
-        # self.update_training_loss_to_mlflow(batch_or_epoch='epoch')
-        # self.training_top1_data_logger.reset()
-        # self.training_topk_data_logger.reset()
-        # self.training_miou_data_logger.reset()
 
     def _classification_train(self, images: torch.Tensor, target: torch.Tensor):
         with self.optimizer.context():
@@ -446,99 +441,64 @@ class Trainer:
         return loss
 
     @timer
-    def val(self):
+    def val(self) -> None:
+        self.model.eval()
 
-        if self.model.training:
-            self.model.eval()
+        if self.task.SEG or self.task.MT:
+            self._segmentation_val()
 
-        for task in self.loss_args.keys():
-            task = task_convert(task)
+        if self.task.CLS or self.task.MT:
+            self._classification_val()
 
-            if task == Task.SEG:
-                self.segmentation_val()
-                print(f'Segmentation Val MIoU(Avg): {self.round_float_4(self.val_miou_data_logger.avg)}')
-
-            elif task == Task.CLS:
-                self.classification_val()
-                print(
-                    f'Classification Val Top1(Avg): {self.round_float_4(self.val_top1_data_logger.avg)} '
-                    f'Top{self.train_args.topk}(Avg): {self.round_float_4(self.val_topk_data_logger.avg)}'
-                )
-
-    def classification_val(self) -> None:
+    def _classification_val(self) -> None:
 
         for data in tqdm(self.cls_val_dl):
             images, targets = data
-            images = self.to_device(images)
-            targets = self.to_device(targets)
+            images = self.sync_device(images)
+            targets = self.sync_device(targets)
 
-            model_output = self.forward_with_val(images)
-            performance: dict = calc_performance(
-                task=Task.CLS,
-                topk=self.train_args.topk,
-                model_output=model_output,
-                targets=targets
-            )
-            self.val_top1_data_logger.update(performance['top1'])
-            self.val_topk_data_logger.update(performance['topk'])
+            pred = self.model(images)
+            # performance: dict = calc_performance(
+            #     task=Task.CLS,
+            #     topk=self.train_args.topk,
+            #     model_output=model_output,
+            #     targets=targets
+            # )
+            # self.val_top1_data_logger.update(performance['top1'])
+            # self.val_topk_data_logger.update(performance['topk'])
 
-        log_metric('Val Epoch Top1', self.val_top1_data_logger.avg)
-        log_metric(f'Val Epoch Top{self.train_args.topk}', self.val_topk_data_logger.avg)
+        # log_metric('Val Epoch Top1', self.val_top1_data_logger.avg)
+        # log_metric(f'Val Epoch Top{self.train_args.topk}', self.val_topk_data_logger.avg)
 
-    def segmentation_val(self) -> None:
+    def _segmentation_val(self) -> None:
         for data in tqdm(self.seg_val_dl):
             images, targets = data
-            images = self.to_device(images)
-            targets = self.to_device(targets)
+            images = self.sync_device(images)
+            targets = self.sync_device(targets)
 
-            model_output = self.forward_with_val(images)
-            performance: dict = calc_performance(
-                task=Task.SEG,
-                model_output=model_output,
-                targets=targets,
-                mask_classes=self.model.mask_classes
-            )
-            self.val_miou_data_logger.update(performance['miou'])
+            pred = self.model(images)
+            # performance: dict = calc_performance(
+            #     task=Task.SEG,
+            #     model_output=model_output,
+            #     targets=targets,
+            #     mask_classes=self.model.mask_classes
+            # )
+            # self.val_miou_data_logger.update(performance['miou'])
 
-        log_metric('Val Epoch MIoU', self.val_miou_data_logger.avg)
+        # log_metric('Val Epoch MIoU', self.val_miou_data_logger.avg)
 
-    def update_training_loss_to_mlflow(
-        self,
-        loss_results: Optional[dict] = None,
-        batch_or_epoch: Optional[str] = None
-    ) -> None:
-        if batch_or_epoch == 'batch_size':
+    def save_model(self, save_path: str) -> None:
 
-            for k, v in loss_results.items():
-                loss_results[k] = self.round_float_8(self.to_constant(v))
-
-            for kv, weight in zip(loss_results.items(), self.losses_weights):
-                loss_name, loss_val = kv
-                loss_results[loss_name] = loss_val * weight
-
-            for loss_type, loss_item in self.loss_args.items():
-                for loss_name, loss_params in self.loss_args[loss_type].items():
-
-                    if task_convert(loss_type) == Task.CLS:
-                        self.classification_loss_data_logger.update(loss_results[loss_name])
-                    elif task_convert(loss_type) == Task.SEG:
-                        self.segmentation_loss_data_logger.update(loss_results[loss_name])
-
-                    log_metric(f'Batch {loss_name}', loss_results[loss_name])
-
-        elif batch_or_epoch == 'epoch':
-            log_metric('Classification Total Loss', self.classification_loss_data_logger.avg)
-            log_metric('Segmentation Total Loss', self.segmentation_loss_data_logger.avg)
-
-    def update_training_performance_to_mlflow(self, batch_size_or_epoch: str = 'batch_size') -> None:
-        if batch_size_or_epoch == 'batch_size':
-            log_metric('Training Batch Top1', self.training_top1_data_logger.curr_val)
-            log_metric(f'Training Batch Top{self.train_args.topk}', self.training_topk_data_logger.curr_val)
-            log_metric('Training Batch MIoU', self.training_miou_data_logger.curr_val)
-        else:
-            log_metric('Training Epoch Top1', self.training_top1_data_logger.avg)
-            log_metric(f'Training Epoch Top{self.train_args.topk}', self.training_topk_data_logger.avg)
-            log_metric('Training Epoch MIoU', self.training_miou_data_logger.avg)
+        save_dict = {
+            'epoch': self.epoch,
+            'state_dict': self.model.state_dict,
+            'model_name': self.model.model_name,
+            'num_classes': self.model.num_classes,
+            'mask_classes': self.model.mask_classes,
+            'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict()))
+        }
+        torch.save(save_dict, save_path)
+        logger.success(f'👍 Save weight to: {save_path}.')
 
     def loss_sum(self, losses: list) -> torch.Tensor:
 
@@ -550,14 +510,3 @@ class Trainer:
             ret += loss * weight
 
         return ret  # noqa
-
-    @staticmethod
-    def to_constant(x: Union[np.float32, np.float64, torch.Tensor, np.ndarray]):
-        if isinstance(x, np.ndarray):
-            return x.tolist()
-        elif isinstance(x, np.float64) or isinstance(x, np.float32):
-            return x.item()
-        elif isinstance(x, torch.Tensor):
-            return x.tolist()
-        else:
-            return x

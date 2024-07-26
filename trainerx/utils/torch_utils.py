@@ -20,20 +20,10 @@ def init_backends_cudnn(deterministic: bool = False) -> None:
         torch.backends.cudnn.benchmark = False
 
 
-# def np2torch(data: np.ndarray) -> torch.Tensor:
-#     return torch.from_numpy(data)
-#
-#
-# def npimage2torch(img: np.ndarray) -> torch.Tensor:
-#     if len(img.shape) < 3:  # image is gray type
-#         img = np.expand_dims(img, -1)  # HW->HW1
-#
-#     # np.ndarray:HWC
-#     # torch.Tensor:CHW
-#     img = img.transpose(2, 0, 1)
-#     img = np.ascontiguousarray(img[::-1])
-#     img = torch.from_numpy(img)
-#     return img
+def convert_optimizer_state_dict_to_fp16(state_dict) -> dict:
+    for state in state_dict["state"].values():
+        for k, v in state.items():
+            if k != "step" and isinstance(v, torch.Tensor) and v.dtype is torch.float32:
+                state[k] = v.half()
 
-
-
+    return state_dict
