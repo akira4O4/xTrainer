@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from loguru import logger
 from mlflow import log_metric, set_experiment
-from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from trainerx.core.lr_scheduler import LRSchedulerWrapper
@@ -23,13 +22,14 @@ from trainerx import (
     DEFAULT_OPTIMIZER
 )
 from trainerx.core.balanced_batch_sampler import BalancedBatchSampler
-from trainerx.core.builder import (
-    build_loss_forward,
+
+from trainerx.core.model import Model
+from trainerx.core.optim import (
+    AMPOptimWrapper,
+    OptimWrapper,
     build_optimizer_wrapper,
     build_amp_optimizer_wrapper
 )
-from trainerx.core.model import Model
-from trainerx.core.optim import AMPOptimWrapper, OptimWrapper
 from trainerx.dataset.classification import ClassificationDataset
 from trainerx.dataset.segmentation import SegmentationDataSet
 from trainerx.utils.common import (
@@ -341,11 +341,11 @@ class Trainer:
             self.segmentation_loss = SegmentationLoss()
             logger.info('Build Segmentation Loss.')
 
-    def to_device(self, data: torch.Tensor) -> torch.Tensor:
-        if self.model.is_cpu:
-            return data
-        else:
+    def sync_device(self, data: torch.Tensor) -> torch.Tensor:
+        if self.model.is_gpu:
             return data.cuda(self.model.device, non_blocking=True)
+        else:
+            return data
 
     def run(self) -> None:
         while self.epoch < CONFIG('epochs'):
@@ -384,30 +384,30 @@ class Trainer:
             dataloaders.append(self.seg_train_dl)
 
         datas: tuple
+
         for curr_step, datas in enumerate(zip(*dataloaders)):
+
             if self.task.MT:
                 cls_data, seg_data = datas
             else:
-                cls_data = seg_data = datas[0]  # cls or seg training
+                cls_data = seg_data = datas[0]
 
-            input_data = None
-            if self.task.CLS:
-                input_data = cls_data
+            cls_loss = 0
+            seg_loss = 0
 
-            if self.task.SEG:
-                input_data = seg_data
+            if self.task.CLS or self.task.MT:
+                images, targets = cls_data
+                images = self.sync_device(images)
+                targets = self.sync_device(targets)
+                cls_loss = self._classification_train(images, targets)
 
-            images, targets = input_data
-            images = self.to_device(images)
-            targets = self.to_device(targets)
-
-            # Train ----------------------------------------------------------------------------------------------------
-            cls_loss = self._classification_train(images, targets)
-            seg_loss = self._segmentation_train(images, targets)
+            if self.task.SEG or self.task.MT:
+                images, targets = seg_data
+                images = self.sync_device(images)
+                targets = self.sync_device(targets)
+                seg_loss = self._segmentation_train(images, targets)
 
             final_loss = self.loss_sum([cls_loss, seg_loss])
-
-            # self.update_training_performance_to_mlflow('batch_size')
 
             # loss backward
             # optimizer step

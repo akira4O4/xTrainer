@@ -7,7 +7,9 @@ from torch.cuda.amp import GradScaler
 
 __all__ = [
     'OptimWrapper',
-    'AMPOptimWrapper'
+    'AMPOptimWrapper',
+    'build_optimizer_wrapper',
+    'build_amp_optimizer_wrapper'
 ]
 
 
@@ -113,3 +115,22 @@ class AMPOptimWrapper(OptimWrapper):
         from torch.cuda.amp import autocast
         with autocast():
             yield
+
+
+def build_optimizer(name: str, **kwargs) -> Optimizer:
+    optim = torch.optim.__dict__.get(name)
+    assert optim is not None
+    optimizer = optim(**kwargs)
+    return optimizer
+
+
+def build_optimizer_wrapper(name: str, **kwargs) -> OptimWrapper:
+    optimizer = build_optimizer(name, **kwargs)
+    optimizer_wrapper = OptimWrapper(optimizer=optimizer)
+    return optimizer_wrapper
+
+
+def build_amp_optimizer_wrapper(name: str, **kwargs) -> AMPOptimWrapper:
+    optimizer = build_optimizer(name, **kwargs)
+    amp_optimizer_wrapper = AMPOptimWrapper(optimizer=optimizer)
+    return amp_optimizer_wrapper
