@@ -35,7 +35,7 @@ class LRSchedulerWrapper:
     def func(self):
         return self.scheduler
 
-    def __call__(self, epoch: Optional[int] = None):
+    def update(self, epoch: Optional[int] = None):
         self.scheduler.step(epoch)
 
 

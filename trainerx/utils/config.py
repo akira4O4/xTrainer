@@ -38,7 +38,3 @@ class Config:
             self._metadata = load_yaml(self._path)
         elif subfix == '.json':
             self._metadata = load_json(self._path)
-
-
-if __name__ == '__main__':
-    ...

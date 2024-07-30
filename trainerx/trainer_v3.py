@@ -46,7 +46,7 @@ from trainerx.utils.data_tracker import (
     ValTracker,
     # LossTracker
 )
-from trainerx.utils.performance import calc_performance
+from trainerx.utils.perf import calc_performance
 from trainerx.utils.task import Task
 from trainerx.core.loss import ClassificationLoss, SegmentationLoss
 from trainerx.utils.torch_utils import (
@@ -61,9 +61,8 @@ class Trainer:
 
         self.epoch = 0
 
-        self.project_root_path: str = CONFIG('project')
-        self.weight_path: str = ''
-        self.output_path: str = ''
+        self.weight_path: str = ''  # project/weight
+        self.experiment_path: str = ''  # project/experiment
         self.init_workspace()
 
         # Init Data Logger ---------------------------------------------------------------------------------------------
@@ -161,7 +160,7 @@ class Trainer:
         self.weight_path = os.path.join(CONFIG('project'), 'weights')
         check_dir(self.weight_path)
 
-        self.output_path = os.path.join(CONFIG('project'), 'temp')
+        self.experiment_path = os.path.join(CONFIG('project'), 'experiment')
         check_dir(self.output_path)
 
     @staticmethod
@@ -343,7 +342,7 @@ class Trainer:
             self.segmentation_loss = SegmentationLoss()
             logger.info('Build Segmentation Loss.')
 
-    def sync_device(self, data: torch.Tensor) -> torch.Tensor:
+    def to_device(self, data: torch.Tensor) -> torch.Tensor:
         if self.model.is_gpu:
             return data.cuda(self.model.device, non_blocking=True)
         else:
@@ -399,14 +398,14 @@ class Trainer:
 
             if self.task.CLS or self.task.MT:
                 images, targets = cls_data
-                images = self.sync_device(images)
-                targets = self.sync_device(targets)
+                images = self.to_device(images)
+                targets = self.to_device(targets)
                 cls_loss = self._classification_train(images, targets)
 
             if self.task.SEG or self.task.MT:
                 images, targets = seg_data
-                images = self.sync_device(images)
-                targets = self.sync_device(targets)
+                images = self.to_device(images)
+                targets = self.to_device(targets)
                 seg_loss = self._segmentation_train(images, targets)
 
             final_loss = self.loss_sum([cls_loss, seg_loss])
@@ -414,20 +413,22 @@ class Trainer:
             # 1.loss backward
             # 2.optimizer step
             # 3.optimizer zero_grad
-            with self.optimizer.context():
-                self.optimizer(final_loss)  # auto running
 
-            self.lr_scheduler()  # auto running
+            with self.optimizer.context() as opt:
+                # self.optimizer.update(final_loss)
+                opt.update(final_loss)
+
+            self.lr_scheduler.update()
 
             # if self.scheduler_step_in_batch is True:
             #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
 
             # Easy info display
-            if curr_step % 20 == 0:
-                print(
-                    f'🚀[Training] Epoch:[{self.epoch}/{CONFIG("epochs")}] '
-                    f'Step:[{curr_step}/{self.total_step}]...'
-                )
+            # if curr_step % 20 == 0:
+            #     print(
+            #         f'🚀[Training] Epoch:[{self.epoch}/{CONFIG("epochs")}] '
+            #         f'Step:[{curr_step}/{self.total_step}]...'
+            #     )
 
     def _classification_train(self, images: torch.Tensor, target: torch.Tensor):
         with self.optimizer.context():
@@ -455,8 +456,8 @@ class Trainer:
 
         for data in tqdm(self.cls_val_dl):
             images, targets = data
-            images = self.sync_device(images)
-            targets = self.sync_device(targets)
+            images = self.to_device(images)
+            targets = self.to_device(targets)
 
             pred = self.model(images)
             # performance: dict = calc_performance(
@@ -474,8 +475,8 @@ class Trainer:
     def _segmentation_val(self) -> None:
         for data in tqdm(self.seg_val_dl):
             images, targets = data
-            images = self.sync_device(images)
-            targets = self.sync_device(targets)
+            images = self.to_device(images)
+            targets = self.to_device(targets)
 
             pred = self.model(images)
             # performance: dict = calc_performance(

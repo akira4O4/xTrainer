@@ -1,0 +1,237 @@
+from typing import Optional, List, Tuple
+import torch
+import numpy as np
+
+
+def topk_accuracy(
+    output: torch.Tensor,
+    target: torch.Tensor,
+    topk: Tuple[int, ...] = (1,)
+) -> List[float]:
+    """Computes the top-k accuracy for the specified values of k
+
+    Args:
+        output (torch.Tensor): The model output with shape (batch_size, num_classes).
+        target (torch.Tensor): The ground truth labels with shape (batch_size).
+        topk (Tuple[int, ...]): A tuple specifying the top-k accuracies to compute.
+
+    Returns:
+        List[float]: A list of top-k accuracy values.
+    """
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    # 获取预测分数最高的 k 个索引
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()  # 转置以适应 target 的形状
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res: List[float] = []
+    for k in topk:
+        correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+        res.append(correct_k.mul_(100.0 / batch_size).item())
+    return res
+
+
+def iou_per_class(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> List[float]:
+    """Computes IoU for each class.
+
+    Args:
+        pred (torch.Tensor): The predicted segmentation map with shape (H, W).
+        target (torch.Tensor): The ground truth segmentation map with shape (H, W).
+        num_classes (int): The number of classes including the background.
+
+    Returns:
+        List[float]: A list containing IoU for each class.
+    """
+    ious = []
+    for cls in range(num_classes):
+        pred_cls = pred == cls
+        target_cls = target == cls
+        intersection = (pred_cls & target_cls).sum().float()
+        union = (pred_cls | target_cls).sum().float()
+
+        if union == 0:
+            ious.append(float('nan'))  # If no ground truth exists for this class, ignore it in IoU calculation
+        else:
+            ious.append((intersection / union).item())
+    return ious
+
+
+def nanmean(tensor: torch.Tensor) -> torch.Tensor:
+    """Compute the mean of a tensor, ignoring NaN values."""
+    mask = ~torch.isnan(tensor)
+    return tensor[mask].mean()
+
+
+def mean_iou_v1(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> float:
+    """Computes the mean IoU across all classes.
+
+    Args:
+        pred (torch.Tensor): The predicted segmentation map with shape (H, W).
+        target (torch.Tensor): The ground truth segmentation map with shape (H, W).
+        num_classes (int): The number of classes including the background.
+
+    Returns:
+        float: The mean IoU.
+    """
+    ious = iou_per_class(pred, target, num_classes)
+    return nanmean(torch.tensor(ious)).item()
+
+
+def compute_confusion_matrix_classification(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> torch.Tensor:
+    """Computes the confusion matrix for classification tasks.
+
+    Args:
+        pred (torch.Tensor): The predicted labels with shape (N,) where N is the number of samples.
+        target (torch.Tensor): The ground truth labels with shape (N,) where N is the number of samples.
+        num_classes (int): The number of classes.
+
+    Returns:
+        torch.Tensor: The confusion matrix with shape (num_classes, num_classes).
+    """
+    if pred.size(0) != target.size(0):
+        raise ValueError("The size of pred and target must be the same.")
+
+    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64)
+
+    # Flatten tensors to 1D if they are not already
+    pred = pred.view(-1)
+    target = target.view(-1)
+
+    # Update confusion matrix
+    for t, p in zip(target.tolist(), pred.tolist()):
+        confusion_matrix[t, p] += 1
+
+    return confusion_matrix
+
+
+def compute_confusion_matrix_segmentation(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> np.ndarray:
+    """Computes the confusion matrix for segmentation tasks.
+
+    Args:
+        pred (torch.Tensor): The predicted labels with shape (H, W) or (N, H, W).
+        target (torch.Tensor): The ground truth labels with shape (H, W) or (N, H, W).
+        num_classes (int): The number of classes.
+
+    Returns:
+        np.ndarray: The confusion matrix with shape (num_classes, num_classes).
+    """
+    if pred.dim() == 3:
+        pred = pred.view(-1)
+        target = target.view(-1)
+    elif pred.dim() == 2:
+        pred = pred.flatten()
+        target = target.flatten()
+    else:
+        raise ValueError("Input tensors should be 2D or 3D tensors.")
+
+    confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
+
+    for t, p in zip(target.cpu().numpy(), pred.cpu().numpy()):
+        confusion_matrix[t, p] += 1
+
+    return confusion_matrix
+
+
+def compute_iou_from_confusion(confusion_matrix: np.ndarray) -> List[float]:
+    """Computes IoU for each class from the confusion matrix.
+
+    Args:
+        confusion_matrix (np.ndarray): The confusion matrix with shape (num_classes, num_classes).
+
+    Returns:
+        List[float]: A list containing IoU for each class.
+    """
+    ious = []
+    for cls in range(confusion_matrix.shape[0]):
+        intersection = confusion_matrix[cls, cls]
+        union = confusion_matrix[cls, :].sum() + confusion_matrix[:, cls].sum() - intersection
+        if union == 0:
+            ious.append(float('nan'))  # If no ground truth exists for this class, ignore it in IoU calculation
+        else:
+            ious.append(intersection / union)
+    return ious
+
+
+def mean_iou_v2(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> float:
+    """Computes the mean IoU across all classes.
+
+    Args:
+        pred (torch.Tensor): The predicted segmentation map with shape (H, W).
+        target (torch.Tensor): The ground truth segmentation map with shape (H, W).
+        num_classes (int): The number of classes including the background.
+
+    Returns:
+        float: The mean IoU.
+    """
+    confusion_matrix = compute_confusion_matrix_segmentation(pred, target, num_classes)
+    ious = compute_iou_from_confusion(confusion_matrix)
+    return np.nanmean(ious)
+
+
+if __name__ == '__main__':
+    # num_classes = 3  # 假设有3个类别
+    # pred = torch.tensor([0, 1, 2, 0, 1], dtype=torch.int64)
+    # target = torch.tensor([0, 1, 1, 0, 2], dtype=torch.int64)
+
+    # conf_matrix = compute_confusion_matrix_classification(pred, target, num_classes)
+    # print("Confusion Matrix for Classification:\n", conf_matrix)
+
+    # batch_size = 5
+    # num_classes = 10
+    # topk = (1, 3, 5)
+    #
+    # # 随机生成模型输出和真实标签
+    # torch.manual_seed(0)
+    # output = torch.randn(batch_size, num_classes)
+    # target = torch.randint(0, num_classes, (batch_size,))
+    # print(output.shape)
+    # print(target.shape)
+    #
+    # # 计算 top-k 精度
+    # accuracies = topk_accuracy(output, target, topk)
+    # for k, acc in zip(topk, accuracies):
+    #     print(f"Top-{k} Accuracy: {acc:.2f}%")
+
+    num_classes = 5  # 假设有5个类别，包括背景
+    pred = torch.tensor([
+        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 4]
+    ], dtype=torch.int64)
+
+    target = torch.tensor([
+        [0, 1, 1, 3, 4],
+        [0, 1, 2, 3, 4],
+        [0, 1, 2, 3, 3],
+        [0, 1, 2, 3, 4],
+        [0, 0, 2, 3, 4]
+    ], dtype=torch.int64)
+
+    miou1 = mean_iou_v1(pred, target, num_classes)
+    miou2 = mean_iou_v2(pred, target, num_classes)
+    print(f"Mean IoU 1: {miou1:.4f}")
+    print(f"Mean IoU 2: {miou2:.4f}")
