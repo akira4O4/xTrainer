@@ -172,11 +172,31 @@ def hw_to_hw1(image: np.ndarray) -> np.ndarray:
     return image[:, :, None]
 
 
-def safe_round(arr: np.ndarray, n: int = 0) -> np.ndarray:
-    flag = np.where(arr >= 0, 1, -1)
-    arr = np.abs(arr)
-    arr10 = arr * 10 ** (n + 1)
-    arr20 = np.floor(arr10)
-    arr30 = np.where(arr20 % 10 == 5, (arr20 + 1) / 10 ** (n + 1), arr20 / 10 ** (n + 1))
-    result = np.around(arr30, n)
-    return result * flag
+def safe_round(data: np.ndarray, n: int = 0) -> np.ndarray:
+    """
+    Safely round an array to `n` decimal places, using half-up rounding.
+
+    Parameters:
+        arr (np.ndarray): Input array to be rounded.
+        n (int): Number of decimal places to round to. Default is 0.
+
+    Returns:
+        np.ndarray: Rounded array.
+    """
+
+    # Scale array for rounding
+    scaling_factor = 10 ** (n + 1)
+    scaled_arr = data * scaling_factor
+
+    # Perform rounding
+    rounded_arr = np.floor(scaled_arr + 0.5)  # Add 0.5 for correct rounding
+    result = rounded_arr / scaling_factor
+
+    # Apply original sign
+    return result
+
+
+if __name__ == '__main__':
+    arr = np.array([-0.1234, -0.5678, -0.5555, -0.1, 0.1234, 0.5678, 0.5555, 0.1])
+    rounded_arr = safe_round(arr, n=2)
+    print("Rounded array:", rounded_arr)

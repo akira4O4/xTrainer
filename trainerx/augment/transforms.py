@@ -28,9 +28,9 @@ class NP2PIL:
         return np2pil(image)
 
     def __call__(self, data):
-        if type(data) == np.ndarray:
+        if type(data) is np.ndarray:
             return self._call_1(data)
-        elif type(data) == tuple:
+        elif type(data) is tuple:
             return self._call_2(data)
 
 
@@ -103,9 +103,9 @@ class Resize:
         return image
 
     def __call__(self, data):
-        if type(data) == np.ndarray:
+        if type(data) is np.ndarray:
             return self._call_1(data)
-        elif type(data) == tuple:
+        elif type(data) is tuple:
             return self._call_2(data)
 
 
@@ -142,9 +142,9 @@ class LetterBox:
     # data: (np.ndarray,np.ndarray)
     # data: np.ndarray
     def __call__(self, data):
-        if type(data) == np.ndarray:
+        if type(data) is np.ndarray:
             return self._call_1(data)
-        elif type(data) == tuple:
+        elif type(data) is tuple:
             return self._call_2(data)
 
 

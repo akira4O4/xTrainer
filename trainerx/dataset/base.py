@@ -27,7 +27,7 @@ class BaseDataset(Dataset, ABC):
         self._hw = (wh[1], wh[0])
         self._is_preload = is_preload
         self._loader_type = loader_type
-        self._loader = self.get_image_loader(loader_type)
+        self._load_image = self.get_image_loader(loader_type)
 
         self._transform = transform
         self._target_transform = target_transform
@@ -69,18 +69,17 @@ class BaseDataset(Dataset, ABC):
     def pil_loader(self, path: str) -> Image.Image:
         img = Image.open(path)
 
-        if self.img_type == 'RGB':
-            if img.mode != self.img_type:
-                img = img.convert(self.img_type)
-
-        if self.img_type == 'GRAY':
-            if img.mode != 'L':
-                img = img.convert('L')
+        if self.img_type == 'RGB' and img.mode != 'RGB':
+            img = img.convert('RGB')
+        elif self.img_type == 'GRAY' and img.mode != 'L':
+            img = img.convert('L')
 
         return img
 
     def opencv_loader(self, path: str) -> np.ndarray:
         im = cv2.imread(path)
+        if im is None:
+            raise FileNotFoundError(f'Don`t open image: {path}')
 
         if self.img_type == 'RGB':
             im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
@@ -94,16 +93,23 @@ class BaseDataset(Dataset, ABC):
             return self.opencv_loader
         elif loader_type == 'pil':
             return self.pil_loader
+        else:
+            raise ValueError(f'不支持的加载器类型: {loader_type}')
 
     def label2idx(self, label: str) -> int:
-        assert len(self._labels) >= 0, 'labels is empty.'
-        assert label in self._labels, 'name not in labels'
+        if not self._labels:
+            raise ValueError('标签列表为空。')
+        if label not in self._labels:
+            raise ValueError(f'标签 {label} 不在标签列表中。')
         return self._labels.index(label)
 
     def idx2label(self, idx: int) -> str:
-        assert len(self._labels) >= 0, 'labels is empty.'
-        assert 0 <= idx <= len(self._labels), '0 <= idx <= len(labels)'
+        if not self._labels:
+            raise ValueError('标签列表为空。')
+        if not (0 <= idx < len(self._labels)):
+            raise ValueError(f'索引 {idx} 超出标签列表范围。')
         return self._labels[idx]
 
     def preload(self):
-        ...
+        """此方法需在子类中实现以适应具体的数据加载需求"""
+        pass

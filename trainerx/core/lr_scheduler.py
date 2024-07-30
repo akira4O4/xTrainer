@@ -22,7 +22,7 @@ class LRSchedulerWrapper:
 
     @staticmethod
     def _easy_lr_lambda():
-        return lambda x: 1 / (x / 4 + 1),
+        return lambda x: 1 / (x / 4 + 1)
 
     @staticmethod
     def _cos_lr_lambda(y1: float = 0.0, y2: float = 1.0, steps: int = 100):

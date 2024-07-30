@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 import torch
 import torchvision
@@ -9,15 +9,6 @@ from trainerx import network
 from trainerx.utils.common import error_exit
 
 __all__ = ['Model']
-
-
-# class CheckPoint:
-#     def __init__(self, weight: str):
-#         assert os.path.exists(weight) is True, 'weight path is not found.'
-#         self._weight: dict = torch.load(weight, map_location='cpu')
-#
-#     def __call__(self, key: str):
-#         return self._weight.get(key, None)
 
 
 class Model:
@@ -38,7 +29,7 @@ class Model:
         self._num_classes = num_classes
         self._mask_classes = mask_classes
         self._weight = weight
-        self._checkpoint = {}
+        self._checkpoint: Dict[str, Any] = {}
         self._strict = strict
         self._device = torch.device('cpu')
         self._map_location = map_location
@@ -72,18 +63,12 @@ class Model:
         return self._device
 
     def set_device(self, idx: int) -> None:
-        if torch.cuda.is_available() is False:
-            self._device = torch.device(f'cpu')
+        if not torch.cuda.is_available() or idx == -1:
+            self._device = torch.device('cpu')
             self._is_gpu = False
-
-        elif idx == -1:
-            self._device = torch.device(f'cpu')
-            self._is_gpu = False
-
         else:
             self._device = torch.device(f'cuda:{idx}')
             self._is_gpu = True
-
         logger.info(f'Change device to {self._device}')
 
     @property
@@ -91,7 +76,7 @@ class Model:
         return self._is_gpu
 
     @property
-    def checkpoint(self) -> dict:
+    def checkpoint(self) -> Dict[str, Any]:
         return self._checkpoint
 
     @property

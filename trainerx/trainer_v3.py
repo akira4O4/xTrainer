@@ -502,12 +502,13 @@ class Trainer:
         torch.save(save_dict, save_path)
         logger.success(f'👍 Save weight to: {save_path}.')
 
-    def loss_sum(self, losses: list) -> torch.Tensor:
+    def loss_sum(self, losses: List[torch.Tensor]) -> torch.Tensor:
 
         if len(losses) != len(self.loss_weights):
             logger.error('len(loss_result)!=len(self.losses_weights)')
 
-        ret = 0
+        ret = torch.tensor(0.0, dtype=losses[0].dtype, device=losses[0].device)
+
         for loss, weight in zip(losses, self.loss_weights):
             ret += loss * weight
 

@@ -30,7 +30,6 @@ class SegmentationDataSet(BaseDataset):
         loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
-        # target_transform: Optional[Callable] = None,  # to target
         expanding_rate: Optional[int] = 1,
         is_preload: Optional[bool] = False
     ) -> None:
@@ -60,14 +59,12 @@ class SegmentationDataSet(BaseDataset):
         self._samples_map: List[int] = list(range(len(self._samples)))
 
         self.expanding_data(expanding_rate)
-        self.letterbox = LetterBox(wh)
 
     @staticmethod
     def find_label_path(path: str) -> str:
         basename = os.path.basename(path)
         name, ext = os.path.splitext(basename)
-        label_path = path.replace(ext, '.json')
-        return label_path
+        return path.replace(ext, '.json')
 
     # Load data path
     def load_data(self) -> None:
@@ -110,12 +107,12 @@ class SegmentationDataSet(BaseDataset):
         label: SegLabel
 
         for image, label in tqdm(self.samples_with_label):
-            image.data = self._loader(image.path)
+            image.data = self._load_image(image.path)
             ih, iw = get_image_shape(image)
             label.mask = self.get_mask(label.objects, (ih, iw))
 
         for image, label in tqdm(self.background_samples):
-            image.data = self._loader(image.path)
+            image.data = self._load_image(image.path)
             label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
     # Return mask shape=(input_h,input_w,1,np.uint8)
@@ -124,7 +121,7 @@ class SegmentationDataSet(BaseDataset):
         ih, iw = image_hw[0], image_hw[0]  # image hw
         oh, ow = self._wh[1], self._wh[1]  # input hw
 
-        if objects is None or objects == []:
+        if not objects:
             return np.zeros((oh, ow, 1), dtype=np.uint8)
 
         mask = np.zeros((oh, ow), dtype=np.uint8)
@@ -145,7 +142,7 @@ class SegmentationDataSet(BaseDataset):
 
     @staticmethod
     def polygon2mask(mask: np.ndarray, points: np.ndarray, label_idx: Optional[int] = 0) -> np.ndarray:
-        assert 255 >= label_idx >= 0, '255 >= label_idx >= 0'
+        assert 0 <= label_idx <= 255, '255 >= label_idx >= 0'
         if points.dtype != np.int32:
             points = points.astype(np.int32)
         cv2.fillConvexPoly(mask, points, color=label_idx)  # noqa
@@ -158,11 +155,11 @@ class SegmentationDataSet(BaseDataset):
         label: SegLabel
         image, label = self._samples[sample_idx]
 
-        im = image.data if self._is_preload else self._loader(image.path)
+        im = image.data if self._is_preload else self._load_image(image.path)
         h, w = get_image_shape(im)
         mask = label.mask if self._is_preload else self.get_mask(label.objects, (h, w))
         img_h, img_w = get_image_shape(im)
-        assert img_w > 0 and img_h > 0, f'Error: img_w or img_h <=0'
+        assert img_w > 0 and img_h > 0, 'Error: img_w or img_h <=0'
 
         # input.type=[Image.Image,torch.Tensor]
         data = (im, mask)
