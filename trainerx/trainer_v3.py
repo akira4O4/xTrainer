@@ -38,12 +38,16 @@ from trainerx.utils.common import (
     round8,
     timer,
     check_dir,
-    align_size
+    align_size,
+    get_time,
+    print_of_mt,
+    print_of_seg,
+    print_of_cls
 )
 from trainerx.utils.data_tracker import (
     TrainTracker,
     ValTracker,
-    # LossTracker
+    LossTracker
 )
 # from trainerx.utils.perf import calc_performance
 from trainerx.utils.task import Task
@@ -69,9 +73,9 @@ class Trainer:
         self.init_workspace()
 
         # Init Data Logger ---------------------------------------------------------------------------------------------
-        self.train_tracker = TrainTracker(topk=CONFIG('topk'))  # noqa
-        self.val_tracker = ValTracker(topk=CONFIG('topk'))  # noqa
-        # self.loss_trakcer = LossTracker()
+        self.train_tracker = TrainTracker(topk=np.argmax(CONFIG('topk')))  # noqa
+        self.val_tracker = ValTracker(topk=np.argmax(CONFIG('topk')))  # noqa
+        self.loss_tracker = LossTracker()
 
         # Init work env ------------------------------------------------------------------------------------------------
         init_seeds(CONFIG('seed'))
@@ -158,15 +162,20 @@ class Trainer:
         """
         project
             - experiment1
+                - cls_labels.txt
                 - weights
             - experiment2
+                - seg_labels.txt
                 - weights
         """
-        assert os.path.isdir(CONFIG('project')) is True, 'args.project must be dir.'
+        # assert os.path.isdir(CONFIG('project')) is True, 'args.project must be dir.'
 
         check_dir(CONFIG('project'))
 
-        self.experiment_path = os.path.join(self.weight_path, 'experiment')
+        self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment'))
+        if os.path.exists(self.experiment_path):
+            self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment') + get_time())
+
         check_dir(self.experiment_path)
 
         self.weight_path = os.path.join(self.experiment_path, 'weights')
@@ -174,10 +183,10 @@ class Trainer:
 
     @staticmethod
     def init_mlflow() -> None:
-        if CONFIG('exp_name') == '':
+        if CONFIG('mlflow_experiment_name') == '':
             logger.info(f'MLFlow Experiment Name: Default.')
         else:
-            set_experiment(CONFIG('exp_name'))
+            set_experiment(CONFIG('mlflow_experiment_name'))
             logger.info(f'MLFlow Experiment Name:{CONFIG("exp_name")}.')
 
     def init_model(self) -> None:
@@ -187,9 +196,6 @@ class Trainer:
         if num_classes == mask_classes == 0:
             logger.error("num_classes == mask_classes == 0")
             error_exit()
-
-        if not os.path.exists(CONFIG('weight')):
-            logger.warning(f'{CONFIG("weight")} is not exists.')
 
         self.model = Model(
             CONFIG('model'),
@@ -255,6 +261,7 @@ class Trainer:
             transform=ClsImageT(tuple(CONFIG('wh'))),
             target_transform=ClsTargetT(),
         )
+
         save_yaml(self.cls_train_ds.labels, os.path.join(self.experiment_path, 'cls_labels.yaml'))
 
         # Build BalancedBatchSampler -------------------------------------------------------------------------------
@@ -269,7 +276,7 @@ class Trainer:
         # Build Train DataLoader -----------------------------------------------------------------------------------
         self.cls_train_dl = DataLoader(
             dataset=self.cls_train_ds,
-            batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('batch'),
+            batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('classification')['batch'],
             num_workers=CONFIG('workers'),
             pin_memory=True,
             batch_sampler=balanced_batch_sampler,
@@ -292,7 +299,7 @@ class Trainer:
         # Build Val DataLoader -----------------------------------------------------------------------------------------
         self.cls_val_dl = DataLoader(
             dataset=self.cls_val_ds,
-            batch_size=CONFIG('batch'),
+            batch_size=CONFIG('classification')['batch'],
             num_workers=CONFIG('workers'),
             pin_memory=True,
             shuffle=False
@@ -342,8 +349,9 @@ class Trainer:
     def init_loss(self) -> None:
 
         if self.task.CLS or self.task.MT:
-            alpha = CONFIG('alpha') if not CONFIG('alpha') else [1] * self.model.num_classes
+            alpha = CONFIG('alpha') if CONFIG('alpha') is not None else [1] * self.model.num_classes
             alpha = torch.tensor(alpha, dtype=torch.float)
+            alpha = self.to_device(alpha)
             self.classification_loss = ClassificationLoss(alpha=alpha, gamma=CONFIG('gamma'))
             logger.info('Build Classification Loss.')
 
@@ -361,9 +369,8 @@ class Trainer:
         while self.epoch < CONFIG('epochs'):
 
             # n*train -> k*val -> n*train->...
-            flow: dict
-            for flow in CONFIG('workflow'):
-                mode, times = flow.items()
+            for wf in CONFIG('workflow'):
+                mode, times = wf
                 run_one_epoch = getattr(self, mode)
 
                 for _ in range(times):
@@ -375,17 +382,45 @@ class Trainer:
                     if mode == 'train':
                         self.epoch += 1
                         log_metric('Epoch', self.epoch)
+                        if self.task.MT:
+                            print_of_mt(
+                                self.epoch,
+                                CONFIG('epochs'),
+                                round4(self.loss_tracker.classification.avg),
+                                round4(self.loss_tracker.segmentation.avg),
+                                round4(self.train_tracker.top1.avg),
+                                round4(self.train_tracker.topk.avg),
+                                round4(self.train_tracker.miou.avg)
+                            )
+                        elif self.task.CLS:
+                            print_of_cls(
+                                self.epoch,
+                                CONFIG('epochs'),
+                                round4(self.loss_tracker.classification.avg),
+                                round4(self.train_tracker.top1.avg),
+                                round4(self.train_tracker.topk.avg),
+                            )
+                        elif self.task.SEG:
+                            print_of_seg(
+                                self.epoch,
+                                CONFIG('epochs'),
+                                round4(self.loss_tracker.segmentation.avg),
+                                round4(self.train_tracker.miou.avg)
+                            )
+
+                        self.train_tracker.reset()
+
 
                     elif mode == 'val':
                         ...
 
-    @timer
+    # @timer
     def train(self) -> None:
 
         self.model.train()
 
-        self.curr_lr = round8(sum(self.optimizer.lrs) / len(self.optimizer.lrs))
-        log_metric('Lr', self.curr_lr)
+        # self.curr_lr = round8(sum(self.optimizer.lrs) / len(self.optimizer.lrs))
+        # log_metric('Lr', self.curr_lr)
 
         dataloaders: List[DataLoader] = []
         if self.task.CLS or self.task.MT:
@@ -427,31 +462,55 @@ class Trainer:
                 # self.optimizer.update(final_loss)
                 opt.update(final_loss)
 
-            self.lr_scheduler.update()
+        self.lr_scheduler.update()
 
             # if self.scheduler_step_in_batch is True:
             #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
 
-            # Easy info display
-            # if curr_step % 20 == 0:
-            #     print(
-            #         f'🚀[Training] Epoch:[{self.epoch}/{CONFIG("epochs")}] '
-            #         f'Step:[{curr_step}/{self.total_step}]...'
-            #     )
-
-    def _classification_train(self, images: torch.Tensor, target: torch.Tensor):
+    def _classification_train(self, images: torch.Tensor, targets: torch.Tensor):
         with self.optimizer.context():
             pred = self.model(images)
-            loss = self.classification_loss(pred, target)  # noqa
+            if self.task.MT:
+                pred = pred[0][0]  # [[cls1,cls2],[seg1,seg2,...]]
+            loss = self.classification_loss(pred, targets)  # noqa
+
+        topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
+
+        maxk = max(CONFIG("topk"))
+        maxk_idx = np.argmax(CONFIG("topk"))
+
+        top1_val = topk[0]
+        topk_val = topk[maxk_idx]
+
+        self.train_tracker.top1.add(top1_val)
+        self.train_tracker.topk.add(topk_val)
+        self.loss_tracker.classification.add(loss.cpu().detach())
+
+        log_metric('Train Batch Top1', top1_val)
+        log_metric(f'Train Batch Top{maxk}', topk_val)
+
         return loss
 
-    def _segmentation_train(self, images: torch.Tensor, target: torch.Tensor):
+    def _segmentation_train(self, images: torch.Tensor, targets: torch.Tensor):
         with self.optimizer.context():
             pred = self.model(images)
-            loss = self.segmentation_loss(pred, target)  # noqa
+
+            if self.task.MT:
+                pred = pred[1][0]  # [[cls1,cls2],[seg1,seg2,...]]
+            elif self.task.SEG:
+                pred = pred[0]  # [seg1,seg2,...]
+
+            loss = self.segmentation_loss(pred, targets)  # noqa
+
+        miou: float = mean_iou_v1(pred, targets, self.model.mask_classes)
+        self.train_tracker.miou.add(miou)
+        self.loss_tracker.segmentation.add(loss.cpu().detach())
+
+        log_metric('Train Batch MIoU', miou)
+
         return loss
 
-    @timer
+    # @timer
     def val(self) -> None:
         self.model.eval()
 
@@ -463,19 +522,31 @@ class Trainer:
 
     def _classification_val(self) -> None:
 
+        maxk: int = max(CONFIG("topk"))
+        maxk_idx = np.argmax(CONFIG("topk"))
+
         for data in tqdm(self.cls_val_dl):
             images, targets = data
             images = self.to_device(images)
             targets = self.to_device(targets)
 
             pred = self.model(images)
+
+            if self.task.MT:
+                pred = pred[0][0]  # [[cls1,cls2],[seg1,seg2,...]]
+
             topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
 
-            self.val_tracker.top1.add(topk[0])
-            self.val_tracker.topk.add(topk[CONFIG('topk')])
+            top1_val = topk[0]
+            topk_val = topk[maxk_idx]
 
-            log_metric('Val Batch Top1', topk[0])
-            log_metric(f'Val Batch Top{CONFIG("topk")}', topk[CONFIG('topk')])
+            self.val_tracker.top1.add(top1_val)
+            self.val_tracker.topk.add(topk_val)
+
+        total_top1: float = self.val_tracker.top1.avg  # i.e.60%
+        total_topk: float = self.val_tracker.topk.avg  # i.e.80%
+        log_metric('Val Epoch Top1', total_top1)
+        log_metric(f'Val Epoch Top{maxk}', total_topk)
 
     def _segmentation_val(self) -> None:
         for data in tqdm(self.seg_val_dl):
@@ -484,10 +555,17 @@ class Trainer:
             targets = self.to_device(targets)
 
             pred = self.model(images)
+
+            if self.task.MT:
+                pred = pred[1][0]  # [[cls1,cls2],[seg1,seg2,...]]
+            elif self.task.SEG:
+                pred = pred[0]  # [seg1,seg2,...]
+
             miou: float = mean_iou_v1(pred, targets, self.model.mask_classes)
             self.val_tracker.miou.add(miou)
 
-            log_metric('Val Batch MIoU', miou)
+        total_miou: float = self.val_tracker.miou.avg
+        log_metric('Val Epoch MIoU', total_miou)
 
     def save_model(self, save_path: str) -> None:
 

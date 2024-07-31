@@ -37,17 +37,17 @@ class BaseT:
 
 # Classification Transform ---------------------------------------------------------------------------------------------
 class ClsImageT(BaseT):
-    def __init__(self, wh: Tuple[int, int]):
+    def __init__(self, wh: Tuple[int, int], only_scaledown: bool = False):
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         hw = (wh[1], wh[0])
         self.ops = [
-            LetterBox(wh),
+            LetterBox(wh, only_scaledown),
             NP2PIL(),
             T.RandomResizedCrop(hw),
             T.RandomHorizontalFlip(),
             T.RandomVerticalFlip(),
-            T.RandAugment(interpolation=Image.BILINEAR),  # noqa
+            T.RandAugment(interpolation=T.InterpolationMode.BILINEAR),  # noqa
             T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.7, hue=0.015),
         ]
         self.ops += self.default_ops
@@ -70,11 +70,11 @@ class ClsTargetT(BaseT):
 
 
 class ClsValT(BaseT):
-    def __init__(self, wh: Tuple[int, int]) -> None:
+    def __init__(self, wh: Tuple[int, int], only_scaledown: bool = False) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self.ops = [
-            LetterBox(wh),
+            LetterBox(wh, only_scaledown),
             NP2PIL()
         ]
         self.ops += self.default_ops
@@ -87,11 +87,16 @@ class ClsValT(BaseT):
 
 # Segmentation Transform -----------------------------------------------------------------------------------------------
 class SegImageT(BaseT):
-    def __init__(self, wh: Tuple[int, int], half: Optional[bool] = False) -> None:
+    def __init__(
+        self,
+        wh: Tuple[int, int],
+        half: Optional[bool] = False,
+        only_scaledown: bool = False
+    ) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self.ops = [
-            LetterBox(wh),
+            LetterBox(wh, only_scaledown),
             RandomHSV(),
             RandomFlip(direction="vertical"),
             RandomFlip(direction="horizontal"),
@@ -106,11 +111,11 @@ class SegImageT(BaseT):
 
 
 class SegValT(BaseT):
-    def __init__(self, wh: Tuple[int, int]) -> None:
+    def __init__(self, wh: Tuple[int, int], only_scaledown: bool = False) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self.ops = [
-            LetterBox(wh),
+            LetterBox(wh, only_scaledown),
             ToTensor(),
             Normalize()
         ]

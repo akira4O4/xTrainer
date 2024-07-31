@@ -1,28 +1,30 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
-task: multitask  #classification segmentation multitask
-project: v3project #project_path or project_name
-experiment: 'exp1'
+task: classification  #classification segmentation multitask
+project: v3_classification #project_path or project_name
+experiment: 'exp'
+
 #Train setting----------------------------------------------------------------------------------------------------------
 device: 0 #-1=cpu
 seed: 0
-topk: 2
-epochs: 10
+topk: [ 1,2 ]
+epochs: 100
 workers: 2
-workflow: [ { train: 1 } , { val: 1 } ]
+workflow: [ [ train,1 ] , [ val,1 ] ]
 model: shufflenet_v2_x1_0 #i.e. shufflenet_v2_x1_0 segmentation_shufflenetplus_v2_x1_0  multi_task_shufflenetplus_v2_x1_0
-weight: ''
+weight: 'model.pth'
 pretrained: True
-wh: [ 480,480 ]
+wh: [ 288,288 ]
+only_scaledown: False
 balanced_batch_sampler: True
 preload: True
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
   batch: 8
-  classes: 3
-  train: 'D:\dataset\cls\train100\train'
-  val: 'D:\dataset\cls\train100\val'
+  classes: 2
+  train: D:\llf\dataset\dog_cat\1280\train
+  val: D:\llf\dataset\dog_cat\1280\val
 
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
@@ -54,4 +56,4 @@ seg_thr: ''
 # MlFlow setting--------------------------------------------------------------------------------------------------------
 mlflow_uri: localhost
 mlflow_port: 5000
-mlflow_experiment_name: multi_task
+mlflow_experiment_name: classification

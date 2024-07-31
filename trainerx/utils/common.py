@@ -196,6 +196,78 @@ def safe_round(data: np.ndarray, n: int = 0) -> np.ndarray:
     return result
 
 
+def print_of_cls(
+    epoch: int,
+    epochs: int,
+    cls_loss: float,
+    top1: float,
+    topk: float,
+    width: int = 12
+):
+    print(
+        f'{"Epoch":>{width}}'
+        f'{"cls_loss":>{width}}'
+        f'{"Top1":>{width}}'
+        f'{"TopK":>{width}}'
+    )
+    epoch_progress = f'{epoch}/{epochs}'
+    print(
+        f'{epoch_progress:>{width}}'
+        f'{cls_loss:>{width}}'
+        f'{top1:>{width}}'
+        f'{topk:>{width}}'
+    )
+
+
+def print_of_seg(
+    epoch: int,
+    epochs: int,
+    seg_loss: float,
+    miou: float,
+    width: int = 12
+):
+    epoch_progress = f'{epoch}/{epochs}'
+    print(
+        f'{"Epoch":>{width}}'
+        f'{"seg_loss":>{width}}'
+        f'{"MIoU":>{width}}'
+    )
+    print(
+        f'{epoch_progress:>{width}}'
+        f'{seg_loss:>{width}}'
+        f'{miou:>{width}}'
+    )
+
+
+def print_of_mt(
+    epoch: int,
+    epochs: int,
+    cls_loss: float,
+    seg_loss: float,
+    top1: float,
+    topk: float,
+    miou: float,
+    width: int = 12
+):
+    print(
+        f'{"Epoch":>{width}}'
+        f'{"cls_loss":>{width}}'
+        f'{"seg_loss":>{width}}'
+        f'{"Top1":>{width}}'
+        f'{"TopK":>{width}}'
+        f'{"MIoU":>{width}}'
+    )
+    epoch_progress = f'{epoch}/{epochs}'
+    print(
+        f'{epoch_progress:>{width}}'
+        f'{cls_loss:>{width}}'
+        f'{seg_loss:>{width}}'
+        f'{top1:>{width}}'
+        f'{topk:>{width}}'
+        f'{miou:>{width}}\n'
+    )
+
+
 if __name__ == '__main__':
     arr = np.array([-0.1234, -0.5678, -0.5555, -0.1, 0.1234, 0.5678, 0.5555, 0.1])
     rounded_arr = safe_round(arr, n=2)

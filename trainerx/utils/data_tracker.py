@@ -41,11 +41,16 @@ class DataTracker:
 
 
 class TrainTracker:
-    def __init__(self, name: str = 'TrainTracker', topk: int = TopK):  # noqa
+    def __init__(self, name: str = 'TrainTracker', topk: int = 2):  # noqa
         self.name = name
         self.top1 = DataTracker(f'Train Top1')
         self.topk = DataTracker(f'Train Top{topk}')  # noqa
         self.miou = DataTracker(f'Train MIoU')  # noqa
+
+    def reset(self) -> None:
+        self.top1.reset()
+        self.topk.reset()
+        self.miou.reset()
 
 
 class ValTracker:
@@ -55,9 +60,18 @@ class ValTracker:
         self.topk = DataTracker(f'Val Top{topk}')  # noqa
         self.miou = DataTracker(f'Val MIoU')  # noqa
 
+    def reset(self) -> None:
+        self.top1.reset()
+        self.topk.reset()
+        self.miou.reset()
+
 
 class LossTracker:
     def __init__(self, name: str = 'LossTracker'):
         self.name = name
         self.classification = DataTracker('Classification')
         self.segmentation = DataTracker('Segmentation')
+
+    def reset(self) -> None:
+        self.classification.reset()
+        self.segmentation.reset()

@@ -67,10 +67,11 @@ def resize(
 def letterbox(
     image: np.ndarray,
     wh: Tuple[int, int],
-    only_scaledown: Optional[bool] = True,
-    pad_value: Tuple[int, int, int] = None
+    only_scaledown: Optional[bool] = False,
+    pad_value: Tuple[int, int, int] = (114, 114, 114)
 ) -> np.ndarray:
-    assert isinstance(image, np.ndarray) is True, 'input image.type must be np.ndarray.'
+    assert isinstance(image, np.ndarray), 'input image.type must be np.ndarray.'
+
     ih, iw = image.shape[:2]
 
     new_w, new_h = wh[0], wh[1]
@@ -84,7 +85,8 @@ def letterbox(
     # Compute padding
     # ratio = r, r  # width, height ratios
     pad_w, pad_h = int(round(iw * r)), int(round(ih * r))
-    dw, dh = iw - pad_w, ih - pad_h  # wh padding
+    # dw, dh = iw - pad_w, ih - pad_h  # wh padding
+    dw, dh = new_w - pad_w, new_h - pad_h  # wh padding
 
     dw /= 2
     dh /= 2
@@ -102,7 +104,7 @@ def letterbox(
         top, bottom,
         left, right,
         cv2.BORDER_CONSTANT,
-        value=(114, 114, 114) if pad_value is None else pad_value
+        value=pad_value
     )
     return image
 

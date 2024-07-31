@@ -212,21 +212,21 @@ if __name__ == '__main__':
     # conf_matrix = compute_confusion_matrix_classification(pred, target, num_classes)
     # print("Confusion Matrix for Classification:\n", conf_matrix)
 
-    # batch_size = 5
-    # num_classes = 10
-    # topk = (1, 3, 5)
-    #
-    # # 随机生成模型输出和真实标签
-    # torch.manual_seed(0)
-    # output = torch.randn(batch_size, num_classes)
-    # target = torch.randint(0, num_classes, (batch_size,))
-    # print(output.shape)
-    # print(target.shape)
-    #
-    # # 计算 top-k 精度
-    # accuracies = topk_accuracy(output, target, topk)
-    # for k, acc in zip(topk, accuracies):
-    #     print(f"Top-{k} Accuracy: {acc:.2f}%")
+    batch_size = 5
+    num_classes = 10
+    topk = (1, 3, 5)
+
+    # 随机生成模型输出和真实标签
+    torch.manual_seed(0)
+    output = torch.randn(batch_size, num_classes)
+    target = torch.randint(0, num_classes, (batch_size,))
+    print(output.shape)
+    print(target.shape)
+
+    # 计算 top-k 精度
+    accuracies = topk_accuracy(output, target, topk)
+    for k, acc in zip(topk, accuracies):
+        print(f"Top-{k} Accuracy: {acc:.2f}%")
 
     num_classes = 5  # 假设有5个类别，包括背景
     pred = torch.tensor([

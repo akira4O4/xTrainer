@@ -13,7 +13,6 @@ from .functional import (
     random_flip,
     resize,
     letterbox,
-    to_tensor
 )
 
 
@@ -110,7 +109,7 @@ class Resize:
 
 
 class LetterBox:
-    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+    def __init__(self, wh: Tuple[int, int], only_scaledown=False):
         self.wh = wh
         self.only_scaledown = only_scaledown
 
