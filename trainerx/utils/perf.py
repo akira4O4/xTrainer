@@ -1,6 +1,16 @@
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 import torch
 import numpy as np
+
+__all__ = [
+    'topk_accuracy',
+    'safe_mean',
+    'mean_iou_v1',
+    'mean_iou_v2',
+    'compute_confusion_matrix_classification',
+    'compute_confusion_matrix_segmentation',
+    ''
+]
 
 
 def topk_accuracy(
@@ -19,16 +29,17 @@ def topk_accuracy(
         List[float]: A list of top-k accuracy values.
     """
     maxk = max(topk)
-    batch_size = target.size(0)
+    batch_size = target.size(0)  # (N,C)
 
     # 获取预测分数最高的 k 个索引
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()  # 转置以适应 target 的形状
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    values, indices = output.topk(maxk, 1, True, True)
+    indices = indices.t()  # 转置以适应 target 的形状 (N,C)->(C,N)
+    expand_target = target.view(1, -1).expand_as(indices)  # (1,N)->(C,N)
+    correct = indices.eq(expand_target)
 
     res: List[float] = []
     for k in topk:
-        correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+        correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)  # top-k result
         res.append(correct_k.mul_(100.0 / batch_size).item())
     return res
 
@@ -62,8 +73,11 @@ def iou_per_class(
     return ious
 
 
-def nanmean(tensor: torch.Tensor) -> torch.Tensor:
+def safe_mean(tensor: torch.Tensor) -> torch.Tensor:
     """Compute the mean of a tensor, ignoring NaN values."""
+    # data=[1,Nan,2,Nan]
+    # mask=[True,False,True,False]
+    # mean=[1,2].mean()
     mask = ~torch.isnan(tensor)
     return tensor[mask].mean()
 
@@ -84,7 +98,7 @@ def mean_iou_v1(
         float: The mean IoU.
     """
     ious = iou_per_class(pred, target, num_classes)
-    return nanmean(torch.tensor(ious)).item()
+    return safe_mean(torch.tensor(ious)).item()
 
 
 def compute_confusion_matrix_classification(
@@ -107,7 +121,6 @@ def compute_confusion_matrix_classification(
 
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64)
 
-    # Flatten tensors to 1D if they are not already
     pred = pred.view(-1)
     target = target.view(-1)
 
@@ -160,8 +173,9 @@ def compute_iou_from_confusion(confusion_matrix: np.ndarray) -> List[float]:
         List[float]: A list containing IoU for each class.
     """
     ious = []
-    for cls in range(confusion_matrix.shape[0]):
-        intersection = confusion_matrix[cls, cls]
+    nc: int = confusion_matrix.shape[0]  # num of classes
+    for cls in range(nc):
+        intersection = confusion_matrix[cls, cls]  # 对角线数值
         union = confusion_matrix[cls, :].sum() + confusion_matrix[:, cls].sum() - intersection
         if union == 0:
             ious.append(float('nan'))  # If no ground truth exists for this class, ignore it in IoU calculation
@@ -187,14 +201,14 @@ def mean_iou_v2(
     """
     confusion_matrix = compute_confusion_matrix_segmentation(pred, target, num_classes)
     ious = compute_iou_from_confusion(confusion_matrix)
-    return np.nanmean(ious)
+    return float(np.nanmean(ious))
 
 
 if __name__ == '__main__':
     # num_classes = 3  # 假设有3个类别
     # pred = torch.tensor([0, 1, 2, 0, 1], dtype=torch.int64)
     # target = torch.tensor([0, 1, 1, 0, 2], dtype=torch.int64)
-
+    #
     # conf_matrix = compute_confusion_matrix_classification(pred, target, num_classes)
     # print("Confusion Matrix for Classification:\n", conf_matrix)
 
@@ -222,6 +236,7 @@ if __name__ == '__main__':
         [0, 1, 2, 3, 4],
         [0, 1, 2, 3, 4]
     ], dtype=torch.int64)
+    # pred = torch.zeros((num_classes, num_classes))
 
     target = torch.tensor([
         [0, 1, 1, 3, 4],

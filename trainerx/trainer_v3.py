@@ -21,7 +21,6 @@ from trainerx import (
     CONFIG,
     DEFAULT_OPTIMIZER
 )
-from trainerx.core.balanced_batch_sampler import BalancedBatchSampler
 
 from trainerx.core.model import Model
 from trainerx.core.optim import (
@@ -30,7 +29,7 @@ from trainerx.core.optim import (
     build_optimizer_wrapper,
     build_amp_optimizer_wrapper
 )
-from trainerx.dataset.classification import ClassificationDataset
+from trainerx.dataset.classification import ClassificationDataset, BalancedBatchSampler
 from trainerx.dataset.segmentation import SegmentationDataSet
 from trainerx.utils.common import (
     save_yaml,
@@ -46,13 +45,17 @@ from trainerx.utils.data_tracker import (
     ValTracker,
     # LossTracker
 )
-from trainerx.utils.perf import calc_performance
+# from trainerx.utils.perf import calc_performance
 from trainerx.utils.task import Task
 from trainerx.core.loss import ClassificationLoss, SegmentationLoss
 from trainerx.utils.torch_utils import (
     init_seeds,
     init_backends_cudnn,
     convert_optimizer_state_dict_to_fp16
+)
+from trainerx.utils.perf import (
+    topk_accuracy,
+    mean_iou_v1
 )
 
 
@@ -151,17 +154,23 @@ class Trainer:
         self.init_mlflow()
         logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
 
-    # TODO
     def init_workspace(self) -> None:
+        """
+        project
+            - experiment1
+                - weights
+            - experiment2
+                - weights
+        """
         assert os.path.isdir(CONFIG('project')) is True, 'args.project must be dir.'
 
         check_dir(CONFIG('project'))
 
-        self.weight_path = os.path.join(CONFIG('project'), 'weights')
-        check_dir(self.weight_path)
+        self.experiment_path = os.path.join(self.weight_path, 'experiment')
+        check_dir(self.experiment_path)
 
-        self.experiment_path = os.path.join(CONFIG('project'), 'experiment')
-        check_dir(self.output_path)
+        self.weight_path = os.path.join(self.experiment_path, 'weights')
+        check_dir(self.weight_path)
 
     @staticmethod
     def init_mlflow() -> None:
@@ -246,7 +255,7 @@ class Trainer:
             transform=ClsImageT(tuple(CONFIG('wh'))),
             target_transform=ClsTargetT(),
         )
-        save_yaml(self.cls_train_ds.labels, os.path.join(self.output_path, 'cls_labels.yaml'))
+        save_yaml(self.cls_train_ds.labels, os.path.join(self.experiment_path, 'cls_labels.yaml'))
 
         # Build BalancedBatchSampler -------------------------------------------------------------------------------
         balanced_batch_sampler = None
@@ -301,7 +310,7 @@ class Trainer:
 
         save_yaml(
             self.seg_train_ds.labels,
-            os.path.join(self.output_path, 'seg_labels.yaml')
+            os.path.join(self.experiment_path, 'seg_labels.yaml')
         )
         self.seg_train_dl = DataLoader(
             dataset=self.seg_train_ds,
@@ -460,17 +469,13 @@ class Trainer:
             targets = self.to_device(targets)
 
             pred = self.model(images)
-            # performance: dict = calc_performance(
-            #     task=Task.CLS,
-            #     topk=self.train_args.topk,
-            #     model_output=model_output,
-            #     targets=targets
-            # )
-            # self.val_top1_data_logger.update(performance['top1'])
-            # self.val_topk_data_logger.update(performance['topk'])
+            topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
 
-        # log_metric('Val Epoch Top1', self.val_top1_data_logger.avg)
-        # log_metric(f'Val Epoch Top{self.train_args.topk}', self.val_topk_data_logger.avg)
+            self.val_tracker.top1.add(topk[0])
+            self.val_tracker.topk.add(topk[CONFIG('topk')])
+
+            log_metric('Val Batch Top1', topk[0])
+            log_metric(f'Val Batch Top{CONFIG("topk")}', topk[CONFIG('topk')])
 
     def _segmentation_val(self) -> None:
         for data in tqdm(self.seg_val_dl):
@@ -479,15 +484,10 @@ class Trainer:
             targets = self.to_device(targets)
 
             pred = self.model(images)
-            # performance: dict = calc_performance(
-            #     task=Task.SEG,
-            #     model_output=model_output,
-            #     targets=targets,
-            #     mask_classes=self.model.mask_classes
-            # )
-            # self.val_miou_data_logger.update(performance['miou'])
+            miou: float = mean_iou_v1(pred, targets, self.model.mask_classes)
+            self.val_tracker.miou.add(miou)
 
-        # log_metric('Val Epoch MIoU', self.val_miou_data_logger.avg)
+            log_metric('Val Batch MIoU', miou)
 
     def save_model(self, save_path: str) -> None:
 

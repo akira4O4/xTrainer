@@ -2,7 +2,7 @@
 mode: train           #train test
 task: multitask  #classification segmentation multitask
 project: v3project #project_path or project_name
-
+experiment: 'exp1'
 #Train setting----------------------------------------------------------------------------------------------------------
 device: 0 #-1=cpu
 seed: 0

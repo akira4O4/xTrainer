@@ -88,7 +88,7 @@ def error_exit() -> None:
 
 
 def check_dir(path: str, clean: bool = False) -> None:
-    if not os.path.exists(path):
+    if os.path.exists(path) is False:
         os.makedirs(path)
     else:
         if clean:

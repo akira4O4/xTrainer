@@ -86,32 +86,67 @@ class ClassificationLoss(FocalLoss):
         super().__init__(alpha, gamma)
 
 
+class DiceLoss(nn.Module):
+    def __init__(self, smooth: float = 1e-6) -> None:
+        super(DiceLoss, self).__init__()
+        self.smooth = smooth
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        # Apply sigmoid to inputs if they are logits
+        inputs = torch.sigmoid(inputs)
+
+        # Flatten inputs and targets
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
+
+        # Calculate intersection and union
+        intersection = (inputs * targets).sum()
+        total = (inputs + targets).sum()
+
+        # Calculate Dice coefficient
+        dice_coeff = (2. * intersection + self.smooth) / (total + self.smooth)
+
+        # Calculate Dice loss
+        dice_loss = 1 - dice_coeff
+
+        return dice_loss
+
+
 class SegmentationLoss:
     def __init__(self):
         ...
 
 
 if __name__ == "__main__":
-    import numpy as np
+    criterion: nn.Module = DiceLoss()
 
-    bs, nc, X1, X2 = 32, 4, 100, 200
-    pred = np.random.randn(bs, nc, X1, X2)
-    pred_logit1 = torch.tensor(pred, dtype=torch.float, requires_grad=True)
-    pred_logit2 = torch.tensor(pred, dtype=torch.float, requires_grad=True)
+    inputs: torch.Tensor = torch.randn(1, 1, 256, 256, requires_grad=True)  # Example prediction
+    targets: torch.Tensor = torch.randint(0, 2, (1, 1, 256, 256)).float()  # Example ground truth
 
-    target = np.random.randint(0, nc, size=(bs, X1, X2))
-    target = torch.tensor(target, dtype=torch.long)
+    loss: torch.Tensor = criterion(inputs, targets)
 
-    alpha = np.abs(np.random.randn(nc))
-    alpha = torch.tensor(alpha, dtype=torch.float)
+    print("Dice Loss:", loss.item())
 
-    loss1 = FocalLoss(gamma=0.0, alpha=alpha)(pred_logit1, target)
-    loss1.backward()
-
-    loss2 = F.cross_entropy(pred_logit2, target, weight=alpha)
-    loss2.backward()
-
-    print(loss1)
-    print(loss2)
-    print(pred_logit1.grad[1, 2, 3, 4])
-    print(pred_logit2.grad[1, 2, 3, 4])
+    # import numpy as np
+    #
+    # bs, nc, X1, X2 = 32, 4, 100, 200
+    # pred = np.random.randn(bs, nc, X1, X2)
+    # pred_logit1 = torch.tensor(pred, dtype=torch.float, requires_grad=True)
+    # pred_logit2 = torch.tensor(pred, dtype=torch.float, requires_grad=True)
+    #
+    # target = np.random.randint(0, nc, size=(bs, X1, X2))
+    # target = torch.tensor(target, dtype=torch.long)
+    #
+    # alpha = np.abs(np.random.randn(nc))
+    # alpha = torch.tensor(alpha, dtype=torch.float)
+    #
+    # loss1 = FocalLoss(gamma=0.0, alpha=alpha)(pred_logit1, target)
+    # loss1.backward()
+    #
+    # loss2 = F.cross_entropy(pred_logit2, target, weight=alpha)
+    # loss2.backward()
+    #
+    # print(loss1)
+    # print(loss2)
+    # print(pred_logit1.grad[1, 2, 3, 4])
+    # print(pred_logit2.grad[1, 2, 3, 4])
