@@ -7,7 +7,7 @@ from PIL import Image
 
 from torchvision.transforms import functional as F
 from imgaug import augmenters as iaa
-from trainerx.utils.common import np2pil, hwc2chw
+from xtrainer.utils.common import np2pil, hwc2chw
 from .functional import (
     random_hsv,
     random_flip,

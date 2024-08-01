@@ -5,8 +5,8 @@ import torch
 import torchvision
 from loguru import logger
 
-from trainerx import network
-from trainerx.utils.common import error_exit
+from xtrainer import network
+from xtrainer.utils.common import error_exit
 
 __all__ = ['Model']
 

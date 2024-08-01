@@ -1,23 +1,18 @@
 import os
 from typing import Optional, Callable, List, Union, Tuple
 
-import cv2
 import numpy as np
 import torch
 from loguru import logger
 from tqdm import tqdm
 
-from trainerx.dataset import Image, SegLabel
-from trainerx.dataset.base import BaseDataset
-from trainerx.core.preprocess import LetterBox
-from trainerx.utils.common import (
+from xtrainer.dataset import Image, SegLabel
+from xtrainer.dataset.base import BaseDataset
+from xtrainer.utils.common import (
     load_json,
     get_images,
     get_image_shape,
-    np2pil,
-    pil2np,
     hw_to_hw1,
-    hw_to_1hw,
     safe_round
 )
 
@@ -172,7 +167,7 @@ class SegmentationDataSet(BaseDataset):
 
 
 if __name__ == '__main__':
-    from trainerx.core.preprocess import SegImageT
+    from xtrainer.core.preprocess import SegImageT
     from torch.utils.data import DataLoader
     from time import time
     import cv2

@@ -1,5 +1,4 @@
 import numpy as np
-from trainerx import TopK
 
 
 class DataTracker:
@@ -54,7 +53,7 @@ class TrainTracker:
 
 
 class ValTracker:
-    def __init__(self, name: str = 'ValTracker', topk: int = TopK):  # noqa
+    def __init__(self, name: str = 'ValTracker', topk: int = 2):  # noqa
         self.name = name
         self.top1 = DataTracker(f'Val Top1')
         self.topk = DataTracker(f'Val Top{topk}')  # noqa

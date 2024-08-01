@@ -1,7 +1,7 @@
 import argparse
 from loguru import logger
-from trainerx import CONFIG, OS, VERSION
-from trainerx.trainer_v3 import Trainer
+from xtrainer import CONFIG, OS, VERSION
+from xtrainer.trainer import Trainer
 
 if __name__ == '__main__':
     logger.info(f'OS: {OS}')

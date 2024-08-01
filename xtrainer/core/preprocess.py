@@ -2,10 +2,9 @@ from typing import Tuple, Optional
 
 import torch
 import numpy as np
-from PIL import Image
 import torchvision.transforms as T
 
-from trainerx.augment.transforms import (
+from xtrainer.augment.transforms import (
     RandomFlip,
     RandomHSV,
     NP2PIL,

@@ -1,13 +1,13 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
 task: classification  #classification segmentation multitask
-project: v3_classification #project_path or project_name
+project: project/v3_classification #project_path or project_name
 experiment: 'exp'
 
 #Train setting----------------------------------------------------------------------------------------------------------
-device: 0 #-1=cpu
 seed: 0
 topk: [ 1,2 ]
+device: 0 #-1=cpu
 epochs: 100
 workers: 2
 workflow: [ [ train,1 ] , [ val,1 ] ]
@@ -16,15 +16,15 @@ weight: 'model.pth'
 pretrained: True
 wh: [ 288,288 ]
 amp: True
-deterministic: True
 preload: True
+deterministic: True
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
   batch: 8
   classes: 2
-  train: D:\llf\dataset\dog_cat\1280\train
-  val: D:\llf\dataset\dog_cat\1280\val
+  train: D:\llf\dataset\dog_cat\128\train
+  val: D:\llf\dataset\dog_cat\128\val
 
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:

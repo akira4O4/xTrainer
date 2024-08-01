@@ -8,14 +8,19 @@ from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
-from trainerx.dataset import Image
-from trainerx.dataset.base import BaseDataset
-from trainerx.utils.common import get_images
+from xtrainer.dataset import Image
+from xtrainer.dataset.base import BaseDataset
+from xtrainer.utils.common import get_images
 from torch.utils.data import Sampler
 
 
 class BalancedBatchSampler(Sampler):
-    def __init__(self, labels: torch.Tensor, n_classes: int, n_samples: int):
+    def __init__(
+        self,
+        labels: torch.Tensor,
+        n_classes: int,
+        n_samples: int
+    ):
         super(BalancedBatchSampler, self).__init__(data_source=None)
         self.labels = labels
         self.labels_set = list(set(self.labels.numpy()))
@@ -84,6 +89,7 @@ class ClassificationDataset(BaseDataset):
 
         logger.info(f'Load data ...')
         self.load_data()
+
         if self._is_preload:
             logger.info(f'Preload image data ...')
             self.preload()
@@ -139,7 +145,7 @@ class ClassificationDataset(BaseDataset):
 
 
 if __name__ == '__main__':
-    from trainerx.core.preprocess import ClsImageT, ClsTargetT
+    from xtrainer.core.preprocess import ClsImageT, ClsTargetT
     from torch.utils.data import DataLoader
     from time import time
     import cv2

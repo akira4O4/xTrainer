@@ -3,7 +3,7 @@ import platform
 import numpy as np
 import torch
 
-from trainerx.utils.config import Config
+from xtrainer.utils.config import Config
 
 try:
     with open("VERSION", "r") as f:
@@ -13,7 +13,6 @@ except FileNotFoundError:
 
 CONFIG = Config()
 
-TopK: int = 2
 NoArgs = None
 DEFAULT_WORKSPACE: str = 'project'
 DEFAULT_OPTIMIZER: str = 'AdamW'

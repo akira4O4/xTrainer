@@ -1,15 +1,17 @@
-import math
 import os
-from typing import Union, List, Optional, Any
+import math
 from copy import deepcopy
-import numpy as np
+from typing import Union, List
+
 import torch
-from loguru import logger
-from mlflow import log_metric, set_experiment
-from torch.utils.data import DataLoader
+import numpy as np
 from tqdm import tqdm
-from trainerx.core.lr_scheduler import LRSchedulerWrapper
-from trainerx.core.preprocess import (
+from loguru import logger
+from torch.utils.data import DataLoader
+from mlflow import log_metric, set_experiment
+
+from xtrainer.core.lr_scheduler import LRSchedulerWrapper
+from xtrainer.core.preprocess import (
     ClsImageT,
     ClsTargetT,
     ClsValT,
@@ -17,25 +19,23 @@ from trainerx.core.preprocess import (
     SegValT
 )
 
-from trainerx import (
-    CONFIG,
-    DEFAULT_OPTIMIZER
-)
+from xtrainer import CONFIG, DEFAULT_OPTIMIZER
 
-from trainerx.core.model import Model
-from trainerx.core.optim import (
+from xtrainer.core.model import Model
+from xtrainer.core.optim import (
     AMPOptimWrapper,
     OptimWrapper,
     build_optimizer_wrapper,
     build_amp_optimizer_wrapper
 )
-from trainerx.dataset.classification import ClassificationDataset, BalancedBatchSampler
-from trainerx.dataset.segmentation import SegmentationDataSet
-from trainerx.utils.common import (
+
+from xtrainer.dataset.segmentation import SegmentationDataSet
+from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSampler
+
+from xtrainer.utils.common import (
     save_yaml,
     error_exit,
     round4,
-    round8,
     timer,
     check_dir,
     align_size,
@@ -44,21 +44,22 @@ from trainerx.utils.common import (
     print_of_seg,
     print_of_cls
 )
-from trainerx.utils.tracker import (
+
+from xtrainer.core.loss import ClassificationLoss, SegmentationLoss
+from xtrainer.utils.task import Task
+from xtrainer.utils.perf import (
+    topk_accuracy,
+    mean_iou_v1
+)
+from xtrainer.utils.tracker import (
     TrainTracker,
     ValTracker,
     LossTracker
 )
-from trainerx.utils.task import Task
-from trainerx.core.loss import ClassificationLoss, SegmentationLoss
-from trainerx.utils.torch_utils import (
+from xtrainer.utils.torch_utils import (
     init_seeds,
     init_backends_cudnn,
     convert_optimizer_state_dict_to_fp16
-)
-from trainerx.utils.perf import (
-    topk_accuracy,
-    mean_iou_v1
 )
 
 
@@ -114,9 +115,6 @@ class Trainer:
 
             self.cls_val_ds: ClassificationDataset = None  # noqa
             self.cls_val_dl: DataLoader = None  # noqa
-
-            if not os.path.exists(CONFIG('classification')['train']): ...
-            if not os.path.exists(CONFIG('classification')['val']): ...
 
             self.build_classification_ds_dl()
 
@@ -524,7 +522,7 @@ class Trainer:
         maxk: int = max(CONFIG("topk"))
         maxk_idx = np.argmax(CONFIG("topk"))
 
-        for data in tqdm(self.cls_val_dl, ncols=100, position=0, dynamic_ncols=True):
+        for data in tqdm(self.cls_val_dl, desc='Val: ', ncols=100, position=0, dynamic_ncols=True):
             images, targets = data
             images = self.to_device(images)
             targets = self.to_device(targets)
