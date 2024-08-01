@@ -164,11 +164,14 @@ class ClassificationDataset(BaseDataset):
         self._samples_map: List[int] = list(range(len(self._samples)))
 
         if expanding_rate > 1:
-            self._samples_map *= expanding_rate
-            self.targets *= expanding_rate
+            self.expand_data(expanding_rate)
 
         if len(self._samples) == 0:
             logger.warning(f"Found 0 files in sub folders of: {self._root}\n")
+
+    def expand_data(self, rate: int) -> None:
+        self._samples_map *= rate
+        self.targets *= rate
 
     def find_labels(self) -> None:
         for d in os.scandir(self._root):

@@ -53,7 +53,10 @@ class SegmentationDataSet(BaseDataset):
         self._samples_map: List[int] = list(range(len(self._samples)))
 
         if expanding_rate > 1:
-            self._samples_map *= expanding_rate
+            self.expand_data(expanding_rate)
+
+    def expand_data(self, rate: int) -> None:
+        self._samples_map *= rate
 
     @staticmethod
     def find_label_path(path: str) -> str:

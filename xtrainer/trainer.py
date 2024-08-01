@@ -140,8 +140,8 @@ class Trainer:
         # Expand dataset -----------------------------------------------------------------------------------------------
         if self.task.MT:
             rate1, rate2 = align_size(self.cls_train_ds.real_data_size, self.seg_train_ds.real_data_size)
-            self.cls_train_ds.expanding_data(rate1)
-            self.seg_train_ds.expanding_data(rate2)
+            self.cls_train_ds.expand_data(rate1)
+            self.seg_train_ds.expand_data(rate2)
             logger.info(f'Expanding classification dataset to: {self.cls_train_ds.real_data_size}x{rate1}')
             logger.info(f'Expanding segmentation dataset to: {self.seg_train_ds.real_data_size}x{rate2}')
 
