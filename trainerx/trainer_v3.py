@@ -44,12 +44,11 @@ from trainerx.utils.common import (
     print_of_seg,
     print_of_cls
 )
-from trainerx.utils.data_tracker import (
+from trainerx.utils.tracker import (
     TrainTracker,
     ValTracker,
     LossTracker
 )
-# from trainerx.utils.perf import calc_performance
 from trainerx.utils.task import Task
 from trainerx.core.loss import ClassificationLoss, SegmentationLoss
 from trainerx.utils.torch_utils import (
@@ -464,8 +463,8 @@ class Trainer:
 
         self.lr_scheduler.update()
 
-            # if self.scheduler_step_in_batch is True:
-            #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
+        # if self.scheduler_step_in_batch is True:
+        #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
 
     def _classification_train(self, images: torch.Tensor, targets: torch.Tensor):
         with self.optimizer.context():
@@ -525,7 +524,7 @@ class Trainer:
         maxk: int = max(CONFIG("topk"))
         maxk_idx = np.argmax(CONFIG("topk"))
 
-        for data in tqdm(self.cls_val_dl):
+        for data in tqdm(self.cls_val_dl, ncols=100, position=0, dynamic_ncols=True):
             images, targets = data
             images = self.to_device(images)
             targets = self.to_device(targets)
@@ -549,7 +548,7 @@ class Trainer:
         log_metric(f'Val Epoch Top{maxk}', total_topk)
 
     def _segmentation_val(self) -> None:
-        for data in tqdm(self.seg_val_dl):
+        for data in tqdm(self.seg_val_dl, ncols=100, position=0, dynamic_ncols=True):
             images, targets = data
             images = self.to_device(images)
             targets = self.to_device(targets)
