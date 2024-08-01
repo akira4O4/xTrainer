@@ -12,8 +12,8 @@ epochs: 100
 workers: 2
 workflow: [ [ train,1 ] , [ val,1 ] ]
 model: shufflenet_v2_x1_0 #i.e. shufflenet_v2_x1_0 segmentation_shufflenetplus_v2_x1_0  multi_task_shufflenetplus_v2_x1_0
-weight: 'model.pth'
 pretrained: True
+weight: model.pth
 wh: [ 288,288 ]
 amp: True
 preload: True
@@ -28,18 +28,17 @@ classification:
 
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
-  batch: 8
+  batch: 2
   classes: 6
   train: 'D:\llf\dataset\danyang\training_data\E\seg'
   val: 'D:\llf\dataset\danyang\training_data\E\seg'
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
-optimizer: AUTO
+optimizer: auto
 cos_lr: True
 lr0: 0.01 # (float) initial learning rate
 lrf: 0.01 # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
-#FocalLoss alpha gamma
 alpha: null
 gamma: 0
 loss_weights: [ 1,1 ] #[classification.weight segmentation.weight]

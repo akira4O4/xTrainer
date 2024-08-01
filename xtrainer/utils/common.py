@@ -200,6 +200,7 @@ def print_of_cls(
     epoch: int,
     epochs: int,
     cls_loss: float,
+    lr: float,
     top1: float,
     topk: float,
     width: int = 12
@@ -207,6 +208,7 @@ def print_of_cls(
     print(
         f'{"Epoch":>{width}}'
         f'{"cls_loss":>{width}}'
+        f'{"lr":>{width}}'
         f'{"Top1":>{width}}'
         f'{"TopK":>{width}}'
     )
@@ -214,6 +216,7 @@ def print_of_cls(
     print(
         f'{epoch_progress:>{width}}'
         f'{cls_loss:>{width}}'
+        f'{lr:>{width}}'
         f'{top1:>{width}}'
         f'{topk:>{width}}'
     )
@@ -223,6 +226,7 @@ def print_of_seg(
     epoch: int,
     epochs: int,
     seg_loss: float,
+    lr: float,
     miou: float,
     width: int = 12
 ):
@@ -230,11 +234,13 @@ def print_of_seg(
     print(
         f'{"Epoch":>{width}}'
         f'{"seg_loss":>{width}}'
+        f'{"lr":>{width}}'
         f'{"MIoU":>{width}}'
     )
     print(
         f'{epoch_progress:>{width}}'
         f'{seg_loss:>{width}}'
+        f'{lr:>{width}}'
         f'{miou:>{width}}'
     )
 
@@ -244,6 +250,7 @@ def print_of_mt(
     epochs: int,
     cls_loss: float,
     seg_loss: float,
+    lr: float,
     top1: float,
     topk: float,
     miou: float,
@@ -253,6 +260,7 @@ def print_of_mt(
         f'{"Epoch":>{width}}'
         f'{"cls_loss":>{width}}'
         f'{"seg_loss":>{width}}'
+        f'{"lr":>{width}}'
         f'{"Top1":>{width}}'
         f'{"TopK":>{width}}'
         f'{"MIoU":>{width}}'
@@ -262,6 +270,7 @@ def print_of_mt(
         f'{epoch_progress:>{width}}'
         f'{cls_loss:>{width}}'
         f'{seg_loss:>{width}}'
+        f'{lr:>{width}}'
         f'{top1:>{width}}'
         f'{topk:>{width}}'
         f'{miou:>{width}}\n'

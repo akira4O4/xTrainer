@@ -34,7 +34,6 @@ class SegmentationDataSet(BaseDataset):
             loader_type=loader_type,
             img_type=img_type,
             transform=transform,
-            # target_transform=target_transform,
             is_preload=is_preload
         )
 
@@ -53,7 +52,8 @@ class SegmentationDataSet(BaseDataset):
         self._samples = self.samples_with_label + self.background_samples
         self._samples_map: List[int] = list(range(len(self._samples)))
 
-        self.expanding_data(expanding_rate)
+        if expanding_rate > 1:
+            self._samples_map *= expanding_rate
 
     @staticmethod
     def find_label_path(path: str) -> str:

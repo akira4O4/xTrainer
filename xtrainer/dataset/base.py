@@ -61,11 +61,6 @@ class BaseDataset(Dataset, ABC):
     def set_target_transform(self, val) -> None:
         self._target_transform = val
 
-    def expanding_data(self, rate: int = 0) -> None:
-        assert len(self._samples_map) != 0, f'Data samples is empty.'
-        assert rate != 0, f'rate == 0.'
-        self._samples_map *= rate
-
     def pil_loader(self, path: str) -> Image.Image:
         img = Image.open(path)
 

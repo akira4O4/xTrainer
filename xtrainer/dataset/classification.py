@@ -1,5 +1,7 @@
 import os
 import random
+from abc import ABC
+from collections import defaultdict
 from typing import Optional, Callable, Tuple, List
 
 import numpy as np
@@ -14,28 +16,35 @@ from xtrainer.utils.common import get_images
 from torch.utils.data import Sampler
 
 
-class BalancedBatchSampler(Sampler):
+# old
+class BalancedBatchSamplerV0(Sampler):
     def __init__(
         self,
-        labels: torch.Tensor,
+        labels: list,
         n_classes: int,
         n_samples: int
     ):
-        super(BalancedBatchSampler, self).__init__(data_source=None)
-        self.labels = labels
-        self.labels_set = list(set(self.labels.numpy()))
-        self.label_to_indices = {
-            label: np.where(self.labels.numpy() == label)[0] for label in self.labels_set
-        }
-        for l in self.labels_set:
-            np.random.shuffle(self.label_to_indices[l])
-        # This dict keeps track of how many samples have been used for each label
-        self.used_label_indices_count = {label: 0 for label in self.labels_set}
+        super(BalancedBatchSamplerV0, self).__init__(data_source=None)
         self.count = 0
+        self.labels = np.array(labels)
         self.n_classes = n_classes
         self.n_samples = n_samples
         self.n_dataset = len(self.labels)
         self.batch_size = self.n_samples * self.n_classes
+
+        self.labels_set = list(set(self.labels))
+
+        # 0:[idx1,idx2,...]
+        # 1:[idx1,idx2,...]
+        self.label_to_indices = {
+            label: np.where(self.labels == label)[0] for label in self.labels_set
+        }
+
+        for i in self.labels_set:
+            np.random.shuffle(self.label_to_indices[i])
+
+        # This dict keeps track of how many samples have been used for each label
+        self.used_label_indices_count = {label: 0 for label in self.labels_set}
 
     def __iter__(self):
         self.count = 0
@@ -59,6 +68,63 @@ class BalancedBatchSampler(Sampler):
 
     def __len__(self):
         return self.n_dataset // self.batch_size
+
+
+class BalancedBatchSamplerV1(Sampler):
+    def __init__(
+        self,
+        labels: list,
+        batch_size: int
+    ) -> None:
+        super().__init__(None)
+        self.labels = labels
+        self.batch_size = batch_size
+        self.label_to_indices = defaultdict(list)
+
+        '''{
+        0:[idx1,idx2,...],
+        1:[],
+        2:[],
+        ...
+        }'''
+
+        for idx, label in enumerate(labels):
+            self.label_to_indices[label].append(idx)
+
+        self.nc = len(self.label_to_indices)  # nc!= model.classes
+        self.image_per_nc = self.batch_size // self.nc  # images per num of classes
+
+        self.batches = self._create_batches()
+
+    def _create_batches(self) -> list:
+        # Shuffle the indices within each label
+        for label in self.label_to_indices:
+            np.random.shuffle(self.label_to_indices[label])
+
+        min_samples = min(len(indices) for indices in self.label_to_indices.values())
+
+        # num_batches=最少数据的类别最小可以分几份
+        num_batches = min_samples // self.image_per_nc
+
+        # bss=[bs,bs,bs,...]
+        batches = []
+        for _ in range(num_batches):
+            batch = []
+            for label in self.label_to_indices:
+                batch.extend(self.label_to_indices[label][:self.image_per_nc])
+                self.label_to_indices[label] = self.label_to_indices[label][self.image_per_nc:]
+            np.random.shuffle(batch)
+            batches.append(batch)
+
+        return batches
+
+    def __iter__(self):
+        np.random.shuffle(self.batches)
+        for batch in self.batches:
+            yield batch
+
+    def __len__(self) -> int:
+        return len(self.batches)
 
 
 class ClassificationDataset(BaseDataset):
@@ -94,11 +160,13 @@ class ClassificationDataset(BaseDataset):
             logger.info(f'Preload image data ...')
             self.preload()
 
+        self.targets = [s[1] for s in self._samples]
         self._samples_map: List[int] = list(range(len(self._samples)))
 
-        self.expanding_data(expanding_rate)
+        if expanding_rate > 1:
+            self._samples_map *= expanding_rate
+            self.targets *= expanding_rate
 
-        self.targets = [s[1] for s in self._samples]
         if len(self._samples) == 0:
             logger.warning(f"Found 0 files in sub folders of: {self._root}\n")
 

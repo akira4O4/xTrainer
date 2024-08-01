@@ -8,7 +8,6 @@ if __name__ == '__main__':
     logger.info(f'Version: {VERSION}')
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-cfg',
         '--config',
         type=str,
         default=r'configs\default.yaml',

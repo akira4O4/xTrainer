@@ -72,7 +72,7 @@ class RandomFlip:
 
 
 class Resize:
-    def __init__(self, wh: Tuple[int, int], only_scaledown=True):
+    def __init__(self, wh: Tuple[int, int], only_scaledown=False):
         self.wh = wh
         self.only_scaledown = only_scaledown
 

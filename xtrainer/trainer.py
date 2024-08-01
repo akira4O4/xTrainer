@@ -30,12 +30,13 @@ from xtrainer.core.optim import (
 )
 
 from xtrainer.dataset.segmentation import SegmentationDataSet
-from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSampler
+from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSamplerV1
 
 from xtrainer.utils.common import (
     save_yaml,
     error_exit,
     round4,
+    round8,
     timer,
     check_dir,
     align_size,
@@ -171,7 +172,7 @@ class Trainer:
 
         self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment'))
         if os.path.exists(self.experiment_path):
-            self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment') + get_time())
+            self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment') + '.' + get_time())
 
         check_dir(self.experiment_path)
 
@@ -250,34 +251,39 @@ class Trainer:
         )
 
     def build_classification_ds_dl(self) -> None:
+        wh = tuple(CONFIG('wh'))
+        bs: int = CONFIG('classification')['batch']
+        nc: int = CONFIG('classification')['classes']
 
         # Build Train Dataset --------------------------------------------------------------------------------------
         self.cls_train_ds = ClassificationDataset(
             root=CONFIG('classification')['train'],
-            wh=CONFIG('wh'),
-            transform=ClsImageT(tuple(CONFIG('wh'))),
+            wh=wh,
+            transform=ClsImageT(wh),
             target_transform=ClsTargetT(),
+            expanding_rate=2
         )
 
         save_yaml(self.cls_train_ds.labels, os.path.join(self.experiment_path, 'cls_labels.yaml'))
 
-        # Build BalancedBatchSampler -------------------------------------------------------------------------------
-        balanced_batch_sampler = None
-        if CONFIG('balanced_batch_sampler'):
-            balanced_batch_sampler = BalancedBatchSampler(
-                torch.tensor(self.cls_train_ds.targets),
-                n_classes=self.model.num_classes,
-                n_samples=math.ceil(CONFIG('classification')['batch'] / self.model.num_classes)
+        batch_sampler = None
+        if bs < nc:
+            logger.info('Close BalancedBatchSampler.')
+        else:
+            logger.info('Open BalancedBatchSampler')
+            batch_sampler = BalancedBatchSamplerV1(
+                self.cls_train_ds.targets,
+                batch_size=bs
             )
 
         # Build Train DataLoader -----------------------------------------------------------------------------------
         self.cls_train_dl = DataLoader(
             dataset=self.cls_train_ds,
-            batch_size=1 if CONFIG('balanced_batch_sampler') else CONFIG('classification')['batch'],
+            batch_size=bs if bs < nc else 1,
             num_workers=CONFIG('workers'),
             pin_memory=True,
-            batch_sampler=balanced_batch_sampler,
-            shuffle=False if CONFIG('balanced_batch_sampler') else True,
+            batch_sampler=batch_sampler,
+            shuffle=True if bs < nc else False,
             drop_last=False,
             sampler=None
         )
@@ -287,8 +293,8 @@ class Trainer:
         # Build Val Dataset --------------------------------------------------------------------------------------------
         self.cls_val_ds = ClassificationDataset(
             root=CONFIG('classification')['val'],
-            wh=CONFIG('wh'),
-            transform=ClsValT(tuple(CONFIG('wh'))),
+            wh=wh,
+            transform=ClsValT(wh),
             target_transform=ClsTargetT(),
         )
         logger.info(f'Classification Val data size: {self.cls_val_ds.real_data_size}.')
@@ -296,18 +302,20 @@ class Trainer:
         # Build Val DataLoader -----------------------------------------------------------------------------------------
         self.cls_val_dl = DataLoader(
             dataset=self.cls_val_ds,
-            batch_size=CONFIG('classification')['batch'],
+            batch_size=bs,
             num_workers=CONFIG('workers'),
             pin_memory=True,
             shuffle=False
         )
 
     def build_segmentation_ds_dl(self) -> None:
+        wh = tuple(CONFIG('wh'))
+        bs: int = CONFIG('batch')
 
         self.seg_train_ds = SegmentationDataSet(
             root=CONFIG('segmentation')['train'],
-            wh=CONFIG('wh'),
-            transform=SegImageT(tuple(CONFIG('wh'))),
+            wh=wh,
+            transform=SegImageT(wh),
         )
 
         background_size = len(self.seg_val_ds.background_samples)
@@ -318,7 +326,7 @@ class Trainer:
         )
         self.seg_train_dl = DataLoader(
             dataset=self.seg_train_ds,
-            batch_size=CONFIG('batch'),
+            batch_size=bs,
             shuffle=False,
             num_workers=CONFIG('workers'),
             pin_memory=True,
@@ -330,12 +338,12 @@ class Trainer:
 
         self.seg_val_ds = SegmentationDataSet(
             root=CONFIG('segmentation')['val'],
-            wh=CONFIG('wh'),
-            transform=SegValT(tuple(CONFIG('wh'))),
+            wh=wh,
+            transform=SegValT(wh),
         )
         self.seg_val_dl = DataLoader(
             dataset=self.seg_val_ds,
-            batch_size=CONFIG('batch'),
+            batch_size=bs,
             shuffle=False,
             num_workers=CONFIG('workers'),
             pin_memory=True,
@@ -385,6 +393,7 @@ class Trainer:
                                 CONFIG('epochs'),
                                 round4(self.loss_tracker.classification.avg),
                                 round4(self.loss_tracker.segmentation.avg),
+                                round8(self.optimizer.lrs[0]),
                                 round4(self.train_tracker.top1.avg),
                                 round4(self.train_tracker.topk.avg),
                                 round4(self.train_tracker.miou.avg)
@@ -394,6 +403,7 @@ class Trainer:
                                 self.epoch,
                                 CONFIG('epochs'),
                                 round4(self.loss_tracker.classification.avg),
+                                round8(self.optimizer.lrs[0]),
                                 round4(self.train_tracker.top1.avg),
                                 round4(self.train_tracker.topk.avg),
                             )
@@ -402,6 +412,7 @@ class Trainer:
                                 self.epoch,
                                 CONFIG('epochs'),
                                 round4(self.loss_tracker.segmentation.avg),
+                                round8(self.optimizer.lrs[0]),
                                 round4(self.train_tracker.miou.avg)
                             )
 
