@@ -196,85 +196,121 @@ def safe_round(data: np.ndarray, n: int = 0) -> np.ndarray:
     return result
 
 
+FIRE = '🔥'
+ROCKET = '🚀'
+
+
 def print_of_cls(
+    mode: str,
     epoch: int,
     epochs: int,
-    cls_loss: float,
-    lr: float,
-    top1: float,
-    topk: float,
+    cls_loss: float = None,
+    lr: float = None,
+    top1: float = None,
+    topk: float = None,
     width: int = 12
 ):
-    print(
-        f'{"Epoch":>{width}}'
-        f'{"cls_loss":>{width}}'
-        f'{"lr":>{width}}'
-        f'{"Top1":>{width}}'
-        f'{"TopK":>{width}}'
-    )
     epoch_progress = f'{epoch}/{epochs}'
-    print(
-        f'{epoch_progress:>{width}}'
-        f'{cls_loss:>{width}}'
-        f'{lr:>{width}}'
-        f'{top1:>{width}}'
-        f'{topk:>{width}}'
-    )
+    if mode == 'val':
+        print(
+            f'{mode.upper():>{width}}'
+            f'{"---":>{width}}'
+            f'{"---":>{width}}'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}\n'
+        )
+    elif mode == 'train':
+        print(
+            f'{"Epoch":>{width}}'
+            f'{"cls_loss":>{width}}'
+            f'{"lr":>{width}}'
+            f'{"Top1":>{width}}'
+            f'{"TopK":>{width}}'
+        )
+        print(
+            f'{epoch_progress:>{width}}'
+            f'{cls_loss:>{width}}'
+            f'{lr:>{width}}'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}'
+        )
 
 
 def print_of_seg(
+    mode: str,
     epoch: int,
     epochs: int,
-    seg_loss: float,
-    lr: float,
-    miou: float,
+    seg_loss: float = None,
+    lr: float = None,
+    miou: float = None,
     width: int = 12
 ):
     epoch_progress = f'{epoch}/{epochs}'
-    print(
-        f'{"Epoch":>{width}}'
-        f'{"seg_loss":>{width}}'
-        f'{"lr":>{width}}'
-        f'{"MIoU":>{width}}'
-    )
-    print(
-        f'{epoch_progress:>{width}}'
-        f'{seg_loss:>{width}}'
-        f'{lr:>{width}}'
-        f'{miou:>{width}}'
-    )
+    if mode == 'val':
+        print(
+            f'{mode.upper():>{width}}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
+            f'{miou:>{width}}'
+        )
+    elif mode == 'train':
+        print(
+            f'{"Epoch":>{width}}'
+            f'{"seg_loss":>{width}}',
+            f'{"lr":>{width}}'
+            f'{"MIoU":>{width}}'
+        )
+        print(
+            f'{epoch_progress:>{width}}'
+            f'{seg_loss:>{width}}'
+            f'{lr:>{width}}'
+            f'{miou:>{width}}'
+        )
 
 
 def print_of_mt(
+    mode: str,
     epoch: int,
     epochs: int,
-    cls_loss: float,
-    seg_loss: float,
-    lr: float,
-    top1: float,
-    topk: float,
-    miou: float,
+    cls_loss: float = None,
+    seg_loss: float = None,
+    lr: float = None,
+    top1: float = None,
+    topk: float = None,
+    miou: float = None,
     width: int = 12
 ):
-    print(
-        f'{"Epoch":>{width}}'
-        f'{"cls_loss":>{width}}'
-        f'{"seg_loss":>{width}}'
-        f'{"lr":>{width}}'
-        f'{"Top1":>{width}}'
-        f'{"TopK":>{width}}'
-        f'{"MIoU":>{width}}'
-    )
     epoch_progress = f'{epoch}/{epochs}'
-    print(
-        f'{epoch_progress:>{width}}'
-        f'{cls_loss:>{width}}'
-        f'{seg_loss:>{width}}'
-        f'{lr:>{width}}'
-        f'{top1:>{width}}'
-        f'{topk:>{width}}'
-        f'{miou:>{width}}\n'
-    )
+    if mode == 'val':
+        print(
+            f'{mode.upper():>{width}}'
+            f'{"---":>{width}}'
+            f'{"---":>{width}}'
+            f'{"---":>{width}}'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}'
+            f'{miou:>{width}}\n'
+        )
+
+    elif mode == 'train':
+        print(
+            f'{"Epoch":>{width}}'
+            f'{"cls_loss":>{width}}'
+            f'{"seg_loss":>{width}}'
+            f'{"lr":>{width}}'
+            f'{"Top1":>{width}}'
+            f'{"TopK":>{width}}'
+            f'{"MIoU":>{width}}'
+        )
+        print(
+            f'{epoch_progress:>{width}}'
+            f'{cls_loss:>{width}}'
+            f'{seg_loss:>{width}}'
+            f'{lr:>{width}}'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}'
+            f'{miou:>{width}}\n'
+        )
 
 
 if __name__ == '__main__':

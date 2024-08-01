@@ -389,6 +389,7 @@ class Trainer:
                         log_metric('Epoch', self.epoch)
                         if self.task.MT:
                             print_of_mt(
+                                mode,
                                 self.epoch,
                                 CONFIG('epochs'),
                                 round4(self.loss_tracker.classification.avg),
@@ -400,6 +401,7 @@ class Trainer:
                             )
                         elif self.task.CLS:
                             print_of_cls(
+                                mode,
                                 self.epoch,
                                 CONFIG('epochs'),
                                 round4(self.loss_tracker.classification.avg),
@@ -409,6 +411,7 @@ class Trainer:
                             )
                         elif self.task.SEG:
                             print_of_seg(
+                                mode,
                                 self.epoch,
                                 CONFIG('epochs'),
                                 round4(self.loss_tracker.segmentation.avg),
@@ -418,9 +421,33 @@ class Trainer:
 
                         self.train_tracker.reset()
 
-
                     elif mode == 'val':
-                        ...
+                        if self.task.MT:
+                            print_of_mt(
+                                mode=mode,
+                                epoch=self.epoch,
+                                epochs=CONFIG('epochs'),
+                                top1=round4(self.val_tracker.top1.avg),
+                                topk=round4(self.val_tracker.topk.avg),
+                                miou=round4(self.val_tracker.miou.avg)
+                            )
+                        elif self.task.CLS:
+                            print_of_cls(
+                                mode=mode,
+                                epoch=self.epoch,
+                                epochs=CONFIG('epochs'),
+                                top1=round4(self.val_tracker.top1.avg),
+                                topk=round4(self.val_tracker.topk.avg),
+                            )
+                        elif self.task.SEG:
+                            print_of_seg(
+                                mode=mode,
+                                epoch=self.epoch,
+                                epochs=CONFIG('epochs'),
+                                miou=round4(self.val_tracker.miou.avg)
+                            )
+
+                        self.val_tracker.reset()
 
     # @timer
     def train(self) -> None:
@@ -533,7 +560,9 @@ class Trainer:
         maxk: int = max(CONFIG("topk"))
         maxk_idx = np.argmax(CONFIG("topk"))
 
-        for data in tqdm(self.cls_val_dl, desc='Val: ', ncols=100, position=0, dynamic_ncols=True):
+        # pbar = tqdm(self.cls_val_dl, desc='Val: ', position=0, dynamic_ncols=True)
+        pbar = self.cls_val_dl
+        for data in pbar:
             images, targets = data
             images = self.to_device(images)
             targets = self.to_device(targets)
