@@ -94,6 +94,11 @@ class DiceLoss(nn.Module):
     def __init__(self, smooth: float = 1e-6) -> None:
         super(DiceLoss, self).__init__()
         self.smooth = smooth
+
+        # smooth = 1e-6：适用于极小的目标区域，通常能有效防止数值稳定性问题。
+        # smooth = 1.0：适用于一般情况，能够处理小区域并且不引入过大的偏差。
+
+    def forward(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         计算多类别Dice损失。
 
@@ -101,11 +106,6 @@ class DiceLoss(nn.Module):
         :param targets: 真实标签张量，形状为[batch_size, height, width]。
         :return: 计算得到的Dice损失值。
         """
-
-        # smooth = 1e-6：适用于极小的目标区域，通常能有效防止数值稳定性问题。
-        # smooth = 1.0：适用于一般情况，能够处理小区域并且不引入过大的偏差。
-
-    def forward(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         num_classes = outputs.size(1)
         dice = 0
 
@@ -126,18 +126,10 @@ class IoULoss(nn.Module):
     def __init__(self, smooth: float = 1.0) -> None:
         super(IoULoss, self).__init__()
         self.smooth = smooth
-        """
-        计算多类别IoU损失。
-
-        :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
-        :param targets: 真实标签张量，形状为[batch_size, height, width]。
-        :return: 计算得到的IoU损失值。
-        """
 
     def forward(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         计算多类别IoU损失。
-
         :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
         :param targets: 真实标签张量，形状为[batch_size, height, width]。
         :return: 计算得到的IoU损失值。
