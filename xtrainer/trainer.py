@@ -31,7 +31,7 @@ from xtrainer.core.optim import (
 
 from xtrainer.dataset.segmentation import SegmentationDataSet
 from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSamplerV1
-
+from xtrainer.utils.emoji import Emoji
 from xtrainer.utils.common import (
     save_yaml,
     error_exit,
@@ -43,7 +43,8 @@ from xtrainer.utils.common import (
     get_time,
     print_of_mt,
     print_of_seg,
-    print_of_cls
+    print_of_cls,
+    Colors
 )
 
 from xtrainer.core.loss import ClassificationLoss, SegmentationLoss
@@ -373,89 +374,66 @@ class Trainer:
     def run(self) -> None:
         while self.epoch < CONFIG('epochs'):
 
+            
+
             # n*train -> k*val -> n*train->...
             for wf in CONFIG('workflow'):
                 mode, times = wf
                 run_one_epoch = getattr(self, mode)
 
+                assert times >= 0, 'times < 0'
+
+                if mode == 'val' and times > 1:
+                    times = 1
+
                 for _ in range(times):
                     if self.epoch >= CONFIG('epochs'):
+                        print('break')
                         break
 
                     run_one_epoch()  # train() or val()
 
+                    # Display info
+                    if self.task.MT:
+                        cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
+                        seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
+                        lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+                        top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
+                        topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
+                        miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
+
+                        print_of_mt(mode, self.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk, miou)
+
+                    elif self.task.CLS:
+                        cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
+                        lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+                        top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
+                        topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
+
+                        print_of_cls(mode, self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
+
+                    elif self.task.SEG:
+                        seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
+                        lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+                        miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
+
+                        print_of_seg(mode, self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
+
                     if mode == 'train':
                         self.epoch += 1
                         log_metric('Epoch', self.epoch)
-                        if self.task.MT:
-                            print_of_mt(
-                                mode,
-                                self.epoch,
-                                CONFIG('epochs'),
-                                round4(self.loss_tracker.classification.avg),
-                                round4(self.loss_tracker.segmentation.avg),
-                                round8(self.optimizer.lrs[0]),
-                                round4(self.train_tracker.top1.avg),
-                                round4(self.train_tracker.topk.avg),
-                                round4(self.train_tracker.miou.avg)
-                            )
-                        elif self.task.CLS:
-                            print_of_cls(
-                                mode,
-                                self.epoch,
-                                CONFIG('epochs'),
-                                round4(self.loss_tracker.classification.avg),
-                                round8(self.optimizer.lrs[0]),
-                                round4(self.train_tracker.top1.avg),
-                                round4(self.train_tracker.topk.avg),
-                            )
-                        elif self.task.SEG:
-                            print_of_seg(
-                                mode,
-                                self.epoch,
-                                CONFIG('epochs'),
-                                round4(self.loss_tracker.segmentation.avg),
-                                round8(self.optimizer.lrs[0]),
-                                round4(self.train_tracker.miou.avg)
-                            )
 
-                        self.train_tracker.reset()
+                        if self.epoch % CONFIG('save_period') == 0:
+                            self.save_model()
 
-                    elif mode == 'val':
-                        if self.task.MT:
-                            print_of_mt(
-                                mode=mode,
-                                epoch=self.epoch,
-                                epochs=CONFIG('epochs'),
-                                top1=round4(self.val_tracker.top1.avg),
-                                topk=round4(self.val_tracker.topk.avg),
-                                miou=round4(self.val_tracker.miou.avg)
-                            )
-                        elif self.task.CLS:
-                            print_of_cls(
-                                mode=mode,
-                                epoch=self.epoch,
-                                epochs=CONFIG('epochs'),
-                                top1=round4(self.val_tracker.top1.avg),
-                                topk=round4(self.val_tracker.topk.avg),
-                            )
-                        elif self.task.SEG:
-                            print_of_seg(
-                                mode=mode,
-                                epoch=self.epoch,
-                                epochs=CONFIG('epochs'),
-                                miou=round4(self.val_tracker.miou.avg)
-                            )
-
-                        self.val_tracker.reset()
+                    self.train_tracker.reset()
+                    self.val_tracker.reset()
+                    self.loss_tracker.reset()
 
     # @timer
     def train(self) -> None:
 
         self.model.train()
-
-        # self.curr_lr = round8(sum(self.optimizer.lrs) / len(self.optimizer.lrs))
-        # log_metric('Lr', self.curr_lr)
 
         dataloaders: List[DataLoader] = []
         if self.task.CLS or self.task.MT:
@@ -604,7 +582,7 @@ class Trainer:
         total_miou: float = self.val_tracker.miou.avg
         log_metric('Val Epoch MIoU', total_miou)
 
-    def save_model(self, save_path: str) -> None:
+    def save_model(self) -> None:
 
         save_dict = {
             'epoch': self.epoch,
@@ -612,10 +590,12 @@ class Trainer:
             'model_name': self.model.model_name,
             'num_classes': self.model.num_classes,
             'mask_classes': self.model.mask_classes,
-            'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict()))
+            'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict())),
+            'lr': self.optimizer.lrs[0]
         }
+        save_path = os.path.join(self.weight_path, f'epoch{self.epoch}.pth')
         torch.save(save_dict, save_path)
-        logger.success(f'👍 Save weight to: {save_path}.')
+        # print(f'{Emoji.DOWNLOAD}{Colors.GREEN}Save model to: {save_path}.{Colors.ENDC}\n')
 
     def loss_sum(self, losses: List[torch.Tensor]) -> torch.Tensor:
 

@@ -7,6 +7,19 @@ import shutil
 from typing import Optional, List, Tuple, Union
 import numpy as np
 from PIL import Image
+from xtrainer.utils.emoji import Emoji
+
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 def round4(data: float) -> float:
@@ -196,10 +209,6 @@ def safe_round(data: np.ndarray, n: int = 0) -> np.ndarray:
     return result
 
 
-FIRE = '🔥'
-ROCKET = '🚀'
-
-
 def print_of_cls(
     mode: str,
     epoch: int,
@@ -211,28 +220,39 @@ def print_of_cls(
     width: int = 12
 ):
     epoch_progress = f'{epoch}/{epochs}'
-    if mode == 'val':
+
+    if mode == 'train':
         print(
-            f'{mode.upper():>{width}}'
-            f'{"---":>{width}}'
-            f'{"---":>{width}}'
-            f'{top1:>{width}}'
-            f'{topk:>{width}}\n'
-        )
-    elif mode == 'train':
-        print(
+            f'{Colors.GREEN}'
+            f'{"Mode":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"cls_loss":>{width}}'
-            f'{"lr":>{width}}'
+            f'{"LR":>{width}}'
             f'{"Top1":>{width}}'
             f'{"TopK":>{width}}'
+            f'{Colors.ENDC}'
         )
         print(
+            f'{Colors.BLUE}'
+            f'{mode.upper():>{width}}'
+            f'{Colors.ENDC}'
             f'{epoch_progress:>{width}}'
             f'{cls_loss:>{width}}'
             f'{lr:>{width}}'
             f'{top1:>{width}}'
             f'{topk:>{width}}'
+        )
+
+    elif mode == 'val':
+        print(
+            f'{Colors.BLUE}'
+            f'{mode.upper():>{width}}'
+            f'{Colors.ENDC}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}\n'
         )
 
 
@@ -246,24 +266,34 @@ def print_of_seg(
     width: int = 12
 ):
     epoch_progress = f'{epoch}/{epochs}'
-    if mode == 'val':
+
+    if mode == 'train':
         print(
-            f'{mode.upper():>{width}}'
-            f'{"-":>{width}}'
-            f'{"-":>{width}}'
-            f'{miou:>{width}}'
-        )
-    elif mode == 'train':
-        print(
+            f'{Colors.GREEN}'
+            f'{"Mode":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"seg_loss":>{width}}',
             f'{"lr":>{width}}'
             f'{"MIoU":>{width}}'
+            f'{Colors.ENDC}'
         )
         print(
+            f'{Colors.BLUE}'
+            f'{mode.upper():>{width}}'
+            f'{Colors.GREEN}'
             f'{epoch_progress:>{width}}'
             f'{seg_loss:>{width}}'
             f'{lr:>{width}}'
+            f'{miou:>{width}}'
+        )
+    elif mode == 'val':
+        print(
+            f'{Colors.BLUE}'
+            f'{mode.upper():>{width}}'
+            f'{Colors.GREEN}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
             f'{miou:>{width}}'
         )
 
@@ -281,19 +311,11 @@ def print_of_mt(
     width: int = 12
 ):
     epoch_progress = f'{epoch}/{epochs}'
-    if mode == 'val':
-        print(
-            f'{mode.upper():>{width}}'
-            f'{"---":>{width}}'
-            f'{"---":>{width}}'
-            f'{"---":>{width}}'
-            f'{top1:>{width}}'
-            f'{topk:>{width}}'
-            f'{miou:>{width}}\n'
-        )
 
-    elif mode == 'train':
+    if mode == 'train':
         print(
+            f'{Colors.GREEN}'
+            f'{"Mode":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"cls_loss":>{width}}'
             f'{"seg_loss":>{width}}'
@@ -301,12 +323,29 @@ def print_of_mt(
             f'{"Top1":>{width}}'
             f'{"TopK":>{width}}'
             f'{"MIoU":>{width}}'
+            f'{Colors.ENDC}'
         )
         print(
+            f'{Colors.BLUE}'
+            f'{mode.upper():>{width}}'
+            f'{Colors.GREEN}'
             f'{epoch_progress:>{width}}'
             f'{cls_loss:>{width}}'
             f'{seg_loss:>{width}}'
             f'{lr:>{width}}'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}'
+            f'{miou:>{width}}\n'
+        )
+    elif mode == 'val':
+        print(
+            f'{Colors.BLUE}'
+            f'{mode.upper():>{width}}'
+            f'{Colors.ENDC}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
+            f'{"-":>{width}}'
             f'{top1:>{width}}'
             f'{topk:>{width}}'
             f'{miou:>{width}}\n'
