@@ -153,7 +153,6 @@ class ClassificationDataset(BaseDataset):
         # samples=[(Image,1),(Image,0),...]
         self._samples: List[Tuple[Image, int]] = []
 
-        logger.info(f'Load data ...')
         self.load_data()
 
         if self._is_preload:
@@ -180,7 +179,7 @@ class ClassificationDataset(BaseDataset):
         self._labels.sort()
 
     def load_data(self) -> None:
-        for idx in tqdm(range(self.num_of_label)):
+        for idx in tqdm(range(self.num_of_label), desc='Loading data'):
             target_path = os.path.join(self._root, self.idx2label(idx))
 
             images: List[str] = get_images(target_path, self._SUPPORT_IMG_FORMAT)
@@ -191,7 +190,7 @@ class ClassificationDataset(BaseDataset):
 
     def preload(self) -> None:
         image: Image
-        for image, idx in tqdm(self._samples):
+        for image, idx in tqdm(self._samples, desc='Preload to memory'):
             image.data = self._load_image(image.path)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:

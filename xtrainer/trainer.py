@@ -186,7 +186,7 @@ class Trainer:
             logger.info(f'MLFlow Experiment Name: Default.')
         else:
             set_experiment(CONFIG('mlflow_experiment_name'))
-            logger.info(f'MLFlow Experiment Name:{CONFIG("exp_name")}.')
+            logger.info(f'MLFlow Experiment Name:{CONFIG("mlflow_experiment_name")}.')
 
     def init_model(self) -> None:
         num_classes: int = CONFIG('classification')['classes']
@@ -241,7 +241,7 @@ class Trainer:
         else:
             self.optimizer = build_optimizer_wrapper(name, **args)
 
-        logger.success(f'Build Optim: {name}.')
+        logger.info(f'Build Optim: {name}.')
 
     def init_lr_scheduler(self) -> None:
         self.lr_scheduler = LRSchedulerWrapper(
@@ -262,7 +262,7 @@ class Trainer:
             wh=wh,
             transform=ClsImageT(wh),
             target_transform=ClsTargetT(),
-            expanding_rate=2
+            is_preload=CONFIG('preload')
         )
 
         save_yaml(self.cls_train_ds.labels, os.path.join(self.experiment_path, 'cls_labels.yaml'))
@@ -297,6 +297,7 @@ class Trainer:
             wh=wh,
             transform=ClsValT(wh),
             target_transform=ClsTargetT(),
+            is_preload=CONFIG('preload')
         )
         logger.info(f'Classification Val data size: {self.cls_val_ds.real_data_size}.')
 
@@ -317,6 +318,7 @@ class Trainer:
             root=CONFIG('segmentation')['train'],
             wh=wh,
             transform=SegImageT(wh),
+            is_preload=CONFIG('preload')
         )
 
         background_size = len(self.seg_val_ds.background_samples)
@@ -341,6 +343,7 @@ class Trainer:
             root=CONFIG('segmentation')['val'],
             wh=wh,
             transform=SegValT(wh),
+            is_preload=CONFIG('preload')
         )
         self.seg_val_dl = DataLoader(
             dataset=self.seg_val_ds,
@@ -373,62 +376,103 @@ class Trainer:
 
     def run(self) -> None:
         while self.epoch < CONFIG('epochs'):
-
-            
-
-            # n*train -> k*val -> n*train->...
-            for wf in CONFIG('workflow'):
-                mode, times = wf
+            for mode in ['train', 'val']:
                 run_one_epoch = getattr(self, mode)
 
-                assert times >= 0, 'times < 0'
+                run_one_epoch()
+                if mode == 'train':
+                    self.epoch += 1
+                    log_metric('Epoch', self.epoch)
 
-                if mode == 'val' and times > 1:
-                    times = 1
+                    if self.epoch % CONFIG('save_period') == 0:
+                        self.save_model()
 
-                for _ in range(times):
-                    if self.epoch >= CONFIG('epochs'):
-                        print('break')
-                        break
+                if CONFIG('not_val') is True and mode == 'val':
+                    continue
 
-                    run_one_epoch()  # train() or val()
+                # Display info
+                if self.task.MT:
+                    cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
+                    seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
+                    lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+                    top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
+                    topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
+                    miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
 
-                    # Display info
-                    if self.task.MT:
-                        cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
-                        seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
-                        lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
-                        top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
-                        topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
-                        miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
+                    print_of_mt(mode, self.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk, miou)
 
-                        print_of_mt(mode, self.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk, miou)
+                elif self.task.CLS:
+                    cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
+                    lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+                    top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
+                    topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
 
-                    elif self.task.CLS:
-                        cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
-                        lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
-                        top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
-                        topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
+                    print_of_cls(mode, self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
 
-                        print_of_cls(mode, self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
+                elif self.task.SEG:
+                    seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
+                    lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+                    miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
 
-                    elif self.task.SEG:
-                        seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
-                        lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
-                        miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
+                    print_of_seg(mode, self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
 
-                        print_of_seg(mode, self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
+                self.train_tracker.reset()
+                self.val_tracker.reset()
+                self.loss_tracker.reset()
 
-                    if mode == 'train':
-                        self.epoch += 1
-                        log_metric('Epoch', self.epoch)
-
-                        if self.epoch % CONFIG('save_period') == 0:
-                            self.save_model()
-
-                    self.train_tracker.reset()
-                    self.val_tracker.reset()
-                    self.loss_tracker.reset()
+            # n*train -> k*val -> n*train->...
+            # for wf in CONFIG('workflow'):
+            #     mode, times = wf
+            #     run_one_epoch = getattr(self, mode)
+            #
+            #     assert times >= 0, 'times < 0'
+            #
+            #     if mode == 'val' and times > 1:
+            #         times = 1
+            #
+            #     for _ in range(times):
+            #         if self.epoch >= CONFIG('epochs'):
+            #             print('break')
+            #             break
+            #
+            #         run_one_epoch()  # train() or val()
+            #
+            #         # Display info
+            #         if self.task.MT:
+            #             cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
+            #             seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
+            #             lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+            #             top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
+            #             topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
+            #             miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
+            #
+            #             print_of_mt(mode, self.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk, miou)
+            #
+            #         elif self.task.CLS:
+            #             cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
+            #             lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+            #             top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
+            #             topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
+            #
+            #             print_of_cls(mode, self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
+            #
+            #         elif self.task.SEG:
+            #             seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
+            #             lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+            #             miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
+            #
+            #             print_of_seg(mode, self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
+            #
+            #         if mode == 'train':
+            #             self.epoch += 1
+            #             log_metric('Epoch', self.epoch)
+            #
+            #             if self.epoch % CONFIG('save_period') == 0:
+            #                 self.save_model()
+            #
+            #         self.train_tracker.reset()
+            #         self.val_tracker.reset()
+            #         self.loss_tracker.reset()
 
     # @timer
     def train(self) -> None:

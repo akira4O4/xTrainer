@@ -239,8 +239,8 @@ def print_of_cls(
             f'{epoch_progress:>{width}}'
             f'{cls_loss:>{width}}'
             f'{lr:>{width}}'
-            f'{top1:>{width}}'
-            f'{topk:>{width}}'
+            f'{top1:>{width}}%'
+            f'{topk:>{width}}%'
         )
 
     elif mode == 'val':
@@ -251,8 +251,8 @@ def print_of_cls(
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
-            f'{top1:>{width}}'
-            f'{topk:>{width}}\n'
+            f'{top1:>{width}}%'
+            f'{topk:>{width}}%\n'
         )
 
 
@@ -333,8 +333,8 @@ def print_of_mt(
             f'{cls_loss:>{width}}'
             f'{seg_loss:>{width}}'
             f'{lr:>{width}}'
-            f'{top1:>{width}}'
-            f'{topk:>{width}}'
+            f'{top1:>{width}}%'
+            f'{topk:>{width}}%'
             f'{miou:>{width}}\n'
         )
     elif mode == 'val':
@@ -346,8 +346,8 @@ def print_of_mt(
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
-            f'{top1:>{width}}'
-            f'{topk:>{width}}'
+            f'{top1:>{width}}%'
+            f'{topk:>{width}}%'
             f'{miou:>{width}}\n'
         )
 

@@ -8,9 +8,8 @@ experiment: 'exp'
 seed: 0
 topk: [ 1,2 ]
 device: 0 #-1=cpu
-epochs: 2
+epochs: 10
 workers: 2
-workflow: [ [ train,1 ] , [ val,1 ] ]
 not_val: False
 model: shufflenet_v2_x1_0 #i.e. shufflenet_v2_x1_0 segmentation_shufflenetplus_v2_x1_0  multi_task_shufflenetplus_v2_x1_0
 pretrained: True
