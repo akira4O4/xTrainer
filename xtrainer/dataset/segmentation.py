@@ -3,6 +3,7 @@ from typing import Optional, Callable, List, Union, Tuple
 
 import numpy as np
 import torch
+import cv2
 from loguru import logger
 from tqdm import tqdm
 
@@ -66,8 +67,7 @@ class SegmentationDataSet(BaseDataset):
 
     # Load data path
     def load_data(self) -> None:
-        logger.info('loading dataset...')
-        for image_path in tqdm(self.all_image_path):
+        for image_path in tqdm(self.all_image_path, desc='Loading data'):
 
             label = SegLabel()
             image = Image(path=image_path)
@@ -99,19 +99,19 @@ class SegmentationDataSet(BaseDataset):
 
     # Preload mask but don`t preprocessing mask
     def preload(self) -> None:
-        logger.info('Preload mask...')
 
         image: Image
         label: SegLabel
+        if len(self.samples_with_label) > 0:
+            for image, label in tqdm(self.samples_with_label, desc='Preload image'):
+                image.data = self._load_image(image.path)
+                ih, iw = get_image_shape(image)
+                label.mask = self.get_mask(label.objects, (ih, iw))
 
-        for image, label in tqdm(self.samples_with_label):
-            image.data = self._load_image(image.path)
-            ih, iw = get_image_shape(image)
-            label.mask = self.get_mask(label.objects, (ih, iw))
-
-        for image, label in tqdm(self.background_samples):
-            image.data = self._load_image(image.path)
-            label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
+        if len(self.background_samples) > 0:
+            for image, label in tqdm(self.background_samples, desc='Preload background'):
+                image.data = self._load_image(image.path)
+                label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
     # Return mask shape=(input_h,input_w,1,np.uint8)
     def get_mask(self, objects: list, image_hw: Tuple[int, int]) -> np.ndarray:

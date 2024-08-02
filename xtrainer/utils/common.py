@@ -273,14 +273,14 @@ def print_of_seg(
             f'{"Mode":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"seg_loss":>{width}}',
-            f'{"lr":>{width}}'
+            f'{"LR":>{width}}'
             f'{"MIoU":>{width}}'
             f'{Colors.ENDC}'
         )
         print(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
-            f'{Colors.GREEN}'
+            f'{Colors.ENDC}'
             f'{epoch_progress:>{width}}'
             f'{seg_loss:>{width}}'
             f'{lr:>{width}}'
@@ -294,7 +294,7 @@ def print_of_seg(
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
-            f'{miou:>{width}}'
+            f'{miou:>{width}}\n'
         )
 
 
@@ -319,7 +319,7 @@ def print_of_mt(
             f'{"Epoch":>{width}}'
             f'{"cls_loss":>{width}}'
             f'{"seg_loss":>{width}}'
-            f'{"lr":>{width}}'
+            f'{"LR":>{width}}'
             f'{"Top1":>{width}}'
             f'{"TopK":>{width}}'
             f'{"MIoU":>{width}}'
@@ -335,7 +335,7 @@ def print_of_mt(
             f'{lr:>{width}}'
             f'{top1:>{width}}%'
             f'{topk:>{width}}%'
-            f'{miou:>{width}}\n'
+            f'{miou:>{width}}'
         )
     elif mode == 'val':
         print(

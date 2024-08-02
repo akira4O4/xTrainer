@@ -1,3 +1,4 @@
+from typing import Dict, List
 import torch
 import torch.nn as nn
 from typing import Optional
@@ -47,7 +48,10 @@ class FocalLoss(nn.Module):
 
     # classification prediction.shape=(bs,nc) target.shape=(bs,1)
     # segmentation prediction.shape=(bs,1,h,w) target.shape=(bs,1,h,w)
-    def focal_loss_impl(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def focal_loss_impl(
+        self, pred: torch.Tensor,
+        target: torch.Tensor
+    ) -> torch.Tensor:
         # pred (bs, nc)  or  (bs, nc, X1, X2, ...)
         # target (bs, )  or  (bs, X1, X2, ...)
         bs, nc = pred.shape[:2]  # batch size and number of categories
@@ -84,35 +88,113 @@ class ClassificationLoss(FocalLoss):
         super().__init__(alpha, gamma)
 
 
+# Dice=(2x∣A∩B∣)/(∣A∣+∣B∣)
+
 class DiceLoss(nn.Module):
     def __init__(self, smooth: float = 1e-6) -> None:
         super(DiceLoss, self).__init__()
         self.smooth = smooth
+        """
+        计算多类别Dice损失。
 
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        # Apply sigmoid to inputs if they are logits
-        inputs = torch.sigmoid(inputs)
+        :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
+        :param targets: 真实标签张量，形状为[batch_size, height, width]。
+        :return: 计算得到的Dice损失值。
+        """
 
-        # Flatten inputs and targets
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
+        # smooth = 1e-6：适用于极小的目标区域，通常能有效防止数值稳定性问题。
+        # smooth = 1.0：适用于一般情况，能够处理小区域并且不引入过大的偏差。
 
-        # Calculate intersection and union
-        intersection = (inputs * targets).sum()
-        total = (inputs + targets).sum()
+    def forward(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        num_classes = outputs.size(1)
+        dice = 0
 
-        # Calculate Dice coefficient
-        dice_coeff = (2. * intersection + self.smooth) / (total + self.smooth)
+        outputs = torch.softmax(outputs, dim=1)
+        for i in range(num_classes):
+            output_i = outputs[:, i, :, :]
+            target_i = (targets == i).float()
+            output_i = output_i.contiguous().view(-1)
+            target_i = target_i.contiguous().view(-1)
+            intersection = (output_i * target_i).sum()
+            total = (output_i + target_i).sum()
+            dice += (2. * intersection + self.smooth) / (total + self.smooth)
 
-        # Calculate Dice loss
-        dice_loss = 1 - dice_coeff
-
-        return dice_loss
+        return 1 - dice / num_classes
 
 
-class SegmentationLoss:
-    def __init__(self):
-        ...
+class IoULoss(nn.Module):
+    def __init__(self, smooth: float = 1.0) -> None:
+        super(IoULoss, self).__init__()
+        self.smooth = smooth
+        """
+        计算多类别IoU损失。
+
+        :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
+        :param targets: 真实标签张量，形状为[batch_size, height, width]。
+        :return: 计算得到的IoU损失值。
+        """
+
+    def forward(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        计算多类别IoU损失。
+
+        :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
+        :param targets: 真实标签张量，形状为[batch_size, height, width]。
+        :return: 计算得到的IoU损失值。
+        """
+        num_classes = outputs.size(1)
+        iou = 0
+
+        outputs = torch.softmax(outputs, dim=1)
+        for i in range(num_classes):
+            output_i = outputs[:, i, :, :]
+            target_i = (targets == i).float()
+            intersection = (output_i * target_i).sum()
+            union = (output_i + target_i - output_i * target_i).sum()
+            iou += (intersection + self.smooth) / (union + self.smooth)
+
+        return 1 - iou / num_classes
+
+
+class SegmentationLoss(nn.Module):
+    def __init__(self, weights: List[float] = None) -> None:
+        super(SegmentationLoss, self).__init__()
+
+        if weights is None:
+            weights = [1.0, 1.0, 1.0]
+
+        if len(weights) != 3:
+            raise ValueError("weights列表的长度必须为3")
+
+        self.weights = weights
+        self.bce_loss = nn.CrossEntropyLoss()
+        self.dice_loss = DiceLoss()
+        self.iou_loss = IoULoss()
+
+    def forward(
+        self,
+        outputs: torch.Tensor,
+        targets: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        计算加权总损失。
+
+        :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
+        :param targets: 真实标签张量，形状为[batch_size, height, width] 或 [batch_size, 1, height, width]。
+        :return: 计算得到的加权总损失值。
+        """
+
+        if targets.dim() == 4:
+            targets = targets.squeeze(1)  # 调整目标张量的形状为 [batch_size, height, width]
+        targets = targets.long()
+
+        bce = self.bce_loss(outputs, targets)
+        dice = self.dice_loss(outputs, targets)
+        iou = self.iou_loss(outputs, targets)
+
+        # total_loss = bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]
+        total_loss = (bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]) / sum(self.weights)
+        return total_loss
 
 
 if __name__ == "__main__":
