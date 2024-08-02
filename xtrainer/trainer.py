@@ -474,11 +474,24 @@ class Trainer:
         #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
 
     def _classification_train(self, images: torch.Tensor, targets: torch.Tensor):
+        loss = 0
+        pred = None
         with self.optimizer.context():
-            pred = self.model(images)
+
+            # multitask output=[[x1,x2],[x1,x2,x3,x4]]
+            # classification output=x
+            outputs = self.model(images)
+
             if self.task.MT:
-                pred = pred[0][0]  # [[cls1,cls2],[seg1,seg2,...]]
-            loss = self.classification_loss(pred, targets)  # noqa
+                preds = outputs[0]  # [[cls1,cls2],[seg1,seg2,...]]
+                for pred in preds:
+                    loss += 0.5 * self.classification_loss(pred, targets)  # noqa
+            else:
+                pred = outputs
+                loss = self.classification_loss(pred, targets)  # noqa
+
+        if self.task.MT:
+            pred = outputs[0][0]
 
         topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
 
@@ -498,15 +511,24 @@ class Trainer:
         return loss
 
     def _segmentation_train(self, images: torch.Tensor, targets: torch.Tensor):
+        loss = 0
         with self.optimizer.context():
-            pred = self.model(images)
+            # multitask output=[[x1,x2],[x1,x2,x3,x4]]
+            # segmentation output=[x1,x2,x3,x4]
+            outputs = self.model(images)
 
             if self.task.MT:
-                pred = pred[1][0]  # [[cls1,cls2],[seg1,seg2,...]]
-            elif self.task.SEG:
-                pred = pred[0]  # [seg1,seg2,...]
+                preds = outputs[1]
+            else:
+                preds = outputs
 
-            loss = self.segmentation_loss(pred, targets)  # noqa
+            for pred in preds:
+                loss += 0.5 * self.segmentation_loss(pred, targets)  # noqa
+
+        if self.task.MT:
+            pred = outputs[1][0]
+        else:
+            pred = outputs[0]
 
         miou: float = mean_iou_v1(pred, targets, self.model.mask_classes)
         self.train_tracker.miou.add(miou)

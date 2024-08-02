@@ -251,8 +251,8 @@ def print_of_cls(
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
-            f'{top1:>{width}}%'
-            f'{topk:>{width}}%\n'
+            f'{top1:>{width}}'
+            f'{topk:>{width}}\n'
         )
 
 

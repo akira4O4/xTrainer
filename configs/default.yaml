@@ -1,6 +1,6 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
-task: multitask #classification segmentation multitask
+task: segmentation #classification segmentation multitask
 project: project/v3_segmentation #project_path or project_name
 experiment: 'exp'
 
@@ -8,12 +8,12 @@ experiment: 'exp'
 seed: 0
 topk: [ 1,2 ]
 device: 0 #-1=cpu
-epochs: 100
+epochs: 500
 workers: 0
 not_val: False
 #model: shufflenet_v2_x1_0
-#model: segmentation_shufflenetplus_v2_x1_0
-model: multi_task_shufflenetplus_v2_x1_0
+model: segmentation_shufflenetplus_v2_x1_0
+#model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: model.pth
 wh: [ 256,256 ]
@@ -32,9 +32,9 @@ classification:
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
   batch: 8
-  classes: 4 #need background
-  train: D:\llf\dataset\danyang\training_data\F\train
-  val: D:\llf\dataset\danyang\training_data\F\train
+  classes: 3 #need background
+  train: D:\llf\dataset\danyang\training_data\F\F
+  val: D:\llf\dataset\danyang\training_data\F\F
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
