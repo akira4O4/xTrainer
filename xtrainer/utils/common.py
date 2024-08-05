@@ -211,6 +211,7 @@ def safe_round(data: np.ndarray, n: int = 0) -> np.ndarray:
 
 def print_of_cls(
     mode: str,
+    task: str,
     epoch: int,
     epochs: int,
     cls_loss: float = None,
@@ -225,6 +226,7 @@ def print_of_cls(
         print(
             f'{Colors.GREEN}'
             f'{"Mode":>{width}}'
+            f'{"Task":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"cls_loss":>{width}}'
             f'{"LR":>{width}}'
@@ -236,6 +238,7 @@ def print_of_cls(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
             f'{Colors.ENDC}'
+            f'{task:>{width}}'
             f'{epoch_progress:>{width}}'
             f'{cls_loss:>{width}}'
             f'{lr:>{width}}'
@@ -248,6 +251,7 @@ def print_of_cls(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
             f'{Colors.ENDC}'
+            f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
@@ -258,6 +262,7 @@ def print_of_cls(
 
 def print_of_seg(
     mode: str,
+    task: str,
     epoch: int,
     epochs: int,
     seg_loss: float = None,
@@ -271,6 +276,7 @@ def print_of_seg(
         print(
             f'{Colors.GREEN}'
             f'{"Mode":>{width}}'
+            f'{"Task":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"seg_loss":>{width}}'
             f'{"LR":>{width}}'
@@ -281,6 +287,7 @@ def print_of_seg(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
             f'{Colors.ENDC}'
+            f'{task:>{width}}'
             f'{epoch_progress:>{width}}'
             f'{seg_loss:>{width}}'
             f'{lr:>{width}}'
@@ -294,12 +301,14 @@ def print_of_seg(
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
+            f'{"-":>{width}}'
             f'{miou:>{width}}\n'
         )
 
 
 def print_of_mt(
     mode: str,
+    task: str,
     epoch: int,
     epochs: int,
     cls_loss: float = None,
@@ -316,6 +325,7 @@ def print_of_mt(
         print(
             f'{Colors.GREEN}'
             f'{"Mode":>{width}}'
+            f'{"Task":>{width}}'
             f'{"Epoch":>{width}}'
             f'{"cls_loss":>{width}}'
             f'{"seg_loss":>{width}}'
@@ -329,6 +339,7 @@ def print_of_mt(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
             f'{Colors.ENDC}'
+            f'{task:>{width}}'
             f'{epoch_progress:>{width}}'
             f'{cls_loss:>{width}}'
             f'{seg_loss:>{width}}'
@@ -342,6 +353,7 @@ def print_of_mt(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
             f'{Colors.ENDC}'
+            f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'

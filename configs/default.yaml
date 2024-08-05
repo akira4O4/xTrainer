@@ -1,7 +1,7 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
-task: segmentation #classification segmentation multitask
-project: project/v3_segmentation #project_path or project_name
+task: classification #classification segmentation multitask
+project: project/v3 #project_path or project_name
 experiment: 'exp'
 
 #Train setting----------------------------------------------------------------------------------------------------------
@@ -11,23 +11,23 @@ device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-#model: shufflenet_v2_x1_0
-model: segmentation_shufflenetplus_v2_x1_0
+model: shufflenet_v2_x1_0
+#model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
-weight: model.pth
+weight: D:\llf\code\xTrainer\project\v3\exp.20240805_145806\weights\epoch20.pth
 wh: [ 256,256 ]
 amp: True
-preload: False
+preload: True
 deterministic: True
-save_period: 2 # (int) Save checkpoint every x epochsa
+save_period: 5 # (int) Save checkpoint every x epochsa
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
-  batch: 8
+  batch: 16
   classes: 2
-  train: D:\llf\dataset\dog_cat\128\train
-  val: D:\llf\dataset\dog_cat\128\train
+  train: D:\llf\dataset\dog_cat\64\train
+  val: D:\llf\dataset\dog_cat\64\train
 
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
@@ -39,12 +39,12 @@ segmentation:
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
 cos_lr: True
-lr0: 0.001 # (float) initial learning rate
+lr0: 0.0001 # (float) initial learning rate
 lrf: 0.01 # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
-alpha: null
-gamma: 0
-smooth: 1.0
+alpha: null #focal loss
+gamma: 2 #focal loss
+smooth: 1.0 #dice loss iou loss ce loss
 loss_weights: [ 1,1 ] #cls_loss*w1+seg_loss*w2
 seg_loss_weights: [ 0.5,1.0,1.0 ] #bce+dice+iou
 

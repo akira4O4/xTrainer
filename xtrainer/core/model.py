@@ -162,11 +162,12 @@ class Model:
         total_item = 0
         loading_item = 0
 
-        for net_kv, weight_kv in zip(model_state_dict, weight_state_dict):
+        for (net_key, net_value), (weight_key, weight_value) in zip(model_state_dict.items(),
+                                                                    weight_state_dict.items()):
             total_item += 1
 
-            if net_kv[1].shape == weight_kv[1].shape:
-                net_kv[1] = weight_kv[1]
+            if net_value.shape == weight_value.shape:
+                model_state_dict[net_key] = weight_value
                 loading_item += 1
 
         self._net.load_state_dict(model_state_dict, strict=self._strict)

@@ -408,20 +408,20 @@ class Trainer:
                     top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
                     topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
 
-                    print_of_cls(mode, self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
+                    print_of_cls(mode, CONFIG('task'), self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
 
                 elif self.task.SEG:
                     seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
                     lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
                     miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
 
-                    print_of_seg(mode, self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
+                    print_of_seg(mode, CONFIG('task'), self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
 
                 self.train_tracker.reset()
                 self.val_tracker.reset()
                 self.loss_tracker.reset()
 
-    # @timer
+    @timer
     def train(self) -> None:
 
         self.model.train()
