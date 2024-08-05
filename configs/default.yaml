@@ -44,7 +44,7 @@ cos_lr: False
 lr0: 0.0001 # (float) initial learning rate
 lrf: 0.01 # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
-alpha: null #focal loss
+alpha: auto #focal loss
 gamma: 2 #focal loss
 smooth: 1.0 #dice loss iou loss ce loss
 loss_weights: [ 1,1 ] #cls_loss*w1+seg_loss*w2

@@ -361,9 +361,13 @@ class Trainer:
     def init_loss(self) -> None:
 
         if self.task.CLS or self.task.MT:
-            alpha = CONFIG('alpha') if CONFIG('alpha') is not None else [1] * self.model.num_classes
+            alpha = CONFIG('alpha')
+            if alpha == 'auto':
+                alpha = [1] * self.model.num_classes
+
             alpha = torch.tensor(alpha, dtype=torch.float)
             alpha = self.to_device(alpha)
+
             self.classification_loss = ClassificationLoss(alpha=alpha, gamma=CONFIG('gamma'))
             logger.info('Build Classification Loss.')
 
