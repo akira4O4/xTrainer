@@ -15,7 +15,7 @@ model: shufflenet_v2_x1_0
 #model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
-weight: D:\llf\code\xTrainer\project\v3\exp.20240805_145806\weights\epoch20.pth
+weight: D:\llf\code\xTrainer\project\v3\exp\weights\epoch500.pth
 wh: [ 256,256 ]
 amp: True
 preload: True
@@ -38,8 +38,8 @@ segmentation:
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
-cos_lr: True
-lr0: 0.0001 # (float) initial learning rate
+cos_lr: False
+lr0: 0.00001 # (float) initial learning rate
 lrf: 0.01 # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
 alpha: null #focal loss

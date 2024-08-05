@@ -3,6 +3,7 @@ import math
 from copy import deepcopy
 from typing import Union, List
 
+import matplotlib.pyplot as plt
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -51,6 +52,8 @@ from xtrainer.core.loss import ClassificationLoss, SegmentationLoss
 from xtrainer.utils.task import Task
 from xtrainer.utils.perf import (
     topk_accuracy,
+    compute_confusion_matrix_classification,
+    draw_confusion_matrix,
     mean_iou_v1
 )
 from xtrainer.utils.tracker import (
@@ -400,7 +403,8 @@ class Trainer:
                     topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
                     miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
 
-                    print_of_mt(mode, self.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk, miou)
+                    print_of_mt(mode, 'MT', self.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk,
+                                miou)
 
                 elif self.task.CLS:
                     cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
@@ -408,14 +412,14 @@ class Trainer:
                     top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
                     topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
 
-                    print_of_cls(mode, CONFIG('task'), self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
+                    print_of_cls(mode, 'CLS', self.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
 
                 elif self.task.SEG:
                     seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
                     lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
                     miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
 
-                    print_of_seg(mode, CONFIG('task'), self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
+                    print_of_seg(mode, 'SEG', self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
 
                 self.train_tracker.reset()
                 self.val_tracker.reset()
@@ -553,7 +557,7 @@ class Trainer:
         maxk: int = max(CONFIG("topk"))
         maxk_idx = np.argmax(CONFIG("topk"))
 
-        # pbar = tqdm(self.cls_val_dl, desc='Val: ', position=0, dynamic_ncols=True)
+        confusion_matrix = 0
         pbar = self.cls_val_dl
         for data in pbar:
             images, targets = data
@@ -565,6 +569,7 @@ class Trainer:
             if self.task.MT:
                 pred = pred[0][0]  # [[cls1,cls2],[seg1,seg2,...]]
 
+            confusion_matrix += compute_confusion_matrix_classification(pred, targets, self.model.num_classes)
             topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
 
             top1_val = topk[0]
@@ -573,6 +578,11 @@ class Trainer:
             self.val_tracker.top1.add(top1_val)
             self.val_tracker.topk.add(topk_val)
 
+        draw_confusion_matrix(
+            confusion_matrix,
+            self.cls_train_ds.labels,
+            os.path.join(self.experiment_path, 'confusion_matrix.png')
+        )
         total_top1: float = self.val_tracker.top1.avg  # i.e.60%
         total_topk: float = self.val_tracker.topk.avg  # i.e.80%
         log_metric('Val Epoch Top1', total_top1)

@@ -119,13 +119,11 @@ def compute_confusion_matrix_classification(
     if pred.size(0) != target.size(0):
         raise ValueError("The size of pred and target must be the same.")
 
+    pred = torch.argmax(pred, dim=1)
+
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64)
 
-    pred = pred.view(-1)
-    target = target.view(-1)
-
-    # Update confusion matrix
-    for t, p in zip(target.tolist(), pred.tolist()):
+    for t, p in zip(target, pred):
         confusion_matrix[t, p] += 1
 
     return confusion_matrix
@@ -149,9 +147,11 @@ def compute_confusion_matrix_segmentation(
     if pred.dim() == 3:
         pred = pred.view(-1)
         target = target.view(-1)
+
     elif pred.dim() == 2:
         pred = pred.flatten()
         target = target.flatten()
+
     else:
         raise ValueError("Input tensors should be 2D or 3D tensors.")
 
@@ -202,6 +202,66 @@ def mean_iou_v2(
     confusion_matrix = compute_confusion_matrix_segmentation(pred, target, num_classes)
     ious = compute_iou_from_confusion(confusion_matrix)
     return float(np.nanmean(ious))
+
+
+import itertools
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+# 绘制混淆矩阵
+
+def draw_confusion_matrix(
+    cm,
+    classes: List[str],
+    save: str,
+    normalize: bool = False,
+    title: str = 'Confusion Matrix',
+    cmap=plt.cm.Blues
+) -> None:
+    """
+    绘制并保存混淆矩阵的图像。
+
+    参数:
+    - cm : ndarray of shape (n_classes, n_classes)
+        计算出的混淆矩阵的值
+    - classes : list of str
+        混淆矩阵中每一行每一列对应的列名
+    - normalize : bool, optional, default: False
+        True:显示百分比, False:显示个数
+    - title : str, optional, default: 'Confusion Matrix'
+        混淆矩阵图像的标题
+    - cmap : Colormap, optional, default: plt.cm.Blues
+        混淆矩阵图像的颜色映射
+    """
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        np.set_printoptions(formatter={'float': '{: 0.2f}'.format})
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    # 反转 y 轴
+    plt.gca().invert_yaxis()
+
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+    # 保存图像
+    plt.savefig(save)
 
 
 if __name__ == '__main__':
