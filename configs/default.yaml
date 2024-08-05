@@ -51,9 +51,10 @@ loss_weights: [ 1,1 ] #cls_loss*w1+seg_loss*w2
 seg_loss_weights: [ 1,0,0 ] #bce+dice+iou
 
 #Test setting-----------------------------------------------------------------------------------------------------------
-test: ''
-cls_thr: ''
-seg_thr: ''
+source: /home/image
+test_weight: mode.pth
+cls_thr: [ ]
+seg_thr: [ ]
 
 # MlFlow setting--------------------------------------------------------------------------------------------------------
 mlflow_uri: localhost
