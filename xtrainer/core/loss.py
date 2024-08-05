@@ -151,7 +151,6 @@ class SegmentationLoss(nn.Module):
     ) -> torch.Tensor:
         """
         计算加权总损失。
-
         :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
         :param targets: 真实标签张量，形状为[batch_size, height, width] 或 [batch_size, 1, height, width]。
         :return: 计算得到的加权总损失值。
@@ -164,7 +163,6 @@ class SegmentationLoss(nn.Module):
         bce: torch.Tensor = self.bce_loss(outputs, targets)
         dice: torch.Tensor = self.dice_loss(outputs, targets)
         iou: torch.Tensor = self.iou_loss(outputs, targets)
-        # print(f'bce:{bce.cpu().item()},dice{dice.cpu().item()},iou:{iou.cpu().item()}')
         total_loss = bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]
         # total_loss = (bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]) / sum(self.weights)
         return total_loss

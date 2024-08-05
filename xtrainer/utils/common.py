@@ -297,7 +297,7 @@ def print_of_seg(
         print(
             f'{Colors.BLUE}'
             f'{mode.upper():>{width}}'
-            f'{Colors.GREEN}'
+            f'{Colors.ENDC}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'
             f'{"-":>{width}}'

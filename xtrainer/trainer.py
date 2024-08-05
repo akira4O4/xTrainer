@@ -527,7 +527,7 @@ class Trainer:
                 preds = outputs
 
             for pred in preds:
-                loss += 0.5 * self.segmentation_loss(pred, targets)  # noqa
+                loss += 1 * self.segmentation_loss(pred, targets)  # noqa
 
         if self.task.MT:
             pred = outputs[1][0]
