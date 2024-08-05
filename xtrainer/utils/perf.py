@@ -1,6 +1,8 @@
 from typing import List, Tuple
 import torch
 import numpy as np
+import itertools
+import matplotlib.pyplot as plt
 
 __all__ = [
     'topk_accuracy',
@@ -119,7 +121,10 @@ def compute_confusion_matrix_classification(
     if pred.size(0) != target.size(0):
         raise ValueError("The size of pred and target must be the same.")
 
-    pred = torch.argmax(pred, dim=1)
+    if pred.dim() == 2:  # (n,nc)->(n,)
+        pred = torch.argmax(pred, dim=-1)
+
+    assert target.dim() == 1, f'target.dim != 1'
 
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64)
 
@@ -202,11 +207,6 @@ def mean_iou_v2(
     confusion_matrix = compute_confusion_matrix_segmentation(pred, target, num_classes)
     ious = compute_iou_from_confusion(confusion_matrix)
     return float(np.nanmean(ious))
-
-
-import itertools
-import matplotlib.pyplot as plt
-import numpy as np
 
 
 # 绘制混淆矩阵

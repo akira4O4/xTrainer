@@ -52,7 +52,11 @@ class FocalLoss(nn.Module):
         loss = -1 * self.alpha * torch.pow(1 - p, self.gamma) * log_p
         return loss.sum() / self.alpha.sum()
 
-    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor
+    ) -> torch.Tensor:
         return self.focal_loss_impl(pred, target)
 
 
