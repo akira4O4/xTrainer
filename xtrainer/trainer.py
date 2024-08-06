@@ -110,7 +110,9 @@ class Trainer:
         # Init loss ---------------------------------------------------------------------------------------------------
         self.classification_loss = None
         self.segmentation_loss = None
-        self.loss_weights: List[int] = CONFIG('loss_weights')
+
+        # self.loss_weights: List[int] = CONFIG('loss_weights')
+        self.loss_weights: List[int] = CONFIG('loss_sum_weights')
         self.init_loss()
 
         # Init dataset and dataloader ---------------------------------------------------------------------------------
@@ -372,7 +374,7 @@ class Trainer:
             logger.info('Build Classification Loss.')
 
         if self.task.SEG or self.task.MT:
-            self.segmentation_loss = SegmentationLoss(CONFIG('seg_loss_weights'))
+            self.segmentation_loss = SegmentationLoss(CONFIG('seg_loss_sum_weights'))
             logger.info('Build Segmentation Loss.')
 
     def to_device(self, data: torch.Tensor) -> torch.Tensor:

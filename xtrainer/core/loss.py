@@ -160,10 +160,20 @@ class SegmentationLoss(nn.Module):
             targets = targets.squeeze(1)  # 调整目标张量的形状为 [batch_size, height, width]
         targets = targets.long()
 
-        bce: torch.Tensor = self.bce_loss(outputs, targets)
-        dice: torch.Tensor = self.dice_loss(outputs, targets)
-        iou: torch.Tensor = self.iou_loss(outputs, targets)
-        total_loss = bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]
+        bce = 0
+        dice = 0
+        iou = 0
+
+        if self.weights[0] != 0:
+            bce = self.bce_loss(outputs, targets) * self.weights[0]
+
+        if self.weights[1] != 0:
+            dice = self.dice_loss(outputs, targets) * self.weights[1]
+
+        if self.weights[2] != 0:
+            iou = self.iou_loss(outputs, targets) * self.weights[2]
+
+        total_loss = bce + dice + iou
         # total_loss = (bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]) / sum(self.weights)
         return total_loss
 

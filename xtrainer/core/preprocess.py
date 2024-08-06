@@ -26,11 +26,11 @@ class BaseT:
             T.Normalize(mean=self.mean, std=self.std)
         ]
 
-    def gen_compose(self) -> T.Compose:
+    def compose(self) -> T.Compose:
         return T.Compose(self.ops)
 
     def __call__(self, image) -> torch.Tensor:
-        t = self.gen_compose()
+        t = self.compose()
         return t(image)
 
 
@@ -46,13 +46,13 @@ class ClsImageT(BaseT):
             T.RandomResizedCrop(hw),
             T.RandomHorizontalFlip(),
             T.RandomVerticalFlip(),
-            T.RandAugment(interpolation=T.InterpolationMode.BILINEAR),  # noqa
-            T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.7, hue=0.015),
+            T.RandAugment(interpolation=T.InterpolationMode.BILINEAR),
+            T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.7, hue=0.015)
         ]
         self.ops += self.default_ops
         self.ops += [T.RandomErasing(inplace=True)]
 
-        self.t = self.gen_compose()
+        self.t = self.compose()
 
     def __call__(self, image: np.ndarray) -> torch.Tensor:
         img = self.t(image)
@@ -77,7 +77,7 @@ class ClsValT(BaseT):
             NP2PIL()
         ]
         self.ops += self.default_ops
-        self.t = self.gen_compose()
+        self.t = self.compose()
 
     def __call__(self, image) -> torch.Tensor:
         image = self.t(image)
@@ -102,15 +102,22 @@ class SegImageT(BaseT):
             ToTensor(half),
             Normalize()
         ]
-        self.t = self.gen_compose()
+        self.t = self.compose()
 
-    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __call__(
+        self,
+        data: Tuple[np.ndarray, np.ndarray]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = self.t(data)
         return image, mask
 
 
 class SegValT(BaseT):
-    def __init__(self, wh: Tuple[int, int], only_scaledown: bool = False) -> None:
+    def __init__(
+        self,
+        wh: Tuple[int, int],
+        only_scaledown: Optional[bool] = False
+    ) -> None:
         super().__init__()
         assert wh is not None, 'imgsz is not None.'
         self.ops = [
@@ -118,7 +125,7 @@ class SegValT(BaseT):
             ToTensor(),
             Normalize()
         ]
-        self.t = self.gen_compose()
+        self.t = self.compose()
 
     def __call__(
         self,

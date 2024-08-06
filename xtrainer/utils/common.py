@@ -166,12 +166,14 @@ def align_size(size1: int, size2: int) -> Tuple[int, int]:
 
 
 def chw2hwc(image: np.ndarray) -> np.ndarray:
-    assert len(image.shape) == 3, f'input shape must be (c,h,w)'
+    assert isinstance(image, np.ndarray), f'Input must be a numpy array, but got {type(image)}'
+    assert len(image.shape) == 3, f'Input shape must be (h, w, c), but got {image.shape}'
     return image.transpose(1, 2, 0)
 
 
 def hwc2chw(image: np.ndarray) -> np.ndarray:
-    assert len(image.shape) == 3, f'input shape must be (h,w,c)'
+    assert isinstance(image, np.ndarray), f'Input must be a numpy array, but got {type(image)}'
+    assert len(image.shape) == 3, f'Input shape must be (h, w, c), but got {image.shape}'
     return image.transpose(2, 0, 1)
 
 

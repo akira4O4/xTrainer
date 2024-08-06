@@ -49,7 +49,7 @@ def random_flip(
 def resize(
     image: np.ndarray,
     wh: Tuple[int, int],
-    only_scaledown=False
+    only_scaledown: Optional[bool] = False
 ) -> np.ndarray:
     ih, iw = image.shape[:2]
     new_w, new_h = wh[0], wh[1]

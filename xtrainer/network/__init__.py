@@ -1,3 +1,10 @@
+# Classification
 from .shufflenetv2 import shufflenet_v2_x1_0
+
+# Segmentation
 from .shufflenetv2_segmantationplus import shufflenet_v2_x1_0 as segmentation_shufflenetplus_v2_x1_0
+from .shufflenetv2_segmantationplus_inference import shufflenet_v2_x1_0 as segmentation_shufflenetplus_v2_x1_0_infer
+
+# MutilTask
 from .shufflenetv2_multi_taskplus import shufflenet_v2_x1_0 as multi_task_shufflenetplus_v2_x1_0
+from .shufflenetv2_multi_taskplus_inference import shufflenet_v2_x1_0 as multi_task_shufflenetplus_v2_x1_0_infer
