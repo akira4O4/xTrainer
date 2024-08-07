@@ -17,7 +17,7 @@ class BaseDataset(Dataset, ABC):
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         target_transform: Optional[Callable] = None,  # to target
-        is_preload: Optional[bool] = False
+        cache: Optional[bool] = False
     ) -> None:
 
         assert os.path.exists(root) is True, f'root is not found.'
@@ -25,7 +25,7 @@ class BaseDataset(Dataset, ABC):
         self._root = root
         self._wh = wh
         self._hw = (wh[1], wh[0])
-        self._is_preload = is_preload
+        self._use_cache = cache
         self._loader_type = loader_type
         self._load_image = self.get_image_loader(loader_type)
 

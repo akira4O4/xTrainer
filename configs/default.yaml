@@ -20,7 +20,7 @@ pretrained: True
 weight: D:\llf\code\xTrainer\project\v3\exp\weights\epoch500.pth
 wh: [ 256,256 ]
 amp: True
-preload: False
+cache: True
 deterministic: True
 save_period: 5 # (int) Save checkpoint every x epochs
 
@@ -34,7 +34,7 @@ classification:
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
   batch: 8
-  classes: 2
+  classes: 3
   train: D:\llf\dataset\danyang\training_data\F\train\tiny
   val: D:\llf\dataset\danyang\training_data\F\train\tiny
 

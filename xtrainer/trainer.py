@@ -264,7 +264,7 @@ class Trainer:
             wh=wh,
             transform=ClsImageT(wh),
             target_transform=ClsTargetT(),
-            is_preload=CONFIG('preload')
+            cache=CONFIG('cache')
         )
 
         save_yaml(self.cls_train_ds.labels, os.path.join(self.experiment_path, 'cls_labels.yaml'))
@@ -299,7 +299,7 @@ class Trainer:
             wh=wh,
             transform=ClsValT(wh),
             target_transform=ClsTargetT(),
-            is_preload=CONFIG('preload')
+            cache=CONFIG('cache')
         )
         logger.info(f'Classification Val data size: {self.cls_val_ds.real_data_size}.')
 
@@ -320,7 +320,7 @@ class Trainer:
             root=CONFIG('segmentation')['train'],
             wh=wh,
             transform=SegImageT(wh),
-            is_preload=CONFIG('preload')
+            cache=CONFIG('cache')
         )
 
         background_size = len(self.seg_train_ds.background_samples)
@@ -345,7 +345,7 @@ class Trainer:
             root=CONFIG('segmentation')['val'],
             wh=wh,
             transform=SegValT(wh),
-            is_preload=CONFIG('preload')
+            cache=CONFIG('cache')
         )
         self.seg_val_dl = DataLoader(
             dataset=self.seg_val_ds,

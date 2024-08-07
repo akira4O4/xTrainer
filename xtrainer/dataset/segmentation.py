@@ -1,9 +1,8 @@
 import os
-from typing import Optional, Callable, List, Union, Tuple
-
+from typing import Optional, Callable, List, Tuple
+import cv2
 import numpy as np
 import torch
-import cv2
 from loguru import logger
 from tqdm import tqdm
 
@@ -27,7 +26,7 @@ class SegmentationDataSet(BaseDataset):
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
         expanding_rate: Optional[int] = 1,
-        is_preload: Optional[bool] = False
+        cache: Optional[bool] = False
     ) -> None:
         super(SegmentationDataSet, self).__init__(
             root=root,
@@ -35,7 +34,7 @@ class SegmentationDataSet(BaseDataset):
             loader_type=loader_type,
             img_type=img_type,
             transform=transform,
-            is_preload=is_preload
+            cache=cache
         )
 
         self._labels = ['0_background_']
@@ -47,7 +46,7 @@ class SegmentationDataSet(BaseDataset):
 
         self.load_data()
 
-        if self._is_preload:
+        if self._use_cache:
             self.preload()
 
         self._samples = self.samples_with_label + self.background_samples
@@ -153,11 +152,11 @@ class SegmentationDataSet(BaseDataset):
         label: SegLabel
         image, label = self._samples[sample_idx]
 
-        im = image.data if self._is_preload else self._load_image(image.path)
+        im = image.data if self._use_cache else self._load_image(image.path)
         ih, iw = get_image_shape(im)
         assert ih > 0 and iw > 0, 'Error: img_w or img_h <=0'
 
-        mask = label.mask if self._is_preload else self.get_mask(label.objects, (ih, iw))
+        mask = label.mask if self._use_cache else self.get_mask(label.objects, (ih, iw))
 
         # input.type=[Image.Image,torch.Tensor]
         data = (im, mask)
@@ -179,7 +178,7 @@ if __name__ == '__main__':
     ds = SegmentationDataSet(
         root=r'C:\Users\Lee Linfeng\Desktop\temp\20240518-bad-F',
         wh=wh,
-        is_preload=True,
+        cache=True,
         transform=SegImageT(wh),
     )
     # image, mask = ds[0]

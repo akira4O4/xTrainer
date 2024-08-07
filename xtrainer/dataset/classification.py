@@ -1,6 +1,5 @@
 import os
 import random
-from abc import ABC
 from collections import defaultdict
 from typing import Optional, Callable, Tuple, List
 
@@ -137,7 +136,7 @@ class ClassificationDataset(BaseDataset):
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         expanding_rate: Optional[int] = 1,
-        is_preload: Optional[bool] = False
+        cache: Optional[bool] = False
     ):
         super(ClassificationDataset, self).__init__(
             root=root,
@@ -146,7 +145,7 @@ class ClassificationDataset(BaseDataset):
             img_type=img_type,
             transform=transform,
             target_transform=target_transform,
-            is_preload=is_preload
+            cache=cache
         )
         self.find_labels()
 
@@ -155,7 +154,7 @@ class ClassificationDataset(BaseDataset):
 
         self.load_data()
 
-        if self._is_preload:
+        if self._use_cache:
             logger.info(f'Preload image data ...')
             self.preload()
 
@@ -200,7 +199,7 @@ class ClassificationDataset(BaseDataset):
         label: int
         image, label = self._samples[sample_idx]
 
-        im = image.data if self._is_preload else self._load_image(image.path)
+        im = image.data if self._use_cache else self._load_image(image.path)
 
         if self._transform is not None:
             im = self._transform(im)
@@ -218,14 +217,12 @@ if __name__ == '__main__':
     from xtrainer.core.preprocess import ClsImageT, ClsTargetT
     from torch.utils.data import DataLoader
     from time import time
-    import cv2
 
     wh = (224, 224)
     t1 = time()
     ds = ClassificationDataset(
         root=r'D:\llf\dataset\danyang\training_data\G\classification\nc3\train\2_youwu',
         wh=wh,
-        # is_preload=True,
         transform=ClsImageT(wh),
         target_transform=ClsTargetT()
     )
