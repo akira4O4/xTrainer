@@ -69,7 +69,7 @@ class Model:
         else:
             self._device = torch.device(f'cuda:{idx}')
             self._is_gpu = True
-        logger.info(f'Change device to {self._device}')
+        logger.info(f'Setting device to {self._device}')
 
     @property
     def is_gpu(self) -> bool:

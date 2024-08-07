@@ -1,12 +1,9 @@
 import os
-import math
 from copy import deepcopy
 from typing import Union, List
 
-import matplotlib.pyplot as plt
 import torch
 import numpy as np
-from tqdm import tqdm
 from loguru import logger
 from torch.utils.data import DataLoader
 from mlflow import log_metric, set_experiment
@@ -32,7 +29,6 @@ from xtrainer.core.optim import (
 
 from xtrainer.dataset.segmentation import SegmentationDataSet
 from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSamplerV1
-from xtrainer.utils.emoji import Emoji
 from xtrainer.utils.common import (
     save_yaml,
     error_exit,
@@ -54,7 +50,7 @@ from xtrainer.utils.perf import (
     topk_accuracy,
     compute_confusion_matrix_classification,
     draw_confusion_matrix,
-    mean_iou_v1
+    compute_iou
 )
 from xtrainer.utils.tracker import (
     TrainTracker,
@@ -84,14 +80,14 @@ class Trainer:
 
         # Init work env ------------------------------------------------------------------------------------------------
         init_seeds(CONFIG('seed'))
-        logger.info(f'Init seed:{CONFIG("seed")}.')
+        logger.info(f'Init seed: {Colors.BLUE}{CONFIG("seed")}{Colors.ENDC}.')
 
         init_backends_cudnn(CONFIG('deterministic'))
-        logger.info(f'Init deterministic:{CONFIG("deterministic")}.')
-        logger.info(f'Init benchmark:{not CONFIG("deterministic")}.')
+        logger.info(f'Init deterministic: {Colors.BLUE}{CONFIG("deterministic")}{Colors.ENDC}.')
+        logger.info(f'Init benchmark: {Colors.BLUE}{not CONFIG("deterministic")}{Colors.ENDC}.')
 
         self.task = Task(CONFIG('task'))
-        logger.info(f"Task: {self.task}")
+        logger.info(f"Task: {Colors.BLUE}{self.task}{Colors.ENDC}")
 
         # Init Model --------------------------------------------------------------------------------------------------
         self.model: Model = None  # noqa
@@ -527,23 +523,21 @@ class Trainer:
             # segmentation output=[x1,x2,x3,x4]
             outputs = self.model(images)
 
-            if self.task.MT:
-                preds = outputs[1]
-            else:
-                preds = outputs
+            preds = outputs[1] if self.task.MT else outputs
 
-            for pred in preds:
-                loss += 1 * self.segmentation_loss(pred, targets)  # noqa
+            loss1 = 1 * self.segmentation_loss(preds[0], targets)  # noqa
+            loss2 = 1 * self.segmentation_loss(preds[1], targets)  # noqa
+            loss3 = 0.5 * self.segmentation_loss(preds[2], targets)  # noqa
+            loss4 = 0.5 * self.segmentation_loss(preds[3], targets)  # noqa
 
-        if self.task.MT:
-            pred = outputs[1][0]
-        else:
-            pred = outputs[0]
+        loss = loss1 + loss2 + loss3 + loss4
 
-        miou: float = mean_iou_v1(pred, targets, self.model.mask_classes)
+        pred = outputs[1][0] if self.task.MT else outputs[0]
+
+        miou: float = compute_iou(pred, targets, self.model.mask_classes)
+
         self.train_tracker.miou.add(miou)
-        self.loss_tracker.segmentation.add(loss.cpu().detach())
-
+        self.loss_tracker.segmentation.add(loss.cpu().detach())  # noqa
         log_metric('Train Batch MIoU', miou)
 
         return loss
@@ -608,7 +602,7 @@ class Trainer:
             elif self.task.SEG:
                 pred = pred[0]  # [seg1,seg2,...]
 
-            miou: float = mean_iou_v1(pred, targets, self.model.mask_classes)
+            miou: float = compute_iou(pred, targets, self.model.mask_classes)
             self.val_tracker.miou.add(miou)
 
         total_miou: float = self.val_tracker.miou.avg

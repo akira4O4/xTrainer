@@ -35,13 +35,13 @@ classification:
 segmentation:
   batch: 8
   classes: 3 #need background
-  train: D:\llf\dataset\danyang\training_data\F\F
-  val: D:\llf\dataset\danyang\training_data\F\F
+  train: D:\llf\dataset\danyang\training_data\F\train\tiny
+  val: D:\llf\dataset\danyang\training_data\F\train\tiny
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
 cos_lr: False
-lr0: 0.0001   # (float) initial learning rate
+lr0: 0.001   # (float) initial learning rate
 lrf: 0.01     # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
 alpha: auto   #focal loss

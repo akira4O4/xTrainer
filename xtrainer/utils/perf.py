@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 __all__ = [
     'topk_accuracy',
     'safe_mean',
-    'mean_iou_v1',
+    'compute_iou',
     'mean_iou_v2',
     'compute_confusion_matrix_classification',
     'compute_confusion_matrix_segmentation',
-    ''
+    'draw_confusion_matrix'
 ]
 
 
@@ -46,21 +46,21 @@ def topk_accuracy(
     return res
 
 
-def iou_per_class(
+def compute_iou_with_hw(
     pred: torch.Tensor,
     target: torch.Tensor,
     num_classes: int
 ) -> List[float]:
-    """Computes IoU for each class.
-
-    Args:
-        pred (torch.Tensor): The predicted segmentation map with shape (H, W).
-        target (torch.Tensor): The ground truth segmentation map with shape (H, W).
-        num_classes (int): The number of classes including the background.
-
-    Returns:
-        List[float]: A list containing IoU for each class.
     """
+    pred (torch.Tensor): The predicted segmentation map with shape (H, W).
+    target (torch.Tensor): The ground truth segmentation map with shape (H, W).
+    num_classes (int): The number of classes including the background.
+    """
+    assert pred.shape[0] == target.shape[0], "Predicted and target batch sizes must be the same"
+    assert pred.shape[1] == target.shape[1], "Predicted and target spatial dimensions must be the same"
+    assert len(pred.shape) == 2, "Predicted tensor must be 2D (H, W)"
+    assert len(target.shape) == 2, "Target tensor must be 2D (H, W)"
+
     ious = []
     for cls in range(num_classes):
         pred_cls = pred == cls
@@ -75,32 +75,87 @@ def iou_per_class(
     return ious
 
 
+def compute_iou_with_nhw(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> List[List[float]]:
+    """
+    pred (torch.Tensor): The predicted segmentation map with shape (N,  H, W).
+    target (torch.Tensor): The ground truth segmentation map with shape (N, H, W).
+    num_classes (int): The number of classes including the background.
+    """
+    assert pred.shape[0] == target.shape[0], "Predicted and target batch sizes must be the same"
+    assert pred.shape[2:] == target.shape[2:], "Predicted and target spatial dimensions must be the same"
+    assert len(pred.shape) == 3, "Predicted tensor must be 3D (N, H, W)"
+    assert len(target.shape) == 3, "Target tensor must be 3D (N, H, W)"
+
+    bs = pred.shape[0]
+    batch_ious = []
+
+    for b in range(bs):
+        ious = compute_iou_with_hw(pred[b], target[b], num_classes)
+        batch_ious.append(ious)
+
+    return batch_ious
+
+
+def compute_iou_with_nchw(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    num_classes: int
+) -> List[List[float]]:
+    """
+    pred (torch.Tensor): The predicted segmentation map with shape (N, C, H, W).
+    target (torch.Tensor): The ground truth segmentation map with shape (N, 1, H, W).
+    num_classes (int): The number of classes including the background.
+    """
+    assert pred.shape[0] == target.shape[0], "Predicted and target batch sizes must be the same"
+    assert pred.shape[2:] == target.shape[2:], "Predicted and target spatial dimensions must be the same"
+    assert len(pred.shape) == 4, "Predicted tensor must be 4D (N, C, H, W)"
+    assert len(target.shape) == 4 and target.shape[1] == 1, "Target tensor must be 4D (N, 1, H, W)"
+
+    bs = pred.shape[0]
+    batch_ious = []
+
+    # Convert prediction to class labels
+    pred_labels: torch.Tensor = pred.argmax(dim=1)  # Shape (N, H, W)
+    target_labels: torch.Tensor = target.squeeze(1)  # Shape (N, H, W)
+
+    for b in range(bs):
+        ious = compute_iou_with_hw(pred_labels[b], target_labels[b], num_classes)
+
+        batch_ious.append(ious)
+
+    return batch_ious
+
+
 def safe_mean(tensor: torch.Tensor) -> torch.Tensor:
-    """Compute the mean of a tensor, ignoring NaN values."""
-    # data=[1,Nan,2,Nan]
-    # mask=[True,False,True,False]
-    # mean=[1,2].mean()
     mask = ~torch.isnan(tensor)
     return tensor[mask].mean()
 
 
-def mean_iou_v1(
+def compute_iou(
     pred: torch.Tensor,
     target: torch.Tensor,
     num_classes: int
 ) -> float:
-    """Computes the mean IoU across all classes.
+    # [H,W]
+    if pred.dim() == 2:
+        iou = compute_iou_with_hw(pred, target, num_classes)
+        return safe_mean(torch.tensor(iou)).item()
 
-    Args:
-        pred (torch.Tensor): The predicted segmentation map with shape (H, W).
-        target (torch.Tensor): The ground truth segmentation map with shape (H, W).
-        num_classes (int): The number of classes including the background.
+    # [N,H,W]
+    elif pred.dim() == 3:
+        bs_iou = compute_iou_with_nhw(pred, target, num_classes)
+        all_iou = [safe_mean(torch.tensor(iou)).item() for iou in bs_iou]
+        return safe_mean(torch.tensor(all_iou)).item()
 
-    Returns:
-        float: The mean IoU.
-    """
-    ious = iou_per_class(pred, target, num_classes)
-    return safe_mean(torch.tensor(ious)).item()
+    # [N,C,H,W]
+    elif pred.dim() == 4:
+        bs_iou = compute_iou_with_nchw(pred, target, num_classes)
+        all_iou = [safe_mean(torch.tensor(iou)).item() for iou in bs_iou]
+        return safe_mean(torch.tensor(all_iou)).item()
 
 
 def compute_confusion_matrix_classification(
@@ -262,51 +317,3 @@ def draw_confusion_matrix(
 
     # 保存图像
     plt.savefig(save)
-
-
-if __name__ == '__main__':
-    # num_classes = 3  # 假设有3个类别
-    # pred = torch.tensor([0, 1, 2, 0, 1], dtype=torch.int64)
-    # target = torch.tensor([0, 1, 1, 0, 2], dtype=torch.int64)
-    #
-    # conf_matrix = compute_confusion_matrix_classification(pred, target, num_classes)
-    # print("Confusion Matrix for Classification:\n", conf_matrix)
-
-    batch_size = 5
-    num_classes = 10
-    topk = (1, 3, 5)
-
-    # 随机生成模型输出和真实标签
-    torch.manual_seed(0)
-    output = torch.randn(batch_size, num_classes)
-    target = torch.randint(0, num_classes, (batch_size,))
-    print(output.shape)
-    print(target.shape)
-
-    # 计算 top-k 精度
-    accuracies = topk_accuracy(output, target, topk)
-    for k, acc in zip(topk, accuracies):
-        print(f"Top-{k} Accuracy: {acc:.2f}%")
-
-    num_classes = 5  # 假设有5个类别，包括背景
-    pred = torch.tensor([
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 4]
-    ], dtype=torch.int64)
-    # pred = torch.zeros((num_classes, num_classes))
-
-    target = torch.tensor([
-        [0, 1, 1, 3, 4],
-        [0, 1, 2, 3, 4],
-        [0, 1, 2, 3, 3],
-        [0, 1, 2, 3, 4],
-        [0, 0, 2, 3, 4]
-    ], dtype=torch.int64)
-
-    miou1 = mean_iou_v1(pred, target, num_classes)
-    miou2 = mean_iou_v2(pred, target, num_classes)
-    print(f"Mean IoU 1: {miou1:.4f}")
-    print(f"Mean IoU 2: {miou2:.4f}")
