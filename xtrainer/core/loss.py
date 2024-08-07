@@ -133,6 +133,7 @@ class SegmentationLoss(nn.Module):
             raise ValueError("weights列表的长度必须为3")
 
         self.weights = weights
+
         self.bce_loss = nn.CrossEntropyLoss()
         self.dice_loss = DiceLoss()
         self.iou_loss = IoULoss()

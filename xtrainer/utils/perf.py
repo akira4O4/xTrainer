@@ -295,3 +295,4 @@ def draw_confusion_matrix(
 
     # 保存图像
     plt.savefig(save)
+    plt.close()

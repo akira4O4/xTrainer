@@ -480,7 +480,6 @@ class Trainer:
 
     def _classification_train(self, images: torch.Tensor, targets: torch.Tensor):
         loss = 0
-        pred = None
         with self.optimizer.context():
 
             # multitask output=[[x1,x2],[x1,x2,x3,x4]]
@@ -496,6 +495,8 @@ class Trainer:
 
         if self.task.MT:
             pred = outputs[0][0]
+        else:
+            pred=outputs
 
         topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
 

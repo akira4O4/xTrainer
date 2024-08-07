@@ -8,7 +8,7 @@ experiment: 'exp'
 
 #Train setting----------------------------------------------------------------------------------------------------------
 seed: 0
-topk: [ 1,2 ]
+topK: [ 1,2 ]
 device: 0 #-1=cpu
 epochs: 500
 workers: 0
@@ -22,7 +22,7 @@ wh: [ 256,256 ]
 amp: True
 preload: False
 deterministic: True
-save_period: 5 # (int) Save checkpoint every x epochsa
+save_period: 5 # (int) Save checkpoint every x epochs
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
@@ -34,7 +34,7 @@ classification:
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
   batch: 8
-  classes: 3 #need background
+  classes: 2
   train: D:\llf\dataset\danyang\training_data\F\train\tiny
   val: D:\llf\dataset\danyang\training_data\F\train\tiny
 
@@ -47,7 +47,7 @@ momentum: 0.937
 alpha: auto   #focal_loss
 gamma: 2      #focal_loss
 smooth: 1.0   #dice_loss,iou_loss,ce_loss
-loss_sum_weights: [ 1,1 ]       # cls_loss+seg_loss
+loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
 seg_loss_sum_weights: [ 1,0,0 ] # bce+dice+iou
 
 #Test setting-----------------------------------------------------------------------------------------------------------

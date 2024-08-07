@@ -6,6 +6,7 @@ from xtrainer.trainer import Trainer
 if __name__ == '__main__':
     logger.info(f'OS: {OS}')
     logger.info(f'Version: {VERSION}')
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--config',

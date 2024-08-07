@@ -69,8 +69,8 @@ class SegmentationDataSet(BaseDataset):
     def load_data(self) -> None:
         for image_path in tqdm(self.all_image_path, desc='Loading data'):
 
-            label = SegLabel()
-            image = Image(path=image_path)
+            label = SegLabel()  # Empty label
+            image = Image(path=image_path)  # Just only have image path
 
             label_path: str = self.find_label_path(image_path)
             if os.path.exists(label_path):
@@ -103,13 +103,13 @@ class SegmentationDataSet(BaseDataset):
         image: Image
         label: SegLabel
         if len(self.samples_with_label) > 0:
-            for image, label in tqdm(self.samples_with_label, desc='Preload image'):
+            for image, label in tqdm(self.samples_with_label, desc='Preload Image'):
                 image.data = self._load_image(image.path)
                 ih, iw = get_image_shape(image)
                 label.mask = self.get_mask(label.objects, (ih, iw))
 
         if len(self.background_samples) > 0:
-            for image, label in tqdm(self.background_samples, desc='Preload background'):
+            for image, label in tqdm(self.background_samples, desc='Preload Background'):
                 image.data = self._load_image(image.path)
                 label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
@@ -154,10 +154,10 @@ class SegmentationDataSet(BaseDataset):
         image, label = self._samples[sample_idx]
 
         im = image.data if self._is_preload else self._load_image(image.path)
-        h, w = get_image_shape(im)
-        mask = label.mask if self._is_preload else self.get_mask(label.objects, (h, w))
-        img_h, img_w = get_image_shape(im)
-        assert img_w > 0 and img_h > 0, 'Error: img_w or img_h <=0'
+        ih, iw = get_image_shape(im)
+        assert ih > 0 and iw > 0, 'Error: img_w or img_h <=0'
+
+        mask = label.mask if self._is_preload else self.get_mask(label.objects, (ih, iw))
 
         # input.type=[Image.Image,torch.Tensor]
         data = (im, mask)
