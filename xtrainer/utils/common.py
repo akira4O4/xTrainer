@@ -7,7 +7,6 @@ import shutil
 from typing import Optional, List, Tuple, Union
 import numpy as np
 from PIL import Image
-from xtrainer.utils.emoji import Emoji
 
 
 class Colors:
@@ -115,6 +114,7 @@ def get_image_shape(image: Union[np.ndarray, Image.Image]) -> Tuple[int, int]:
         img_w, img_h = image.size
     elif isinstance(image, np.ndarray):
         img_h, img_w, c = image.shape
+
     return img_w, img_h
 
 

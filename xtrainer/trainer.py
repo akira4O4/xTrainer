@@ -49,6 +49,7 @@ from xtrainer.utils.task import Task
 from xtrainer.utils.perf import (
     topk_accuracy,
     compute_confusion_matrix_classification,
+    compute_confusion_matrix_segmentation,
     draw_confusion_matrix,
     compute_iou
 )
@@ -396,11 +397,11 @@ class Trainer:
                 if CONFIG('not_val') is True and mode == 'val':
                     continue
 
+                lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
                 # Display info
                 if self.task.MT:
                     cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
                     seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
-                    lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
                     top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
                     topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
                     miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
@@ -410,7 +411,6 @@ class Trainer:
 
                 elif self.task.CLS:
                     cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
-                    lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
                     top1 = round4(self.train_tracker.top1.avg if mode == 'train' else self.val_tracker.top1.avg)
                     topk = round4(self.train_tracker.topk.avg if mode == 'train' else self.val_tracker.topk.avg)
 
@@ -418,7 +418,6 @@ class Trainer:
 
                 elif self.task.SEG:
                     seg_loss: float = round4(self.loss_tracker.segmentation.avg) if mode == 'train' else None
-                    lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
                     miou = round4(self.train_tracker.miou.avg if mode == 'train' else self.val_tracker.miou.avg)
 
                     print_of_seg(mode, 'SEG', self.epoch, CONFIG('epochs'), seg_loss, lr, miou)
@@ -493,8 +492,7 @@ class Trainer:
                 for pred in preds:
                     loss += 0.5 * self.classification_loss(pred, targets)  # noqa
             else:
-                pred = outputs
-                loss = self.classification_loss(pred, targets)  # noqa
+                loss = self.classification_loss(outputs, targets)  # noqa
 
         if self.task.MT:
             pred = outputs[0][0]
@@ -517,7 +515,6 @@ class Trainer:
         return loss
 
     def _segmentation_train(self, images: torch.Tensor, targets: torch.Tensor):
-        loss = 0
         with self.optimizer.context():
             # multitask output=[[x1,x2],[x1,x2,x3,x4]]
             # segmentation output=[x1,x2,x3,x4]
@@ -558,16 +555,15 @@ class Trainer:
         maxk_idx = np.argmax(CONFIG("topk"))
 
         confusion_matrix = 0
-        pbar = self.cls_val_dl
-        for data in pbar:
+
+        for data in self.cls_val_dl:
             images, targets = data
             images = self.to_device(images)
             targets = self.to_device(targets)
 
-            pred = self.model(images)
+            output = self.model(images)  # [[cls1,cls2],[seg1,seg2,...]]
 
-            if self.task.MT:
-                pred = pred[0][0]  # [[cls1,cls2],[seg1,seg2,...]]
+            pred = output[0][0] if self.task.MT else output
 
             confusion_matrix += compute_confusion_matrix_classification(pred, targets, self.model.num_classes)
             topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
@@ -581,7 +577,7 @@ class Trainer:
         draw_confusion_matrix(
             confusion_matrix,
             self.cls_train_ds.labels,
-            os.path.join(self.experiment_path, 'confusion_matrix.png')
+            os.path.join(self.experiment_path, 'cls_confusion_matrix.png')
         )
         total_top1: float = self.val_tracker.top1.avg  # i.e.60%
         total_topk: float = self.val_tracker.topk.avg  # i.e.80%
@@ -589,22 +585,28 @@ class Trainer:
         log_metric(f'Val Epoch Top{maxk}', total_topk)
 
     def _segmentation_val(self) -> None:
+        confusion_matrix = 0
 
         for data in self.seg_val_dl:
             images, targets = data
             images = self.to_device(images)
-            targets = self.to_device(targets)
+            targets = self.to_device(targets)  # target.shape=(N,1,H,W)
 
-            pred = self.model(images)
+            output = self.model(images)
 
-            if self.task.MT:
-                pred = pred[1][0]  # [[cls1,cls2],[seg1,seg2,...]]
-            elif self.task.SEG:
-                pred = pred[0]  # [seg1,seg2,...]
+            # pred.shpae=(N,C,H,W)
+            pred = output[1][0] if self.task.MT else output[0]
 
             miou: float = compute_iou(pred, targets, self.model.mask_classes)
             self.val_tracker.miou.add(miou)
 
+            confusion_matrix += compute_confusion_matrix_segmentation(pred, targets, self.model.mask_classes)
+
+        draw_confusion_matrix(
+            confusion_matrix,
+            self.seg_train_ds.labels,
+            os.path.join(self.experiment_path, 'seg_confusion_matrix.png')
+        )
         total_miou: float = self.val_tracker.miou.avg
         log_metric('Val Epoch MIoU', total_miou)
 

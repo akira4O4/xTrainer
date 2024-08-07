@@ -1,14 +1,7 @@
-from typing import Dict, List
+from typing import List
 import torch
 import torch.nn as nn
 from typing import Optional
-
-'''
-pt=softmax(x)
-FocalLoss(pt)=-alpha(1-pt)^gamma*log(pt)
-alpha调和不同类别中的数据不平衡，可以输入一个数字如0.25（第一类数据的比重为0.25，其余类别为1-0.25），也可以直接输入一个list，顺序为各类的权重（数据量小的给大权重）
-gamma负责降低简单样本的损失值, hardcase的预测的分数低，easycase的概率高，（1-p）**gamma可以将easycase的loss进一步降低，反之亦然
-'''
 
 
 class FocalLoss(nn.Module):
@@ -58,15 +51,6 @@ class FocalLoss(nn.Module):
         target: torch.Tensor
     ) -> torch.Tensor:
         return self.focal_loss_impl(pred, target)
-
-
-class ClassificationLoss(FocalLoss):
-    def __init__(
-        self,
-        alpha: Optional[torch.Tensor] = None,
-        gamma=0  # type:(int,float)
-    ):
-        super().__init__(alpha, gamma)
 
 
 # Dice=(2x∣A∩B∣)/(∣A∣+∣B∣)
@@ -129,6 +113,15 @@ class IoULoss(nn.Module):
         return 1 - iou / num_classes
 
 
+class ClassificationLoss(FocalLoss):
+    def __init__(
+        self,
+        alpha: Optional[torch.Tensor] = None,
+        gamma=0  # type:(int,float)
+    ):
+        super().__init__(alpha, gamma)
+
+
 class SegmentationLoss(nn.Module):
     def __init__(self, weights: List[float] = None) -> None:
         super(SegmentationLoss, self).__init__()
@@ -150,14 +143,16 @@ class SegmentationLoss(nn.Module):
         targets: torch.Tensor
     ) -> torch.Tensor:
         """
-        计算加权总损失。
-        :param outputs: 模型的输出张量，形状为[batch_size, num_classes, height, width]。
-        :param targets: 真实标签张量，形状为[batch_size, height, width] 或 [batch_size, 1, height, width]。
-        :return: 计算得到的加权总损失值。
+        :param outputs: (N,C,H,W)
+        :param targets: (N,H,W),(N,1,H,W)
         """
+        assert len(outputs.shape) == 4, "Output tensor must be 4D (N, C, H, W)"
 
-        if targets.dim() == 4:
-            targets = targets.squeeze(1)  # 调整目标张量的形状为 [batch_size, height, width]
+        if targets.dim() == 4 and targets.shape[1] == 1:
+            targets = targets.squeeze(1)
+        else:
+            raise ValueError("Target tensors.shape should be (N,H,W),(N,1,H,W)")
+
         targets = targets.long()
 
         bce = 0
@@ -176,47 +171,3 @@ class SegmentationLoss(nn.Module):
         total_loss = bce + dice + iou
         # total_loss = (bce * self.weights[0] + dice * self.weights[1] + iou * self.weights[2]) / sum(self.weights)
         return total_loss
-
-
-if __name__ == "__main__":
-    # criterion: nn.Module = DiceLoss()
-    #
-    # inputs: torch.Tensor = torch.randn(1, 1, 256, 256, requires_grad=True)  # Example prediction
-    # targets: torch.Tensor = torch.randint(0, 2, (1, 1, 256, 256)).float()  # Example ground truth
-    #
-    # loss: torch.Tensor = criterion(inputs, targets)
-    #
-    # print("Dice Loss:", loss.item())
-
-    import numpy as np
-    from torch.nn import functional as F
-
-    # bs, nc, h, w = 32, 4, 100, 200
-    # pred = np.random.randn(bs, nc, h, w)
-    # target = np.random.randint(0, nc, size=(bs, h, w))
-    # target = torch.tensor(target, dtype=torch.long)
-
-    bs, nc = 32, 4
-    pred = np.random.randn(bs, nc)
-    target = np.random.randint(0, nc, size=(bs,))
-    target = torch.tensor(target, dtype=torch.long)
-    pred_logit1 = torch.tensor(pred, dtype=torch.float, requires_grad=True)
-    pred_logit2 = torch.tensor(pred, dtype=torch.float, requires_grad=True)
-
-    print(f'pred_logit1.dim(): {pred_logit1.dim()}')
-    print(f'pred_logit2.dim(): {pred_logit2.dim()}')
-    print(f'target.dim(): {target.dim()}')
-
-    alpha = np.abs(np.random.randn(nc))
-    alpha = torch.tensor(alpha, dtype=torch.float)
-
-    loss1 = FocalLoss(gamma=0.0, alpha=alpha)(pred_logit1, target)
-    loss1.backward()
-
-    loss2 = F.cross_entropy(pred_logit2, target, weight=alpha)
-    loss2.backward()
-
-    print(loss1)
-    print(loss2)
-    print(pred_logit1.grad[1, 2])
-    print(pred_logit2.grad[1, 2])

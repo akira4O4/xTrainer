@@ -5,10 +5,9 @@ import itertools
 import matplotlib.pyplot as plt
 
 __all__ = [
-    'topk_accuracy',
     'safe_mean',
     'compute_iou',
-    'mean_iou_v2',
+    'topk_accuracy',
     'compute_confusion_matrix_classification',
     'compute_confusion_matrix_segmentation',
     'draw_confusion_matrix'
@@ -194,29 +193,29 @@ def compute_confusion_matrix_segmentation(
     target: torch.Tensor,
     num_classes: int
 ) -> np.ndarray:
-    """Computes the confusion matrix for segmentation tasks.
-
-    Args:
-        pred (torch.Tensor): The predicted labels with shape (H, W) or (N, H, W).
-        target (torch.Tensor): The ground truth labels with shape (H, W) or (N, H, W).
-        num_classes (int): The number of classes.
-
-    Returns:
-        np.ndarray: The confusion matrix with shape (num_classes, num_classes).
     """
-    if pred.dim() == 3:
-        pred = pred.view(-1)
-        target = target.view(-1)
+    pred (torch.Tensor): The predicted labels with shape (H, W) or (N, H, W).
+    target (torch.Tensor): The ground truth labels with shape (H, W) or (N, H, W).
+    num_classes (int): The number of classes.
+    """
+    if pred.dim() == 4:  # shape=(N, C, H, W)
+        pred = pred.argmax(dim=1)  # Convert to shape=(N, H, W)
 
-    elif pred.dim() == 2:
+    if target.dim() == 4 and target.shape[1] == 1:  # shape=(N, 1, H, W)
+        target = target.squeeze(1)  # Convert to shape=(N, H, W)
+
+    if pred.dim() == 3:  # shape=(N, H, W)
+        N = pred.shape[0]
+        pred = pred.view(N, -1)
+        target = target.view(N, -1)
+
+    elif pred.dim() == 2:  # shape=(H, W)
         pred = pred.flatten()
         target = target.flatten()
-
     else:
-        raise ValueError("Input tensors should be 2D or 3D tensors.")
+        raise ValueError("Input tensors should be 2D, 3D or 4D tensors.")
 
     confusion_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
-
     for t, p in zip(target.cpu().numpy(), pred.cpu().numpy()):
         confusion_matrix[t, p] += 1
 
@@ -244,28 +243,7 @@ def compute_iou_from_confusion(confusion_matrix: np.ndarray) -> List[float]:
     return ious
 
 
-def mean_iou_v2(
-    pred: torch.Tensor,
-    target: torch.Tensor,
-    num_classes: int
-) -> float:
-    """Computes the mean IoU across all classes.
-
-    Args:
-        pred (torch.Tensor): The predicted segmentation map with shape (H, W).
-        target (torch.Tensor): The ground truth segmentation map with shape (H, W).
-        num_classes (int): The number of classes including the background.
-
-    Returns:
-        float: The mean IoU.
-    """
-    confusion_matrix = compute_confusion_matrix_segmentation(pred, target, num_classes)
-    ious = compute_iou_from_confusion(confusion_matrix)
-    return float(np.nanmean(ious))
-
-
 # 绘制混淆矩阵
-
 def draw_confusion_matrix(
     cm,
     classes: List[str],
