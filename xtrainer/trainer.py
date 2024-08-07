@@ -380,6 +380,7 @@ class Trainer:
         else:
             return data
 
+    @timer
     def run(self) -> None:
         print('-' * 60)
         while self.epoch < CONFIG('epochs'):
@@ -426,7 +427,7 @@ class Trainer:
                 self.val_tracker.reset()
                 self.loss_tracker.reset()
 
-    @timer
+    # @timer
     def train(self) -> None:
 
         self.model.train()
@@ -496,7 +497,7 @@ class Trainer:
         if self.task.MT:
             pred = outputs[0][0]
         else:
-            pred=outputs
+            pred = outputs
 
         topk: List[float] = topk_accuracy(pred, targets, CONFIG('topk'))
 

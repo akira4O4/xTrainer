@@ -48,7 +48,7 @@ alpha: auto   #focal_loss
 gamma: 2      #focal_loss
 smooth: 1.0   #dice_loss,iou_loss,ce_loss
 loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
-seg_loss_sum_weights: [ 1,0,0 ] # bce+dice+iou
+seg_loss_sum_weights: [ 1,1,1 ] # bce+dice+iou
 
 #Test setting-----------------------------------------------------------------------------------------------------------
 source: /home/image
