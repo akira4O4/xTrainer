@@ -1,20 +1,20 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
-#task: classification #classification segmentation multitask
-task: segmentation #classification segmentation multitask
+task: classification #classification segmentation multitask
+#task: segmentation #classification segmentation multitask
 #task: multitask #classification segmentation multitask
 project: project/v3 #project_path or project_name
 experiment: 'exp'
 
 #Train setting----------------------------------------------------------------------------------------------------------
 seed: 0
-topK: [ 1,2 ]
+topk: [ 1,2 ]
 device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-#model: shufflenet_v2_x1_0
-model: segmentation_shufflenetplus_v2_x1_0
+model: shufflenet_v2_x1_0
+#model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: D:\llf\code\xTrainer\project\v3\exp\weights\epoch500.pth
