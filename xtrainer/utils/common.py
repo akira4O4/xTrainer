@@ -113,8 +113,7 @@ def get_image_shape(image: Union[np.ndarray, Image.Image]) -> Tuple[int, int]:
     if isinstance(image, Image.Image):
         img_w, img_h = image.size
     elif isinstance(image, np.ndarray):
-        img_h, img_w, c = image.shape
-
+        img_h, img_w = image.shape[:2]
     return img_w, img_h
 
 

@@ -23,8 +23,11 @@ class BaseDataset(Dataset, ABC):
         assert os.path.exists(root) is True, f'root is not found.'
 
         self._root = root
+
+        # model input shape
         self._wh = wh
         self._hw = (wh[1], wh[0])
+
         self._use_cache = cache
         self._loader_type = loader_type
         self._load_image = self.get_image_loader(loader_type)

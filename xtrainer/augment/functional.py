@@ -73,6 +73,8 @@ def letterbox(
     assert isinstance(image, np.ndarray), 'input image.type must be np.ndarray.'
 
     ih, iw = image.shape[:2]
+    if (iw, ih) == wh:
+        return image
 
     new_w, new_h = wh[0], wh[1]
     # Min scale ratio (new / old)

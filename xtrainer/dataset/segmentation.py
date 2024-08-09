@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from xtrainer.dataset import Image, SegLabel
 from xtrainer.dataset.base import BaseDataset
+from xtrainer.augment.functional import letterbox
 from xtrainer.utils.common import (
     load_json,
     get_images,
@@ -47,7 +48,7 @@ class SegmentationDataSet(BaseDataset):
         self.load_data()
 
         if self._use_cache:
-            self.preload()
+            self.cache_images_to_mem()
 
         self._samples = self.samples_with_label + self.background_samples
         self._samples_map: List[int] = list(range(len(self._samples)))
@@ -97,22 +98,23 @@ class SegmentationDataSet(BaseDataset):
         logger.info(f'background_samples: {len(self.background_samples)}')
 
     # Preload mask but don`t preprocessing mask
-    def preload(self) -> None:
+    def cache_images_to_mem(self) -> None:
 
         image: Image
         label: SegLabel
         if len(self.samples_with_label) > 0:
             for image, label in tqdm(self.samples_with_label, desc='Preload Image'):
-                image.data = self._load_image(image.path)
-                ih, iw = get_image_shape(image)
+                im = self._load_image(image.path)
+                iw, ih = get_image_shape(im)
+                image.data = letterbox(im, self._wh)
                 label.mask = self.get_mask(label.objects, (ih, iw))
 
         if len(self.background_samples) > 0:
             for image, label in tqdm(self.background_samples, desc='Preload Background'):
-                image.data = self._load_image(image.path)
+                im = self._load_image(image.path)
+                image.data = letterbox(im, self._wh)
                 label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
-    # Return mask shape=(input_h,input_w,1,np.uint8)
     def get_mask(self, objects: list, image_hw: Tuple[int, int]) -> np.ndarray:
 
         ih, iw = image_hw[0], image_hw[0]  # image hw
@@ -126,13 +128,16 @@ class SegmentationDataSet(BaseDataset):
             # points:[[x,y],[x,y],...]
 
             points = np.array(obj["points"], dtype=float)
-            points /= np.array([iw, ih], dtype=float)  # x/iw y/ih
-            points *= np.array([ow, oh], dtype=float)  # x*ow y*oh
-            points = safe_round(points)
+
+            if (iw, ih) != (ow, oh):
+                points /= np.array([iw, ih], dtype=float)  # x/iw y/ih
+                points *= np.array([ow, oh], dtype=float)  # x*ow y*oh
+                points = safe_round(points)
 
             label: str = obj['label']
             mask = self.polygon2mask(mask, points, self.label2idx(label))
 
+        # (H,W)->(H,W,C) C=1
         mask = hw_to_hw1(mask)
 
         return mask
@@ -153,19 +158,15 @@ class SegmentationDataSet(BaseDataset):
         image, label = self._samples[sample_idx]
 
         im = image.data if self._use_cache else self._load_image(image.path)
-        ih, iw = get_image_shape(im)
-        assert ih > 0 and iw > 0, 'Error: img_w or img_h <=0'
-
+        iw, ih = get_image_shape(im)
         mask = label.mask if self._use_cache else self.get_mask(label.objects, (ih, iw))
 
-        # input.type=[Image.Image,torch.Tensor]
-        data = (im, mask)
-        im, mask = self._transform(data)
+        im, mask = self._transform((im, mask))
 
         return im, mask
 
     def __len__(self) -> int:
-        return len(self._samples)
+        return len(self._samples_map)
 
 
 if __name__ == '__main__':

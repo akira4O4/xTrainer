@@ -1,7 +1,7 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train test
-task: classification #classification segmentation multitask
-#task: segmentation #classification segmentation multitask
+#task: classification #classification segmentation multitask
+task: segmentation #classification segmentation multitask
 #task: multitask #classification segmentation multitask
 project: project/v3 #project_path or project_name
 experiment: 'exp'
@@ -13,14 +13,14 @@ device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-model: shufflenet_v2_x1_0
-#model: segmentation_shufflenetplus_v2_x1_0
+#model: shufflenet_v2_x1_0
+model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: D:\llf\code\xTrainer\project\v3\exp\weights\epoch500.pth
 wh: [ 256,256 ]
 amp: True
-cache: False
+cache: True
 deterministic: True
 save_period: 5 # (int) Save checkpoint every x epochs
 
@@ -48,7 +48,7 @@ alpha: auto   #focal_loss
 gamma: 2      #focal_loss
 smooth: 1.0
 loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
-seg_loss_sum_weights: [ 1,1,1 ] # bce + dice + iou
+seg_loss_sum_weights: [ 1,0,0 ] # bce + dice + iou
 
 #Test setting-----------------------------------------------------------------------------------------------------------
 source: /home/image

@@ -104,10 +104,7 @@ class SegImageT(BaseT):
         ]
         self.t = self.compose()
 
-    def __call__(
-        self,
-        data: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = self.t(data)
         return image, mask
 
@@ -127,10 +124,6 @@ class SegValT(BaseT):
         ]
         self.t = self.compose()
 
-    def __call__(
-        self,
-        data: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        image, mask = data
-        image, mask = self.t((image, mask))
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
+        image, mask = self.t(data)
         return image, mask
