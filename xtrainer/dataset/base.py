@@ -104,7 +104,3 @@ class BaseDataset(Dataset, ABC):
         if not (0 <= idx < len(self._labels)):
             raise ValueError(f'索引 {idx} 超出标签列表范围。')
         return self._labels[idx]
-
-    def preload(self):
-        """此方法需在子类中实现以适应具体的数据加载需求"""
-        pass

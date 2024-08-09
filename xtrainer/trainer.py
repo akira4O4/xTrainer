@@ -28,7 +28,7 @@ from xtrainer.core.optim import (
 )
 
 from xtrainer.dataset.segmentation import SegmentationDataSet
-from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSamplerV1
+from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSampler
 from xtrainer.utils.common import (
     save_yaml,
     error_exit,
@@ -69,6 +69,8 @@ class Trainer:
     def __init__(self):
 
         self.epoch = 0
+
+        assert CONFIG('save_period') >= 1, 'save period must>=1'
 
         self.weight_path: str = ''  # project/weight
         self.experiment_path: str = ''  # project/experiment
@@ -274,7 +276,7 @@ class Trainer:
             logger.info('Close BalancedBatchSampler.')
         else:
             logger.info('Open BalancedBatchSampler')
-            batch_sampler = BalancedBatchSamplerV1(
+            batch_sampler = BalancedBatchSampler(
                 self.cls_train_ds.targets,
                 batch_size=bs
             )
@@ -380,7 +382,6 @@ class Trainer:
         else:
             return data
 
-    @timer
     def run(self) -> None:
         print('-' * 60)
         while self.epoch < CONFIG('epochs'):
@@ -388,17 +389,20 @@ class Trainer:
                 run_one_epoch = getattr(self, mode)
 
                 run_one_epoch()
+
                 if mode == 'train':
                     self.epoch += 1
-                    log_metric('Epoch', self.epoch)
-
                     if self.epoch % CONFIG('save_period') == 0:
                         self.save_model()
 
-                if CONFIG('not_val') is True and mode == 'val':
-                    continue
+                    log_metric('Epoch', self.epoch)
+
+                else:
+                    if CONFIG('not_val') is True:
+                        continue
 
                 lr: float = round8(self.optimizer.lrs[0]) if mode == 'train' else None
+
                 # Display info
                 if self.task.MT:
                     cls_loss: float = round4(self.loss_tracker.classification.avg) if mode == 'train' else None
@@ -427,7 +431,7 @@ class Trainer:
                 self.val_tracker.reset()
                 self.loss_tracker.reset()
 
-    # @timer
+    @timer
     def train(self) -> None:
 
         self.model.train()
@@ -466,20 +470,13 @@ class Trainer:
             else:
                 final_loss = cls_loss + seg_loss
 
-            # 1.loss backward
-            # 2.optimizer step
-            # 3.optimizer zero_grad
-
             with self.optimizer.context() as opt:
                 # self.optimizer.update(final_loss)
                 opt.update(final_loss)
 
         self.lr_scheduler.update()
 
-        # if self.scheduler_step_in_batch is True:
-        #     self.lr_scheduler.step(CONFIG('epochs') + curr_step / self.total_step)
-
-    def _classification_train(self, images: torch.Tensor, targets: torch.Tensor):
+    def _classification_train(self, images: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         loss = 0
         with self.optimizer.context():
 
@@ -516,7 +513,7 @@ class Trainer:
 
         return loss
 
-    def _segmentation_train(self, images: torch.Tensor, targets: torch.Tensor):
+    def _segmentation_train(self, images: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         with self.optimizer.context():
             # multitask output=[[x1,x2],[x1,x2,x3,x4]]
             # segmentation output=[x1,x2,x3,x4]

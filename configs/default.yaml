@@ -20,13 +20,13 @@ pretrained: True
 weight: D:\llf\code\xTrainer\project\v3\exp\weights\epoch500.pth
 wh: [ 256,256 ]
 amp: True
-cache: True
+cache: False
 deterministic: True
 save_period: 5 # (int) Save checkpoint every x epochs
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
-  batch: 16
+  batch: 64
   classes: 2
   train: D:\llf\dataset\dog_cat\64\train
   val: D:\llf\dataset\dog_cat\64\train
@@ -46,9 +46,9 @@ lrf: 0.01     # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
 alpha: auto   #focal_loss
 gamma: 2      #focal_loss
-smooth: 1.0   #dice_loss,iou_loss,ce_loss
+smooth: 1.0
 loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
-seg_loss_sum_weights: [ 1,1,1 ] # bce+dice+iou
+seg_loss_sum_weights: [ 1,1,1 ] # bce + dice + iou
 
 #Test setting-----------------------------------------------------------------------------------------------------------
 source: /home/image

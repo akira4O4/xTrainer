@@ -5,71 +5,18 @@ from typing import Optional, Callable, Tuple, List
 
 import numpy as np
 import torch
-from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
+from torch.utils.data import Sampler
 from xtrainer.dataset import Image
 from xtrainer.dataset.base import BaseDataset
 from xtrainer.utils.common import get_images
-from torch.utils.data import Sampler
+from xtrainer.augment.functional import letterbox
 
 
 # old
-class BalancedBatchSamplerV0(Sampler):
-    def __init__(
-        self,
-        labels: list,
-        n_classes: int,
-        n_samples: int
-    ):
-        super(BalancedBatchSamplerV0, self).__init__(data_source=None)
-        self.count = 0
-        self.labels = np.array(labels)
-        self.n_classes = n_classes
-        self.n_samples = n_samples
-        self.n_dataset = len(self.labels)
-        self.batch_size = self.n_samples * self.n_classes
-
-        self.labels_set = list(set(self.labels))
-
-        # 0:[idx1,idx2,...]
-        # 1:[idx1,idx2,...]
-        self.label_to_indices = {
-            label: np.where(self.labels == label)[0] for label in self.labels_set
-        }
-
-        for i in self.labels_set:
-            np.random.shuffle(self.label_to_indices[i])
-
-        # This dict keeps track of how many samples have been used for each label
-        self.used_label_indices_count = {label: 0 for label in self.labels_set}
-
-    def __iter__(self):
-        self.count = 0
-        while self.count + self.batch_size <= self.n_dataset:
-            classes = np.random.choice(self.labels_set, size=self.n_classes, replace=False)
-            indices = []
-
-            for class_ in classes:
-                start_idx = self.used_label_indices_count[class_]
-                end_idx = start_idx + self.n_samples
-                indices.extend(self.label_to_indices[class_][start_idx:end_idx])
-                self.used_label_indices_count[class_] += self.n_samples
-
-                if self.used_label_indices_count[class_] + self.n_samples > len(self.label_to_indices[class_]):
-                    np.random.shuffle(self.label_to_indices[class_])
-                    self.used_label_indices_count[class_] = 0
-
-            yield indices
-
-            self.count += self.batch_size
-
-    def __len__(self):
-        return self.n_dataset // self.batch_size
-
-
-class BalancedBatchSamplerV1(Sampler):
+class BalancedBatchSampler(Sampler):
     def __init__(
         self,
         labels: list,
@@ -156,10 +103,10 @@ class ClassificationDataset(BaseDataset):
 
         if self._use_cache:
             logger.info(f'Preload image data ...')
-            self.preload()
+            self.cache_images_to_mem()
 
-        self.targets = [s[1] for s in self._samples]
-        self._samples_map: List[int] = list(range(len(self._samples)))
+        self.targets = [s[1] for s in self._samples]  # [1,0,1,0,1,...]
+        self._samples_map: List[int] = list(range(len(self._samples)))  # [0,1,2,...,n]
 
         if expanding_rate > 1:
             self.expand_data(expanding_rate)
@@ -179,18 +126,23 @@ class ClassificationDataset(BaseDataset):
 
     def load_data(self) -> None:
         for idx in tqdm(range(self.num_of_label), desc='Loading data'):
+            # xxx/xxx/0
+            # xxx/xxx/1
             target_path = os.path.join(self._root, self.idx2label(idx))
 
             images: List[str] = get_images(target_path, self._SUPPORT_IMG_FORMAT)
 
-            self._samples.extend(list(map(lambda x: (Image(path=x), idx), images)))  # noqa
+            for image in images:
+                self._samples.append((Image(path=image), idx))
 
         random.shuffle(self._samples)
 
-    def preload(self) -> None:
+    def cache_images_to_mem(self) -> None:
         image: Image
         for image, idx in tqdm(self._samples, desc='Preload to memory'):
-            image.data = self._load_image(image.path)
+            im = self._load_image(image.path)
+            # pre-resize image
+            image.data = letterbox(im, self._wh)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
         sample_idx = self._samples_map[index]
