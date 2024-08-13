@@ -6,7 +6,7 @@ import torch
 import numpy as np
 from loguru import logger
 from torch.utils.data import DataLoader
-from mlflow import log_metric, set_experiment
+from mlflow import log_metric
 
 from xtrainer.core.lr_scheduler import LRSchedulerWrapper
 from xtrainer.core.preprocess import (
@@ -35,9 +35,7 @@ from xtrainer.utils.common import (
     round4,
     round8,
     timer,
-    check_dir,
     align_size,
-    get_time,
     print_of_mt,
     print_of_seg,
     print_of_cls,
@@ -61,6 +59,7 @@ from xtrainer.utils.tracker import (
 from xtrainer.utils.torch_utils import (
     init_seeds,
     init_backends_cudnn,
+    loss_sum,
     convert_optimizer_state_dict_to_fp16
 )
 
@@ -69,12 +68,6 @@ class Trainer:
     def __init__(self):
 
         self.epoch = 0
-
-        assert CONFIG('save_period') >= 1, 'save period must>=1'
-
-        self.weight_path: str = ''  # project/weight
-        self.experiment_path: str = ''  # project/experiment
-        self.init_workspace()
 
         # Init Data Logger ---------------------------------------------------------------------------------------------
         self.train_tracker = TrainTracker(topk=np.argmax(CONFIG('topk')))  # noqa
@@ -110,8 +103,7 @@ class Trainer:
         self.classification_loss = None
         self.segmentation_loss = None
 
-        # self.loss_weights: List[int] = CONFIG('loss_weights')
-        self.loss_weights: List[int] = CONFIG('loss_sum_weights')
+        # self.loss_weights: List[int] = CONFIG('loss_sum_weights')
         self.init_loss()
 
         # Init dataset and dataloader ---------------------------------------------------------------------------------
@@ -124,7 +116,7 @@ class Trainer:
 
             self.build_classification_ds_dl()
 
-            if CONFIG('classification')['classes'] != self.cls_train_ds.num_of_label:
+            if CONFIG('classification.classes') != self.cls_train_ds.num_of_label:
                 logger.error('classification num of classes setting error.')
                 error_exit()
 
@@ -138,7 +130,7 @@ class Trainer:
 
             self.build_segmentation_ds_dl()
 
-            if CONFIG('segmentation')['classes'] != self.seg_train_ds.num_of_label:
+            if CONFIG('segmentation.classes') != self.seg_train_ds.num_of_label:
                 logger.error('segmentation num of classes setting error.')
                 error_exit()
 
@@ -157,44 +149,11 @@ class Trainer:
         elif self.task.SEG:
             self.total_step = len(self.seg_train_dl)
 
-        # Init MLFlow  -------------------------------------------------------------------------------------------------
-        self.init_mlflow()
         logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
 
-    def init_workspace(self) -> None:
-        """
-        project
-            - experiment1
-                - cls_labels.txt
-                - weights
-            - experiment2
-                - seg_labels.txt
-                - weights
-        """
-        # assert os.path.isdir(CONFIG('project')) is True, 'args.project must be dir.'
-
-        check_dir(CONFIG('project'))
-
-        self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment'))
-        if os.path.exists(self.experiment_path):
-            self.experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment') + '.' + get_time())
-
-        check_dir(self.experiment_path)
-
-        self.weight_path = os.path.join(self.experiment_path, 'weights')
-        check_dir(self.weight_path)
-
-    @staticmethod
-    def init_mlflow() -> None:
-        if CONFIG('mlflow_experiment_name') == '':
-            logger.info(f'MLFlow Experiment Name: Default.')
-        else:
-            set_experiment(CONFIG('mlflow_experiment_name'))
-            logger.info(f'MLFlow Experiment Name:{CONFIG("mlflow_experiment_name")}.')
-
     def init_model(self) -> None:
-        num_classes: int = CONFIG('classification')['classes']
-        mask_classes: int = CONFIG('segmentation')['classes']
+        num_classes: int = CONFIG('classification.classes')
+        mask_classes: int = CONFIG('segmentation.classes')
 
         if num_classes == mask_classes == 0:
             logger.error("num_classes == mask_classes == 0")
@@ -257,19 +216,19 @@ class Trainer:
 
     def build_classification_ds_dl(self) -> None:
         wh = tuple(CONFIG('wh'))
-        bs: int = CONFIG('classification')['batch']
-        nc: int = CONFIG('classification')['classes']
+        bs: int = CONFIG('classification.batch')
+        nc: int = CONFIG('classification.classes')
 
         # Build Train Dataset --------------------------------------------------------------------------------------
         self.cls_train_ds = ClassificationDataset(
-            root=CONFIG('classification')['train'],
+            root=CONFIG('classification.train'),
             wh=wh,
             transform=ClsImageT(wh),
             target_transform=ClsTargetT(),
             cache=CONFIG('cache')
         )
 
-        save_yaml(self.cls_train_ds.labels, os.path.join(self.experiment_path, 'cls_labels.yaml'))
+        save_yaml(self.cls_train_ds.labels, os.path.join(CONFIG('experiment_path'), 'cls_labels.yaml'))
 
         batch_sampler = None
         if bs < nc:
@@ -297,7 +256,7 @@ class Trainer:
 
         # Build Val Dataset --------------------------------------------------------------------------------------------
         self.cls_val_ds = ClassificationDataset(
-            root=CONFIG('classification')['val'],
+            root=CONFIG('classification.val'),
             wh=wh,
             transform=ClsValT(wh),
             target_transform=ClsTargetT(),
@@ -316,10 +275,10 @@ class Trainer:
 
     def build_segmentation_ds_dl(self) -> None:
         wh = tuple(CONFIG('wh'))
-        bs: int = CONFIG('segmentation')['batch']
+        bs: int = CONFIG('segmentation.batch')
 
         self.seg_train_ds = SegmentationDataSet(
-            root=CONFIG('segmentation')['train'],
+            root=CONFIG('segmentation.train'),
             wh=wh,
             transform=SegImageT(wh),
             cache=CONFIG('cache')
@@ -327,7 +286,7 @@ class Trainer:
 
         save_yaml(
             self.seg_train_ds.labels,
-            os.path.join(self.experiment_path, 'seg_labels.yaml')
+            os.path.join(CONFIG('experiment_path'), 'seg_labels.yaml')
         )
 
         self.seg_train_dl = DataLoader(
@@ -344,7 +303,7 @@ class Trainer:
             f'Segmentation Train data size: {self.seg_train_ds.real_data_size} (background:{background_size}).')
 
         self.seg_val_ds = SegmentationDataSet(
-            root=CONFIG('segmentation')['val'],
+            root=CONFIG('segmentation.val'),
             wh=wh,
             transform=SegValT(wh),
             cache=CONFIG('cache')
@@ -465,8 +424,9 @@ class Trainer:
                 images = self.to_device(images)
                 targets = self.to_device(targets)
                 seg_loss = self._segmentation_train(images, targets)
+
             if self.task.MT:
-                final_loss = self.loss_sum([cls_loss, seg_loss])
+                final_loss = loss_sum([cls_loss, seg_loss], CONFIG('loss_sum_weights'))
             else:
                 final_loss = cls_loss + seg_loss
 
@@ -576,7 +536,7 @@ class Trainer:
         draw_confusion_matrix(
             confusion_matrix,
             self.cls_train_ds.labels,
-            os.path.join(self.experiment_path, 'cls_confusion_matrix.png')
+            os.path.join(CONFIG('experiment_path'), 'cls_confusion_matrix.png')
         )
         total_top1: float = self.val_tracker.top1.avg  # i.e.60%
         total_topk: float = self.val_tracker.topk.avg  # i.e.80%
@@ -604,7 +564,7 @@ class Trainer:
         draw_confusion_matrix(
             confusion_matrix,
             self.seg_train_ds.labels,
-            os.path.join(self.experiment_path, 'seg_confusion_matrix.png')
+            os.path.join(CONFIG('experiment_path'), 'seg_confusion_matrix.png')
         )
         total_miou: float = self.val_tracker.miou.avg
         log_metric('Val Epoch MIoU', total_miou)
@@ -620,18 +580,5 @@ class Trainer:
             'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict())),
             'lr': self.optimizer.lrs[0]
         }
-        save_path = os.path.join(self.weight_path, f'epoch{self.epoch}.pth')
+        save_path = os.path.join(CONFIG('weight_path'), f'epoch{self.epoch}.pth')
         torch.save(save_dict, save_path)
-        # print(f'{Emoji.DOWNLOAD}{Colors.GREEN}Save model to: {save_path}.{Colors.ENDC}\n')
-
-    def loss_sum(self, losses: List[torch.Tensor]) -> torch.Tensor:
-
-        if len(losses) != len(self.loss_weights):
-            logger.error('len(loss_result)!=len(self.losses_weights)')
-
-        ret = torch.tensor(0.0, dtype=losses[0].dtype, device=losses[0].device)
-
-        for loss, weight in zip(losses, self.loss_weights):
-            ret += loss * weight
-
-        return ret  # noqa

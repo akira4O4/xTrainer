@@ -1,9 +1,9 @@
 #Default setting--------------------------------------------------------------------------------------------------------
-mode: train           #train test
+mode: train           #train predict
 #task: classification #classification segmentation multitask
-task: segmentation #classification segmentation multitask
-#task: multitask #classification segmentation multitask
-project: project/v3 #project_path or project_name
+task: segmentation
+#task: multitask
+project: project/temp #project_path or project_name
 experiment: 'exp'
 
 #Train setting----------------------------------------------------------------------------------------------------------

@@ -38,7 +38,7 @@ class Config:
         else:
             raise FileNotFoundError(f"The path {path} does not exist.")
 
-    def add_kw(self, kv: Dict[str, Any]) -> None:
+    def update(self, kv: Dict[str, Any]) -> None:
         if isinstance(kv, dict):
             self._metadata.update(kv)
         else:

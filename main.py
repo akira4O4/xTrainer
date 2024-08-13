@@ -1,7 +1,63 @@
+import os
 import argparse
+
 from loguru import logger
-from xtrainer import CONFIG, OS, VERSION
+from mlflow import set_experiment
+
+from xtrainer import CONFIG, OS, VERSION, CUDA
 from xtrainer.trainer import Trainer
+from xtrainer.predict import Predict
+from xtrainer.utils.common import check_dir, get_time
+
+
+def init_workspace() -> None:
+    """
+    project
+        - experiment1
+            - cls_labels.txt
+            - seg_labels.txt
+            - weights(dir)
+    """
+
+    check_dir(CONFIG('project'))
+
+    experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment'))
+    if os.path.exists(experiment_path):
+        experiment_path = os.path.join(CONFIG('project'), CONFIG('experiment') + '.' + get_time())
+    check_dir(experiment_path)
+
+    weight_path = os.path.join(experiment_path, 'weights')
+    check_dir(weight_path)
+
+    CONFIG.update({"experiment_path": experiment_path})
+    CONFIG.update({"weight_path": weight_path})
+
+
+def init_mlflow() -> None:
+    if CONFIG('mlflow_experiment_name') == '':
+        logger.info(f'MLFlow Experiment Name: Default.')
+    else:
+        exp_name = CONFIG('mlflow_experiment_name')
+        set_experiment(exp_name)
+        logger.info(f'MLFlow Experiment Name :{exp_name}.')
+
+
+def check_args() -> None:
+    if CONFIG('mode').lower() not in ['train', 'predict']:
+        raise KeyError("Model must be in ['train', 'predict']")
+
+    if CONFIG('task').lower() not in ['classification', 'segmentation', 'multitask']:
+        raise KeyError("Model must be in ['classification', 'segmentation', 'multitask']")
+
+    if CONFIG('device') != -1 and CUDA:
+        logger.error('CUDA is not available')
+        exit(-1)
+
+    if CONFIG('save_period') < 1:
+        raise ValueError('save period must be >= 1')
+
+    logger.success('Args check done.')
+
 
 if __name__ == '__main__':
     logger.info(f'OS: {OS}')
@@ -19,6 +75,14 @@ if __name__ == '__main__':
     CONFIG.set_path(args.config)
     CONFIG.load()
 
-    trainer = Trainer()
+    check_args()
+    init_workspace()
+    init_mlflow()
 
-    trainer.run()
+    if CONFIG('mode').lower() == 'train':
+        trainer = Trainer()
+        trainer.run()
+
+    elif CONFIG('mode').lower() == 'predict':
+        predict = Predict()
+        predict.run()

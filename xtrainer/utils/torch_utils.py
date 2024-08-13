@@ -1,4 +1,5 @@
 import random
+from typing import List
 import numpy as np
 import torch
 import torch.backends.cudnn
@@ -26,3 +27,14 @@ def convert_optimizer_state_dict_to_fp16(state_dict) -> dict:
                 state[k] = v.half()
 
     return state_dict
+
+
+def loss_sum(losses: List[torch.Tensor], weights: List[float]) -> torch.Tensor:
+    assert len(losses) == len(weights), 'len(loss)!=len(weights)'
+
+    ret = torch.tensor(0.0, dtype=losses[0].dtype, device=losses[0].device)
+
+    for loss, weight in zip(losses, weights):
+        ret += loss * weight
+
+    return ret  # noqa
