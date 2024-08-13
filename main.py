@@ -6,7 +6,7 @@ from mlflow import set_experiment
 
 from xtrainer import CONFIG, OS, VERSION, CUDA
 from xtrainer.trainer import Trainer
-from xtrainer.predict import Predict
+from xtrainer.predict import Predictor
 from xtrainer.utils.common import check_dir, get_time
 
 
@@ -84,5 +84,5 @@ if __name__ == '__main__':
         trainer.run()
 
     elif CONFIG('mode').lower() == 'predict':
-        predict = Predict()
-        predict.run()
+        predictor = Predictor()
+        predictor.run()
