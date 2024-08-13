@@ -57,17 +57,17 @@ class RandomHSV:
 class RandomFlip:
     def __init__(
         self,
-        flip_thr: Optional[float] = 0.5,
+        flip_p: Optional[float] = 0.5,
         direction: Optional[str] = "horizontal"
     ) -> None:
-        self.flip_thr = flip_thr
+        self.flip_p = flip_p
         self.direction = direction
 
     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         image, mask = data
         random_p = random.random()
-        image = random_flip(image, self.flip_thr, self.direction, random_p)
-        mask = random_flip(mask, self.flip_thr, self.direction, random_p)
+        image = random_flip(image, self.flip_p, self.direction, random_p)
+        mask = random_flip(mask, self.flip_p, self.direction, random_p)
         return image, mask
 
 
@@ -87,7 +87,6 @@ class Resize:
             return image, mask
 
         image = resize(image, self.wh, self.only_scaledown)
-        # mask = resize(image, self.wh, self.only_scaledown)
         return image, mask
 
     def _call_1(self, image: np.ndarray) -> np.ndarray:
@@ -141,9 +140,9 @@ class LetterBox:
     # data: (np.ndarray,np.ndarray)
     # data: np.ndarray
     def __call__(self, data):
-        if type(data) is np.ndarray:
+        if isinstance(data, np.ndarray):
             return self._call_1(data)
-        elif type(data) is tuple:
+        elif isinstance(data, tuple):
             return self._call_2(data)
 
 

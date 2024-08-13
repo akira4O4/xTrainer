@@ -12,7 +12,7 @@ from xtrainer.augment.functional import letterbox
 from xtrainer.utils.common import (
     load_json,
     get_images,
-    get_image_shape,
+    get_image_wh,
     hw_to_hw1,
     safe_round
 )
@@ -48,16 +48,13 @@ class SegmentationDataSet(BaseDataset):
         self.load_data()
 
         if self._use_cache:
-            self.cache_images_to_mem()
+            self.cache_images_to_memory()
 
-        self._samples = self.samples_with_label + self.background_samples
-        self._samples_map: List[int] = list(range(len(self._samples)))
+        self._samples = self.samples_with_label + self.background_samples  # [(image,label),(image,label),...]
+        self._samples_map: List[int] = list(range(len(self._samples)))  # [0,1,2,3,...]
 
         if expanding_rate > 1:
-            self.expand_data(expanding_rate)
-
-    def expand_data(self, rate: int) -> None:
-        self._samples_map *= rate
+            self._samples_map *= expanding_rate
 
     @staticmethod
     def find_label_path(path: str) -> str:
@@ -65,7 +62,6 @@ class SegmentationDataSet(BaseDataset):
         name, ext = os.path.splitext(basename)
         return path.replace(ext, '.json')
 
-    # Load data path
     def load_data(self) -> None:
         for image_path in tqdm(self.all_image_path, desc='Loading data'):
 
@@ -73,7 +69,7 @@ class SegmentationDataSet(BaseDataset):
             image = Image(path=image_path)  # Just only have image path
 
             label_path: str = self.find_label_path(image_path)
-            if os.path.exists(label_path):
+            if os.path.exists(label_path) is True:
 
                 # load and decode json data
                 label.load_metadata(load_json(label_path))
@@ -97,17 +93,16 @@ class SegmentationDataSet(BaseDataset):
         logger.info(f'samples_with_label: {len(self.samples_with_label)}')
         logger.info(f'background_samples: {len(self.background_samples)}')
 
-    # Preload mask but don`t preprocessing mask
-    def cache_images_to_mem(self) -> None:
+    def cache_images_to_memory(self) -> None:
 
         image: Image
         label: SegLabel
         if len(self.samples_with_label) > 0:
             for image, label in tqdm(self.samples_with_label, desc='Preload Image'):
                 im = self._load_image(image.path)
-                iw, ih = get_image_shape(im)
+                iw, ih = get_image_wh(im)
                 image.data = letterbox(im, self._wh)
-                label.mask = self.get_mask(label.objects, (ih, iw))
+                label.mask = self.get_mask(label.objects, (iw, ih))
 
         if len(self.background_samples) > 0:
             for image, label in tqdm(self.background_samples, desc='Preload Background'):
@@ -115,10 +110,14 @@ class SegmentationDataSet(BaseDataset):
                 image.data = letterbox(im, self._wh)
                 label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
-    def get_mask(self, objects: list, image_hw: Tuple[int, int]) -> np.ndarray:
+    def get_mask(
+        self,
+        objects: list,
+        image_wh: Tuple[int, int]
+    ) -> np.ndarray:
 
-        ih, iw = image_hw[0], image_hw[0]  # image hw
-        oh, ow = self._wh[1], self._wh[1]  # input hw
+        iw, ih = image_wh[0], image_wh[1]  # image wh
+        ow, oh = self._wh[0], self._wh[1]  # input wh
 
         if not objects:
             return np.zeros((oh, ow, 1), dtype=np.uint8)
@@ -143,7 +142,11 @@ class SegmentationDataSet(BaseDataset):
         return mask
 
     @staticmethod
-    def polygon2mask(mask: np.ndarray, points: np.ndarray, label_idx: Optional[int] = 0) -> np.ndarray:
+    def polygon2mask(
+        mask: np.ndarray,
+        points: np.ndarray,
+        label_idx: Optional[int] = 0
+    ) -> np.ndarray:
         assert 0 <= label_idx <= 255, '255 >= label_idx >= 0'
         if points.dtype != np.int32:
             points = points.astype(np.int32)
@@ -158,8 +161,8 @@ class SegmentationDataSet(BaseDataset):
         image, label = self._samples[sample_idx]
 
         im = image.data if self._use_cache else self._load_image(image.path)
-        iw, ih = get_image_shape(im)
-        mask = label.mask if self._use_cache else self.get_mask(label.objects, (ih, iw))
+        iw, ih = get_image_wh(im)
+        mask = label.mask if self._use_cache else self.get_mask(label.objects, (iw, ih))
 
         im, mask = self._transform((im, mask))
 

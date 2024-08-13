@@ -103,7 +103,7 @@ class ClassificationDataset(BaseDataset):
 
         if self._use_cache:
             logger.info(f'Preload image data ...')
-            self.cache_images_to_mem()
+            self.cache_images_to_memory()
 
         self.targets = [s[1] for s in self._samples]  # [1,0,1,0,1,...]
         self._samples_map: List[int] = list(range(len(self._samples)))  # [0,1,2,...,n]
@@ -137,7 +137,7 @@ class ClassificationDataset(BaseDataset):
 
         random.shuffle(self._samples)
 
-    def cache_images_to_mem(self) -> None:
+    def cache_images_to_memory(self) -> None:
         image: Image
         for image, idx in tqdm(self._samples, desc='Preload to memory'):
             im = self._load_image(image.path)

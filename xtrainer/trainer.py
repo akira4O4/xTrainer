@@ -325,12 +325,11 @@ class Trainer:
             cache=CONFIG('cache')
         )
 
-        background_size = len(self.seg_train_ds.background_samples)
-
         save_yaml(
             self.seg_train_ds.labels,
             os.path.join(self.experiment_path, 'seg_labels.yaml')
         )
+
         self.seg_train_dl = DataLoader(
             dataset=self.seg_train_ds,
             batch_size=bs,
@@ -339,6 +338,7 @@ class Trainer:
             pin_memory=True,
         )
 
+        background_size = len(self.seg_train_ds.background_samples)
         logger.info(f'Segmentation num of labels: {self.seg_train_ds.num_of_label}.')
         logger.info(
             f'Segmentation Train data size: {self.seg_train_ds.real_data_size} (background:{background_size}).')

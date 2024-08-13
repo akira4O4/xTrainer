@@ -20,4 +20,5 @@ if __name__ == '__main__':
     CONFIG.load()
 
     trainer = Trainer()
+
     trainer.run()

@@ -134,6 +134,11 @@ def safe_mean(tensor: torch.Tensor) -> torch.Tensor:
     return tensor[mask].mean()
 
 
+def mean(data: list) -> float:
+    safe_data = [x for x in data if x is not None]
+    return sum(safe_data) / len(safe_data) if safe_data else 0.0
+
+
 def compute_iou(
     pred: torch.Tensor,
     target: torch.Tensor,
@@ -147,14 +152,14 @@ def compute_iou(
     # [N,H,W]
     elif pred.dim() == 3:
         bs_iou = compute_iou_with_nhw(pred, target, num_classes)
-        all_iou = [safe_mean(torch.tensor(iou)).item() for iou in bs_iou]
-        return safe_mean(torch.tensor(all_iou)).item()
+        bs_mean_iou = [safe_mean(torch.tensor(iou)).item() for iou in bs_iou]
+        return mean(bs_mean_iou)
 
     # [N,C,H,W]
     elif pred.dim() == 4:
         bs_iou = compute_iou_with_nchw(pred, target, num_classes)
-        all_iou = [safe_mean(torch.tensor(iou)).item() for iou in bs_iou]
-        return safe_mean(torch.tensor(all_iou)).item()
+        bs_mean_iou = [safe_mean(torch.tensor(iou)).item() for iou in bs_iou]
+        return mean(bs_mean_iou)
 
 
 def compute_confusion_matrix_classification(
@@ -296,3 +301,11 @@ def draw_confusion_matrix(
     # 保存图像
     plt.savefig(save)
     plt.close()
+if __name__ == '__main__':
+    pred2 = torch.tensor([[[0, 1], [1, 0]],
+                          [[1, 1], [0, 0]]])
+    target2 = torch.tensor([[[0, 1], [0, 1]],
+                            [[1, 0], [0, 1]]])
+    num_classes2 = 2
+    conf_matrix2 = compute_confusion_matrix_segmentation(pred2, target2, num_classes2)
+    print(conf_matrix2)
