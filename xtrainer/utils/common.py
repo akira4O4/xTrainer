@@ -5,6 +5,7 @@ import json
 import yaml
 import shutil
 from typing import Optional, List, Tuple, Union
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -135,7 +136,7 @@ def pil2np(img: Image.Image) -> np.ndarray:
 def np2pil(img: np.ndarray) -> Image.Image:
     if isinstance(img, Image.Image):
         return img
-
+    img = np.ascontiguousarray(img)  # contiguous
     return Image.fromarray(img)
 
 
@@ -363,6 +364,12 @@ def print_of_mt(
             f'{topk:>{width}}'
             f'{miou:>{width}}\n'
         )
+
+
+def safe_imread(path: str) -> np.ndarray:
+    image_data = np.fromfile(path, dtype=np.uint8)
+    image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+    return image
 
 
 if __name__ == '__main__':

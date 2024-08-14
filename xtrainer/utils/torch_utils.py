@@ -38,3 +38,19 @@ def loss_sum(losses: List[torch.Tensor], weights: List[float]) -> torch.Tensor:
         ret += loss * weight
 
     return ret  # noqa
+
+
+class ToDevice:
+    def __init__(self, device: int = -1):
+        self.device = torch.device('cpu')
+        self.is_gpu = False
+
+        if torch.cuda.is_available() or device >= 0:
+            self.device = torch.device(f'cuda:{device}')
+            self.is_gpu = True
+
+    def __call__(self, data: torch.Tensor) -> torch.Tensor:
+        if self.is_gpu:
+            return data.cuda(self.device, non_blocking=True)
+        else:
+            return data

@@ -1,7 +1,7 @@
 #Default setting--------------------------------------------------------------------------------------------------------
-mode: train           #train predict
-#task: classification #classification segmentation multitask
-task: segmentation
+mode: predict           #train predict
+task: classification #classification segmentation multitask
+#task: segmentation
 #task: multitask
 project: project/temp #project_path or project_name
 experiment: 'exp'
@@ -13,12 +13,12 @@ device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-#model: shufflenet_v2_x1_0
-model: segmentation_shufflenetplus_v2_x1_0
+model: shufflenet_v2_x1_0
+#model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: model.pth
-wh: [ 256,256 ]
+wh: [ 480,480 ]
 amp: True
 cache: True
 deterministic: True
@@ -51,10 +51,12 @@ loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
 seg_loss_sum_weights: [ 1,1,0 ] # bce + dice + iou
 
 #Test setting-----------------------------------------------------------------------------------------------------------
-source: /home/image
-test_weight: mode.pth
-cls_thr: [ ]
-seg_thr: [ ]
+#source: D:\llf\dataset\danyang\training_data\F\train\tiny
+source: D:\llf\dataset\danyang\training_data\G\tiny
+test_weight: D:\llf\code\DLFv2\project\danyang_G\weights\20240426_164450_Epoch84_Acc99.9698_lr9e-06_BestModel.pth
+label: D:\llf\code\xTrainer\project\label.yaml
+cls_thr: [ 0.6,0.6 ]
+seg_thr: [ -1, ] #-1=ignore
 
 # MlFlow setting--------------------------------------------------------------------------------------------------------
 mlflow_uri: localhost

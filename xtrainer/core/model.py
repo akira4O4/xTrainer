@@ -69,7 +69,7 @@ class Model:
         else:
             self._device = torch.device(f'cuda:{idx}')
             self._is_gpu = True
-        logger.info(f'Setting device to {self._device}')
+        logger.info(f'Setting model to {self._device}')
 
     @property
     def is_gpu(self) -> bool:
@@ -100,7 +100,6 @@ class Model:
 
     def to_device(self) -> None:
         self._net.to(self._device)
-        logger.info(f'Model.device: {self._device}.')
 
     def set_weight(self, path: str) -> None:
         self._weight = path

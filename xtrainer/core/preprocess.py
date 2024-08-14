@@ -71,7 +71,7 @@ class ClsTargetT(BaseT):
 class ClsValT(BaseT):
     def __init__(self, wh: Tuple[int, int], only_scaledown: bool = False) -> None:
         super().__init__()
-        assert wh is not None, 'imgsz is not None.'
+        assert wh is not None, 'image wh is None.'
         self.ops = [
             LetterBox(wh, only_scaledown),
             NP2PIL()
@@ -127,3 +127,23 @@ class SegValT(BaseT):
     def __call__(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = self.t(data)
         return image, mask
+
+
+class InferT(BaseT):
+    def __init__(
+        self,
+        wh: Tuple[int, int],
+        only_scaledown: bool = False
+    ) -> None:
+        super().__init__()
+        assert wh is not None, 'image wh is None.'
+        self.ops = [
+            LetterBox(wh, only_scaledown),
+            NP2PIL()
+        ]
+        self.ops += self.default_ops
+        self.t = self.compose()
+
+    def __call__(self, image) -> torch.Tensor:
+        image = self.t(image)
+        return image

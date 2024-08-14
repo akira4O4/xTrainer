@@ -49,14 +49,30 @@ def check_args() -> None:
     if CONFIG('task').lower() not in ['classification', 'segmentation', 'multitask']:
         raise KeyError("Model must be in ['classification', 'segmentation', 'multitask']")
 
-    if CONFIG('device') != -1 and CUDA:
+    if not CUDA and CONFIG('device') >= 0:
         logger.error('CUDA is not available')
         exit(-1)
 
     if CONFIG('save_period') < 1:
         raise ValueError('save period must be >= 1')
 
-    logger.success('Args check done.')
+    if CONFIG('mode') == 'predict':
+        if os.path.exists(CONFIG('source')) is False:
+            raise FileNotFoundError('Don`t test source')
+
+        if os.path.exists(CONFIG('test_weight')) is False:
+            raise FileNotFoundError('Don`t found weight')
+
+        if os.path.exists(CONFIG('label')) is False:
+            raise FileNotFoundError('Don`t found label file')
+
+        if CONFIG('task') in ['classification', 'multitask']:
+            if CONFIG('classification.classes') < len(CONFIG('cls_thr')):
+                raise EOFError('nc!=len(thr)')
+
+        if CONFIG('task') in ['segmentation', 'multitask']:
+            if CONFIG('segmentation.classes') < len(CONFIG('seg_thr')):
+                raise EOFError('nc!=len(thr)')
 
 
 if __name__ == '__main__':
@@ -76,10 +92,10 @@ if __name__ == '__main__':
     CONFIG.load()
 
     check_args()
-    init_workspace()
-    init_mlflow()
 
     if CONFIG('mode').lower() == 'train':
+        init_workspace()
+        init_mlflow()
         trainer = Trainer()
         trainer.run()
 

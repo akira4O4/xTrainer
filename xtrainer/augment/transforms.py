@@ -17,20 +17,13 @@ from .functional import (
 
 
 class NP2PIL:
-    @staticmethod
-    def _call_2(data: Tuple[np.ndarray, np.ndarray]) -> Tuple[Image.Image, Image.Image]:
-        image, mask = data
-        return np2pil(image), np2pil(mask)
-
-    @staticmethod
-    def _call_1(image: np.ndarray) -> Image.Image:
-        return np2pil(image)
 
     def __call__(self, data):
-        if type(data) is np.ndarray:
-            return self._call_1(data)
-        elif type(data) is tuple:
-            return self._call_2(data)
+        if isinstance(data, np.ndarray):
+            return np2pil(data)
+        elif isinstance(data, tuple):
+            image, mask = data
+            return np2pil(image), np2pil(mask)
 
 
 class RandomHSV:
@@ -76,21 +69,7 @@ class Resize:
         self.wh = wh
         self.only_scaledown = only_scaledown
 
-    def _call_2(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        image, mask = data
-        assert image is not None, 'image is None.'
-        assert mask is not None, 'mask is None'
-
-        ih, iw = image.shape[:2]
-
-        if (iw, ih) == self.wh:
-            return image, mask
-
-        image = resize(image, self.wh, self.only_scaledown)
-        return image, mask
-
-    def _call_1(self, image: np.ndarray) -> np.ndarray:
-        assert image is not None, 'image is None.'
+    def _impl(self, image: np.ndarray) -> np.ndarray:
 
         ih, iw = image.shape[:2]
 
@@ -101,10 +80,18 @@ class Resize:
         return image
 
     def __call__(self, data):
-        if type(data) is np.ndarray:
-            return self._call_1(data)
-        elif type(data) is tuple:
-            return self._call_2(data)
+        if isinstance(data, np.ndarray):
+            assert data is not None, 'image is None.'
+
+            return self._impl(data)
+
+        elif isinstance(data, tuple):
+            image, mask = data
+            assert image is not None, 'image is None.'
+            assert mask is not None, 'mask is None'
+
+            new_image = self._impl(image)
+            return new_image, mask
 
 
 class LetterBox:
@@ -112,9 +99,7 @@ class LetterBox:
         self.wh = wh
         self.only_scaledown = only_scaledown
 
-    def _call_1(self, image: np.ndarray) -> np.ndarray:
-
-        assert image is not None, 'image is None.'
+    def _impl(self, image: np.ndarray) -> np.ndarray:
 
         ih, iw = image.shape[:2]
 
@@ -124,26 +109,17 @@ class LetterBox:
         image = letterbox(image, self.wh, self.only_scaledown)
         return image
 
-    def _call_2(self, data: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        image, mask = data
-        assert image is not None, 'image is None.'
-        assert mask is not None, 'mask is None'
-
-        ih, iw = image.shape[:2]
-
-        if (iw, ih) == self.wh:
-            return image, mask
-
-        image = letterbox(image, self.wh, self.only_scaledown)
-        return image, mask
-
-    # data: (np.ndarray,np.ndarray)
-    # data: np.ndarray
     def __call__(self, data):
         if isinstance(data, np.ndarray):
-            return self._call_1(data)
+            assert data is not None, 'image is None.'
+            return self._impl(data)
+
         elif isinstance(data, tuple):
-            return self._call_2(data)
+            image, mask = data
+            assert image is not None, 'image is None.'
+            assert mask is not None, 'mask is None'
+            new_image = self._impl(image)
+            return new_image, mask
 
 
 class ImgAugT:
