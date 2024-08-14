@@ -91,7 +91,7 @@ def timer(func):
     return func_wrapper
 
 
-def get_time(fmt: str = '%Y%m%d_%H%M%S') -> str:
+def get_time(fmt: str = '%Y%m%d.%H%M(%S)') -> str:
     time_str = time.strftime(fmt, time.localtime())
     return str(time_str)
 

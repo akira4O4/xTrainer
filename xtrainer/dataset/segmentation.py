@@ -38,7 +38,7 @@ class SegmentationDataSet(BaseDataset):
             cache=cache
         )
 
-        self._labels = ['0_background_']
+        self._labels = []
 
         self.samples_with_label: List[Tuple[Image, SegLabel]] = []
         self.background_samples: List[Tuple[Image, SegLabel]] = []

@@ -153,7 +153,7 @@ class Trainer:
 
     def init_model(self) -> None:
         num_classes: int = CONFIG('classification.classes')
-        mask_classes: int = CONFIG('segmentation.classes')
+        mask_classes: int = CONFIG('segmentation.classes') + 1  # add background
 
         if num_classes == mask_classes == 0:
             logger.error("num_classes == mask_classes == 0")

@@ -63,14 +63,17 @@ def check_args() -> None:
         if os.path.exists(CONFIG('test_weight')) is False:
             raise FileNotFoundError('Don`t found weight')
 
-        if os.path.exists(CONFIG('label')) is False:
-            raise FileNotFoundError('Don`t found label file')
-
         if CONFIG('task') in ['classification', 'multitask']:
+            if os.path.exists(CONFIG('cls_label')) is False:
+                raise FileNotFoundError('Don`t found label file')
+
             if CONFIG('classification.classes') < len(CONFIG('cls_thr')):
                 raise EOFError('nc!=len(thr)')
 
         if CONFIG('task') in ['segmentation', 'multitask']:
+            if os.path.exists(CONFIG('seg_label')) is False:
+                raise FileNotFoundError('Don`t found label file')
+
             if CONFIG('segmentation.classes') < len(CONFIG('seg_thr')):
                 raise EOFError('nc!=len(thr)')
 

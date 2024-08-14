@@ -1,7 +1,7 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: predict           #train predict
-task: classification #classification segmentation multitask
-#task: segmentation
+#task: classification #classification segmentation multitask
+task: segmentation
 #task: multitask
 project: project/temp #project_path or project_name
 experiment: 'exp'
@@ -13,12 +13,12 @@ device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-model: shufflenet_v2_x1_0
-#model: segmentation_shufflenetplus_v2_x1_0
+#model: shufflenet_v2_x1_0
+model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: model.pth
-wh: [ 480,480 ]
+wh: [ 256,256 ]
 amp: True
 cache: True
 deterministic: True
@@ -34,7 +34,7 @@ classification:
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
   batch: 8
-  classes: 2
+  classes: 5 # Not add background
   train: D:\llf\dataset\danyang\training_data\F\train\8\train
   val: D:\llf\dataset\danyang\training_data\F\train\8\train
 
@@ -50,13 +50,16 @@ smooth: 1.0
 loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
 seg_loss_sum_weights: [ 1,1,0 ] # bce + dice + iou
 
-#Test setting-----------------------------------------------------------------------------------------------------------
-#source: D:\llf\dataset\danyang\training_data\F\train\tiny
-source: D:\llf\dataset\danyang\training_data\G\tiny
-test_weight: D:\llf\code\DLFv2\project\danyang_G\weights\20240426_164450_Epoch84_Acc99.9698_lr9e-06_BestModel.pth
-label: D:\llf\code\xTrainer\project\label.yaml
+#Predict setting-----------------------------------------------------------------------------------------------------------
+source: D:\llf\dataset\danyang\training_data\F\tiny
+test_weight: D:\llf\code\xTrainer\project\F.pth
+
 cls_thr: [ 0.6,0.6 ]
-seg_thr: [ -1, ] #-1=ignore
+cls_label: D:\llf\code\xTrainer\project\cls_label.yaml
+
+seg_thr: [ 10,10,-1,-1,-1 ] #Not add background (-1==ignore)
+seg_label: D:\llf\code\xTrainer\project\seg_label.yaml
+sum_method: True
 
 # MlFlow setting--------------------------------------------------------------------------------------------------------
 mlflow_uri: localhost
