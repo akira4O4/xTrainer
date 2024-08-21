@@ -34,12 +34,15 @@ def init_workspace() -> None:
 
 
 def init_mlflow() -> None:
-    if CONFIG('mlflow_experiment_name') == '':
-        logger.info(f'MLFlow Experiment Name: Default.')
+    if CONFIG('mlflow_uri') != -1:
+        if CONFIG('mlflow_experiment_name') == '':
+            logger.info(f'MLFlow Experiment Name: Default.')
+        else:
+            exp_name = CONFIG('mlflow_experiment_name')
+            set_experiment(exp_name)
+            logger.info(f'MLFlow Experiment Name :{exp_name}.')
     else:
-        exp_name = CONFIG('mlflow_experiment_name')
-        set_experiment(exp_name)
-        logger.info(f'MLFlow Experiment Name :{exp_name}.')
+        logger.info('Disable mlflow tracker.')
 
 
 def check_args() -> None:

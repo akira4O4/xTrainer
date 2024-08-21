@@ -1,9 +1,9 @@
 #Default setting--------------------------------------------------------------------------------------------------------
-mode: predict           #train predict
+mode: predict           #train or predict
 #task: classification #classification segmentation multitask
 task: segmentation
 #task: multitask
-project: project/temp #project_path or project_name
+project: project/temp
 experiment: 'exp'
 
 #Train setting----------------------------------------------------------------------------------------------------------
@@ -41,17 +41,17 @@ segmentation:
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
 cos_lr: False
-lr0: 0.001   # (float) initial learning rate
-lrf: 0.01     # (float) final learning rate (lr0 * lrf)
+lr0: 0.001                        # (float) initial learning rate
+lrf: 0.01                         # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
-alpha: auto   #focal_loss
-gamma: 2      #focal_loss
-smooth: 1.0
-loss_sum_weights: [ 1,1 ]       # cls_loss + seg_loss
-seg_loss_sum_weights: [ 1,1,0 ] # bce + dice + iou
+alpha: auto                       #focal_loss
+gamma: 2                          #focal_loss
+smooth: 1.0                       # seg loss
+loss_sum_weights: [ 1,1 ]         # cls_loss + seg_loss
+seg_loss_sum_weights: [ 1,1,0 ]   # bce + dice + iou
 
 #Predict setting-----------------------------------------------------------------------------------------------------------
-source: D:\llf\dataset\danyang\training_data\F\tiny
+source: D:\llf\dataset\danyang\training_data\F\one
 test_weight: D:\llf\code\xTrainer\project\F.pth
 
 cls_thr: [ 0.6,0.6 ]
@@ -59,9 +59,9 @@ cls_label: D:\llf\code\xTrainer\project\cls_label.yaml
 
 seg_thr: [ 10,10,-1,-1,-1 ] #Not add background (-1==ignore)
 seg_label: D:\llf\code\xTrainer\project\seg_label.yaml
-sum_method: True
+sum_method: False #segment only
 
 # MlFlow setting--------------------------------------------------------------------------------------------------------
-mlflow_uri: localhost
+mlflow_uri: -1 #-1=disable
 mlflow_port: 5000
 mlflow_experiment_name: classification

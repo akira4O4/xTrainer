@@ -1,77 +1,28 @@
 import os
 import shutil
-from copy import deepcopy
-from typing import Union, List, Any
+from typing import List, Any
 
 import cv2
 import torch
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
-from torch.utils.data import DataLoader
-from mlflow import log_metric
 
-from xtrainer.core.lr_scheduler import LRSchedulerWrapper
-from xtrainer.core.preprocess import (
-    ClsImageT,
-    ClsTargetT,
-    ClsValT,
-    SegImageT,
-    SegValT,
-    InferT
-)
-
-from xtrainer import CONFIG, DEFAULT_OPTIMIZER, COLOR_LIST
-
+from xtrainer.utils.task import Task
 from xtrainer.core.model import Model
-from xtrainer.core.optim import (
-    AMPOptimWrapper,
-    OptimWrapper,
-    build_optimizer_wrapper,
-    build_amp_optimizer_wrapper
-)
-
-from xtrainer.dataset.segmentation import SegmentationDataSet
-from xtrainer.dataset.classification import ClassificationDataset, BalancedBatchSampler
+from xtrainer import CONFIG, COLOR_LIST
+from xtrainer.core.preprocess import InferT
+from xtrainer.utils.torch_utils import ToDevice
 from xtrainer.utils.common import (
-    save_yaml,
     error_exit,
-    round4,
     round8,
-    timer,
-    align_size,
     get_images,
     get_time,
-    print_of_mt,
-    print_of_seg,
-    print_of_cls,
     Colors,
     safe_imread,
     load_yaml,
     check_dir,
     save_json
-)
-
-from xtrainer.core.loss import ClassificationLoss, SegmentationLoss
-from xtrainer.utils.task import Task
-from xtrainer.utils.perf import (
-    topk_accuracy,
-    compute_confusion_matrix_classification,
-    compute_confusion_matrix_segmentation,
-    draw_confusion_matrix,
-    compute_iou
-)
-from xtrainer.utils.tracker import (
-    TrainTracker,
-    ValTracker,
-    LossTracker
-)
-from xtrainer.utils.torch_utils import (
-    init_seeds,
-    init_backends_cudnn,
-    loss_sum,
-    convert_optimizer_state_dict_to_fp16,
-    ToDevice
 )
 
 
@@ -97,7 +48,7 @@ class Predictor:
         self.cls_save = ''  # project/runs/classification
         self.seg_save = ''  # project/runs/segmentation
         self.seg_image_output = ''  # project/runs/segmentation/images
-        self.seg_result_output = ''  # project/runs/segmentation/results
+        self.seg_data_output = ''  # project/runs/segmentation/results
         self.init_output_dir()
 
     def init_output_dir(self) -> None:
@@ -112,8 +63,8 @@ class Predictor:
             self.seg_image_output = os.path.join(self.seg_save, 'images')
             check_dir(self.seg_image_output)
 
-            self.seg_result_output = os.path.join(self.seg_save, 'results')
-            check_dir(self.seg_result_output)
+            self.seg_data_output = os.path.join(self.seg_save, 'data')
+            check_dir(self.seg_data_output)
 
     def load_label(self) -> None:
         if self.task.CLS or self.task.MT:
@@ -210,13 +161,13 @@ class Predictor:
         im = safe_imread(image)
         ih, iw, ic = im.shape
         mask = mask.astype(np.uint8)  # 0-255
-        draw_mask = np.zeros((ih, iw, 3)) + [0, 0, 0]  # black image
+        draw_mask = np.zeros_like(im)
 
         no_result = True
         record = {'image': image}
-        nc = CONFIG('segmentation.classes') + 1
+        nc = CONFIG('segmentation.classes') + 1  # +1 = +background
 
-        for label_idx in range(1, nc):
+        for label_idx in range(1, nc):  # ignore background pixel
             thr = CONFIG('seg_thr')[label_idx - 1]
             label = self.seg_label[label_idx - 1]
 
@@ -228,6 +179,10 @@ class Predictor:
 
             index = np.where(mask == label_idx)
             num_of_pixel = len(index[0])
+            print(f'num_of_pixel:{num_of_pixel}')
+
+            if num_of_pixel == 0:  # no mask in this label
+                continue
 
             if CONFIG('sum_method'):
                 record[label] = num_of_pixel
@@ -235,18 +190,20 @@ class Predictor:
                     draw_mask[index[0], index[1], :] = color
                     no_result = False
 
-            # TODO: BUG
             else:
-                w, h = CONFIG('wh')
-                mask_index = np.zeros((h, w), dtype=np.uint8)
+                mask_index = np.zeros((ih, iw), dtype=np.uint8)
                 mask_index[index[0], index[1]] = 255
                 cnts, _ = cv2.findContours(mask_index, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                # draw_cns = [cnt for cnt in cnts if cv2.contourArea(cnt) >= thr]
                 draw_cns = []
                 for cnt in cnts:
                     area = cv2.contourArea(cnt)
+                    print(area)
                     if area >= thr:
                         draw_cns.append(cnt)
-                cv2.drawContours(draw_mask, draw_cns, -1, color, -1)
+                if draw_cns:
+                    cv2.drawContours(draw_mask, draw_cns, -1, color, -1)
+                    no_result = False
 
         basename = os.path.basename(image)
         name, suffix = os.path.splitext(basename)
@@ -260,7 +217,7 @@ class Predictor:
             cv2.imwrite(os.path.join(self.seg_image_output, name + '_mask.png'), draw_mask)  # image_mask.png
 
         # Save result json
-        save_json(record, os.path.join(self.seg_result_output, basename.replace(suffix, '.json')))
+        save_json(record, os.path.join(self.seg_data_output, basename.replace(suffix, '.json')))
 
     def multitask(self, output, image: str) -> None:
         cls_output = output[0][0]
