@@ -196,7 +196,6 @@ class Predictor:
                 draw_cns = []
                 for cnt in cnts:
                     area = cv2.contourArea(cnt)
-                    print(area)
                     if area >= thr:
                         draw_cns.append(cnt)
                 if draw_cns:
