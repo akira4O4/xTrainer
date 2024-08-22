@@ -179,13 +179,12 @@ class Predictor:
 
             index = np.where(mask == label_idx)
             num_of_pixel = len(index[0])
-            print(f'num_of_pixel:{num_of_pixel}')
+            record[label] = num_of_pixel
 
             if num_of_pixel == 0:  # no mask in this label
                 continue
 
             if CONFIG('sum_method'):
-                record[label] = num_of_pixel
                 if num_of_pixel >= thr:
                     draw_mask[index[0], index[1], :] = color
                     no_result = False
@@ -194,7 +193,6 @@ class Predictor:
                 mask_index = np.zeros((ih, iw), dtype=np.uint8)
                 mask_index[index[0], index[1]] = 255
                 cnts, _ = cv2.findContours(mask_index, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                # draw_cns = [cnt for cnt in cnts if cv2.contourArea(cnt) >= thr]
                 draw_cns = []
                 for cnt in cnts:
                     area = cv2.contourArea(cnt)
