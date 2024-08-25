@@ -23,6 +23,7 @@ class SegmentationDataSet(BaseDataset):
         self,
         root: str,
         wh: Tuple[int, int],
+        labels: List[str],
         loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
@@ -38,7 +39,7 @@ class SegmentationDataSet(BaseDataset):
             cache=cache
         )
 
-        self._labels = []
+        self._labels = labels
 
         self.samples_with_label: List[Tuple[Image, SegLabel]] = []
         self.background_samples: List[Tuple[Image, SegLabel]] = []

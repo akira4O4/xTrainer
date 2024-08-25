@@ -39,7 +39,6 @@ from xtrainer.utils.common import (
     print_of_mt,
     print_of_seg,
     print_of_cls,
-    Colors
 )
 
 from xtrainer.core.loss import ClassificationLoss, SegmentationLoss
@@ -76,14 +75,18 @@ class Trainer:
 
         # Init work env ------------------------------------------------------------------------------------------------
         init_seeds(CONFIG('seed'))
-        logger.info(f'Init seed: {Colors.BLUE}{CONFIG("seed")}{Colors.ENDC}.')
+        logger.info(f'Init seed: {CONFIG("seed")}.')
 
         init_backends_cudnn(CONFIG('deterministic'))
-        logger.info(f'Init deterministic: {Colors.BLUE}{CONFIG("deterministic")}{Colors.ENDC}.')
-        logger.info(f'Init benchmark: {Colors.BLUE}{not CONFIG("deterministic")}{Colors.ENDC}.')
+        logger.info(f'Init deterministic: {CONFIG("deterministic")}.')
+        logger.info(f'Init benchmark: {not CONFIG("deterministic")}.')
 
         self.task = Task(CONFIG('task'))
-        logger.info(f"Task: {Colors.BLUE}{self.task}{Colors.ENDC}")
+        logger.info(f"Task: {self.task}")
+
+        self.num_classes = 0
+        self.mask_classes = 0
+        self.init_labels()
 
         # Init Model --------------------------------------------------------------------------------------------------
         self.model: Model = None  # noqa
@@ -116,12 +119,7 @@ class Trainer:
 
             self.build_classification_ds_dl()
 
-            if CONFIG('classification.classes') != self.cls_train_ds.num_of_label:
-                logger.error('classification num of classes setting error.')
-                error_exit()
-
         if self.task.SEG or self.task.MT:
-
             self.seg_train_ds: SegmentationDataSet = None  # noqa
             self.seg_train_dl: DataLoader = None  # noqa
 
@@ -129,10 +127,6 @@ class Trainer:
             self.seg_val_dl: DataLoader = None  # noqa
 
             self.build_segmentation_ds_dl()
-
-            if CONFIG('segmentation.classes') != self.seg_train_ds.num_of_label:
-                logger.error('segmentation num of classes setting error.')
-                error_exit()
 
         # Expand dataset -----------------------------------------------------------------------------------------------
         if self.task.MT:
@@ -151,18 +145,25 @@ class Trainer:
 
         logger.info('请使用MLFlow UI进行训练数据观察 -> [Terminal]: mlflow ui')
 
+    def init_labels(self) -> None:
+        self.num_classes: int = len(CONFIG('cls_labels'))
+        self.mask_classes: int = len(CONFIG('seg_labels'))
+
+        if self.task.CLS or self.task.MT:
+            logger.info(f'num of classes: {self.num_classes}')
+            logger.info(f'cls label: {CONFIG("cls_labels")}')
+        if self.task.SEG or self.task.MT:
+            logger.info(f'num of mask classes: {self.mask_classes}')
+            logger.info(f'seg label: {CONFIG("seg_labels")}')
+
+        self.num_classes: int = len(CONFIG('cls_labels'))
+        self.mask_classes: int = len(CONFIG('seg_labels'))
+
     def init_model(self) -> None:
-        num_classes: int = CONFIG('classification.classes')
-        mask_classes: int = CONFIG('segmentation.classes') + 1  # add background
-
-        if num_classes == mask_classes == 0:
-            logger.error("num_classes == mask_classes == 0")
-            error_exit()
-
         self.model = Model(
             CONFIG('model'),
-            num_classes,
-            mask_classes,
+            self.num_classes,
+            self.mask_classes,
             CONFIG("pretrained"),
             CONFIG('weight'),
             CONFIG('device')
@@ -217,21 +218,19 @@ class Trainer:
     def build_classification_ds_dl(self) -> None:
         wh = tuple(CONFIG('wh'))
         bs: int = CONFIG('classification.batch')
-        nc: int = CONFIG('classification.classes')
 
         # Build Train Dataset --------------------------------------------------------------------------------------
         self.cls_train_ds = ClassificationDataset(
             root=CONFIG('classification.train'),
             wh=wh,
+            labels=CONFIG('cls_labels'),
             transform=ClsImageT(wh),
             target_transform=ClsTargetT(),
             cache=CONFIG('cache')
         )
 
-        save_yaml(self.cls_train_ds.labels, os.path.join(CONFIG('experiment_path'), 'cls_labels.yaml'))
-
         batch_sampler = None
-        if bs < nc:
+        if bs < self.num_classes:
             logger.info('Close BalancedBatchSampler.')
         else:
             logger.info('Open BalancedBatchSampler')
@@ -243,11 +242,11 @@ class Trainer:
         # Build Train DataLoader -----------------------------------------------------------------------------------
         self.cls_train_dl = DataLoader(
             dataset=self.cls_train_ds,
-            batch_size=bs if bs < nc else 1,
+            batch_size=bs if bs < self.num_classes else 1,
             num_workers=CONFIG('workers'),
             pin_memory=True,
             batch_sampler=batch_sampler,
-            shuffle=True if bs < nc else False,
+            shuffle=True if bs < self.num_classes else False,
             drop_last=False,
             sampler=None
         )
@@ -258,6 +257,7 @@ class Trainer:
         self.cls_val_ds = ClassificationDataset(
             root=CONFIG('classification.val'),
             wh=wh,
+            labels=CONFIG('cls_labels'),
             transform=ClsValT(wh),
             target_transform=ClsTargetT(),
             cache=CONFIG('cache')
@@ -280,6 +280,7 @@ class Trainer:
         self.seg_train_ds = SegmentationDataSet(
             root=CONFIG('segmentation.train'),
             wh=wh,
+            labels=CONFIG('seg_labels'),
             transform=SegImageT(wh),
             cache=CONFIG('cache')
         )
@@ -305,6 +306,7 @@ class Trainer:
         self.seg_val_ds = SegmentationDataSet(
             root=CONFIG('segmentation.val'),
             wh=wh,
+            labels=CONFIG('seg_labels'),
             transform=SegValT(wh),
             cache=CONFIG('cache')
         )
