@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
+from xtrainer.utils.labels import Labels
 
 
 class BaseDataset(Dataset, ABC):
@@ -41,18 +42,10 @@ class BaseDataset(Dataset, ABC):
 
         self._samples = []
         self._samples_map: List[int] = []
-        self._labels: List[str] = []
+        self._labels: Labels = None  # noqa
 
         assert img_type in self._SUPPORT_IMG_TYPE, 'Image type is not support.'
         self.img_type = img_type
-
-    @property
-    def labels(self) -> list:
-        return self._labels
-
-    @property
-    def num_of_label(self) -> int:
-        return len(self._labels)
 
     @property
     def real_data_size(self) -> int:
@@ -93,17 +86,3 @@ class BaseDataset(Dataset, ABC):
             return self.pil_loader
         else:
             raise ValueError(f'不支持的加载器类型: {loader_type}')
-
-    def label2idx(self, label: str) -> int:
-        if not self._labels:
-            raise ValueError('标签列表为空。')
-        if label not in self._labels:
-            raise ValueError(f'标签 {label} 不在标签列表中。')
-        return self._labels.index(label)
-
-    def idx2label(self, idx: int) -> str:
-        if not self._labels:
-            raise ValueError('标签列表为空。')
-        if not (0 <= idx < len(self._labels)):
-            raise ValueError(f'索引 {idx} 超出标签列表范围。')
-        return self._labels[idx]

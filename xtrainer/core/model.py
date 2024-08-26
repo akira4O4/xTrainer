@@ -47,14 +47,6 @@ class Model:
         return self._model_name
 
     @property
-    def num_classes(self) -> int:
-        return self._num_classes
-
-    @property
-    def mask_classes(self) -> int:
-        return self._mask_classes
-
-    @property
     def state_dict(self) -> dict:
         return self._net.state_dict()
 

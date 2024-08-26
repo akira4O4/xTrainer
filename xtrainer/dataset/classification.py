@@ -9,8 +9,8 @@ from loguru import logger
 from tqdm import tqdm
 from torch.utils.data import Sampler
 
-from xtrainer import CONFIG
 from xtrainer.dataset import Image
+from xtrainer.utils.labels import Labels
 from xtrainer.dataset.base import BaseDataset
 from xtrainer.utils.common import get_images
 from xtrainer.augment.functional import letterbox
@@ -79,7 +79,7 @@ class ClassificationDataset(BaseDataset):
         self,
         root: str,
         wh: Tuple[int, int],
-        labels: List[str],
+        labels: Labels,
         loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,
@@ -121,18 +121,10 @@ class ClassificationDataset(BaseDataset):
         self._samples_map *= rate
         self.targets *= rate
 
-    def find_labels(self) -> None:
-        for d in os.scandir(self._root):
-            if d.is_dir():
-                self._labels.append(d.name)
-        self._labels.sort()
-
     def load_data(self) -> None:
-        for idx in tqdm(range(self.num_of_label), desc='Loading data'):
-            # xxx/xxx/0
-            # xxx/xxx/1
-            target_path = os.path.join(self._root, self.idx2label(idx))
+        for idx in tqdm(range(self._labels.size), desc='Loading data'):
 
+            target_path: str = os.path.join(self._root, self._labels[idx])
             images: List[str] = get_images(target_path, self._SUPPORT_IMG_FORMAT)
 
             for image in images:
@@ -166,25 +158,3 @@ class ClassificationDataset(BaseDataset):
 
     def __len__(self) -> int:
         return len(self._samples_map)
-
-
-if __name__ == '__main__':
-    from xtrainer.core.preprocess import ClsImageT, ClsTargetT
-    from torch.utils.data import DataLoader
-    from time import time
-
-    wh = (224, 224)
-    t1 = time()
-    ds = ClassificationDataset(
-        root=r'D:\llf\dataset\danyang\training_data\G\classification\nc3\train\2_youwu',
-        wh=wh,
-        transform=ClsImageT(wh),
-        target_transform=ClsTargetT()
-    )
-    dl = DataLoader(ds, 8)
-    for imgs, target in dl:
-        print(imgs.shape)
-        print(target)
-
-    t2 = time()
-    print(t2 - t1)

@@ -21,34 +21,34 @@ Labelme Data
 
 
 # Segmentation label
-@dataclass
-class SegLabel:
-    metadata: Optional[dict] = None
-    objects: Optional[list] = None
-    image_path: Optional[str] = ''
-    num_of_objects: Optional[int] = 0
-    is_background: Optional[int] = False
-    ih: Optional[int] = 0
-    iw: Optional[int] = 0
-    mask: Optional[np.ndarray] = None
-
-    def _decode(self) -> None:
-        if self.metadata is not None:
-            self.objects = self.metadata.get('shapes')
-            self.image_path = self.metadata.get('imagePath')
-            self.iw = self.metadata.get('imageWidth')
-            self.ih = self.metadata.get('imageHeight')
-
-            self.num_of_objects = len(self.objects)
-            self.is_background = self.num_of_objects == 0
-            self.metadata['imageData'] = None
-
-    def load_metadata(self, val) -> None:
-        self.metadata = val
-        self._decode()
-
-    def __post_init__(self) -> None:
-        self._decode()
+# @dataclass
+# class SegLabel:
+#     metadata: Optional[dict] = None
+#     objects: Optional[list] = None
+#     image_path: Optional[str] = ''
+#     num_of_objects: Optional[int] = 0
+#     is_background: Optional[int] = False
+#     ih: Optional[int] = 0
+#     iw: Optional[int] = 0
+#     mask: Optional[np.ndarray] = None
+#
+#     def _decode(self) -> None:
+#         if self.metadata is not None:
+#             self.objects = self.metadata.get('shapes')
+#             self.image_path = self.metadata.get('imagePath')
+#             self.iw = self.metadata.get('imageWidth')
+#             self.ih = self.metadata.get('imageHeight')
+#
+#             self.num_of_objects = len(self.objects)
+#             self.is_background = self.num_of_objects == 0
+#             self.metadata['imageData'] = None
+#
+#     def load_metadata(self, val) -> None:
+#         self.metadata = val
+#         self._decode()
+#
+#     def __post_init__(self) -> None:
+#         self._decode()
 
 
 @dataclass

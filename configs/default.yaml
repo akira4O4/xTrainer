@@ -6,16 +6,6 @@ task: classification #classification segmentation multitask
 project: project/temp
 experiment: 'exp'
 
-#Label----------------------------------------------------------------------------------------------------------
-cls_labels:
-  - 0cat
-  - 1dog
-
-seg_labels:
-  - 0_background_ #add this label if your task is segmentation
-  - 1a
-  - 2b
-
 #Train setting----------------------------------------------------------------------------------------------------------
 seed: 0
 topk: [ 1,2 ]
@@ -23,28 +13,35 @@ device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-#model: shufflenet_v2_x1_0
-model: segmentation_shufflenetplus_v2_x1_0
+model: shufflenet_v2_x1_0
+#model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: model.pth
 wh: [ 256,256 ]
 amp: True
-cache: True
+cache: False
 deterministic: True
 save_period: 100 # (int) Save checkpoint every x epochs
 
 # Classification--------------------------------------------------------------------------------------------------------
 classification:
-  batch: 64
-  train: D:\dataset\catdog\128\train
-  val: D:\dataset\catdog\128\train
+  batch: 32
+  train: D:\llf\dataset\dog_cat\64\train
+  val: D:\llf\dataset\dog_cat\64\train
+  labels:
+    - 0cat
+    - 1dog
 
 # Segmentation----------------------------------------------------------------------------------------------------------
 segmentation:
   batch: 8
   train: D:\llf\dataset\danyang\training_data\F\train\8\train
   val: D:\llf\dataset\danyang\training_data\F\train\8\train
+  labels:
+    - 0_background_ #default
+    - 1a
+    - 2b
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
@@ -52,16 +49,15 @@ cos_lr: False
 lr0: 0.001                        # (float) initial learning rate
 lrf: 0.01                         # (float) final learning rate (lr0 * lrf)
 momentum: 0.937
-alpha: auto                       #focal_loss
-gamma: 2                          #focal_loss
+alpha: auto                       # focal_loss
+gamma: 2                          # focal_loss
 smooth: 1.0                       # seg loss
-loss_sum_weights: [ 1,1 ]         # cls_loss + seg_loss
-seg_loss_sum_weights: [ 1,1,0 ]   # bce + dice + iou
+loss_sum_weights: [ 1,1 ]         # cls_loss + seg_loss multitask
+seg_loss_sum_weights: [ 1,1,0 ]   # bce + dice + iou only segmentation
 
 #Predict setting-----------------------------------------------------------------------------------------------------------
 source: D:\llf\dataset\danyang\training_data\F\one
 test_weight: D:\llf\code\xTrainer\project\F.pth
-
 cls_thr: [ 0.6,0.6 ]
 seg_thr: [ 10,10,-1,-1,-1 ] #Not add background (-1==ignore)
 sum_method: False #segment only
