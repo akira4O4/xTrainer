@@ -109,17 +109,17 @@ class ClassificationDataset(BaseDataset):
             self.cache_images_to_memory()
 
         self.targets = [s[1] for s in self._samples]  # [1,0,1,0,1,...]
-        self._samples_map: List[int] = list(range(len(self._samples)))  # [0,1,2,...,n]
+        self._samples_idx_map: List[int] = list(range(len(self._samples)))  # [0,1,2,...,n]
 
-        if expanding_rate > 1:
-            self.expand_data(expanding_rate)
+        self.expand_data(expanding_rate)
 
         if len(self._samples) == 0:
             logger.warning(f"Found 0 files in sub folders of: {self._root}\n")
 
     def expand_data(self, rate: int) -> None:
-        self._samples_map *= rate
-        self.targets *= rate
+        if rate > 1:
+            self._samples_idx_map *= rate
+            self.targets *= rate
 
     def load_data(self) -> None:
         for idx in tqdm(range(self._labels.size), desc='Loading data'):
@@ -140,7 +140,7 @@ class ClassificationDataset(BaseDataset):
             image.data = letterbox(im, self._wh)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
-        sample_idx = self._samples_map[index]
+        sample_idx = self._samples_idx_map[index]
 
         image: Image
         label: int
@@ -157,4 +157,4 @@ class ClassificationDataset(BaseDataset):
         return im, label
 
     def __len__(self) -> int:
-        return len(self._samples_map)
+        return len(self._samples_idx_map)

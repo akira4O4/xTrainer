@@ -6,9 +6,10 @@ import torch
 from loguru import logger
 from tqdm import tqdm
 
-from xtrainer.dataset import Image, SegLabel
+from xtrainer.dataset import Image
 from xtrainer.dataset.base import BaseDataset
 from xtrainer.augment.functional import letterbox
+from xtrainer.utils.labels import MaskLabel, Labels
 from xtrainer.utils.common import (
     load_json,
     get_images,
@@ -23,7 +24,7 @@ class SegmentationDataSet(BaseDataset):
         self,
         root: str,
         wh: Tuple[int, int],
-        labels: List[str],
+        labels: Labels,
         loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,  # to samples
@@ -41,8 +42,8 @@ class SegmentationDataSet(BaseDataset):
 
         self._labels = labels
 
-        self.samples_with_label: List[Tuple[Image, SegLabel]] = []
-        self.background_samples: List[Tuple[Image, SegLabel]] = []
+        self.samples_with_label: List[Tuple[Image, MaskLabel]] = []
+        self.background_samples: List[Tuple[Image, MaskLabel]] = []
 
         self.all_image_path: List[str] = get_images(self._root, self._SUPPORT_IMG_FORMAT)
 
@@ -52,13 +53,13 @@ class SegmentationDataSet(BaseDataset):
             self.cache_images_to_memory()
 
         self._samples = self.samples_with_label + self.background_samples  # [(image,label),(image,label),...]
-        self._samples_map: List[int] = list(range(len(self._samples)))  # [0,1,2,3,...]
+        self._samples_idx_map: List[int] = list(range(len(self._samples)))  # [0,1,2,3,...]
 
-        if expanding_rate > 1:
-            self.expand_data(expanding_rate)
+        self.expand_data(expanding_rate)
 
     def expand_data(self, rate: int) -> None:
-        self._samples_map *= rate
+        if rate > 1:
+            self._samples_idx_map *= rate
 
     @staticmethod
     def find_label_path(path: str) -> str:
@@ -69,14 +70,14 @@ class SegmentationDataSet(BaseDataset):
     def load_data(self) -> None:
         for image_path in tqdm(self.all_image_path, desc='Loading data'):
 
-            label = SegLabel()  # Empty label
+            label = MaskLabel()  # Empty label
             image = Image(path=image_path)  # Just only have image path
 
             label_path: str = self.find_label_path(image_path)
             if os.path.exists(label_path) is True:
 
                 # load and decode json data
-                label.load_metadata(load_json(label_path))
+                label.set_metadata(load_json(label_path))
 
                 # check image path
                 if os.path.basename(image_path) != label.image_path:
@@ -85,14 +86,8 @@ class SegmentationDataSet(BaseDataset):
 
                 self.samples_with_label.append((image, label))
 
-                # find the all label
-                for obj in label.objects:
-                    if obj["label"] not in self._labels:
-                        self._labels.append(obj["label"])
             else:
                 self.background_samples.append((image, label))
-
-        self._labels.sort()
 
         logger.info(f'samples_with_label: {len(self.samples_with_label)}')
         logger.info(f'background_samples: {len(self.background_samples)}')
@@ -100,7 +95,7 @@ class SegmentationDataSet(BaseDataset):
     def cache_images_to_memory(self) -> None:
 
         image: Image
-        label: SegLabel
+        label: MaskLabel
         if len(self.samples_with_label) > 0:
             for image, label in tqdm(self.samples_with_label, desc='Preload Image'):
                 im = self._load_image(image.path)
@@ -114,11 +109,7 @@ class SegmentationDataSet(BaseDataset):
                 image.data = letterbox(im, self._wh)
                 label.mask = np.zeros((self._hw[0], self._hw[1], 1), dtype=np.uint8)
 
-    def get_mask(
-        self,
-        objects: list,
-        image_wh: Tuple[int, int]
-    ) -> np.ndarray:
+    def get_mask(self, objects: list, image_wh: Tuple[int, int]) -> np.ndarray:
 
         iw, ih = image_wh[0], image_wh[1]  # image wh
         ow, oh = self._wh[0], self._wh[1]  # input wh
@@ -137,8 +128,7 @@ class SegmentationDataSet(BaseDataset):
                 points *= np.array([ow, oh], dtype=float)  # x*ow y*oh
                 points = safe_round(points)
 
-            label: str = obj['label']
-            mask = self.polygon2mask(mask, points, self.label2idx(label))
+            mask = self.polygon2mask(mask, points, self._labels[obj['label']])
 
         # (H,W)->(H,W,C) C=1
         mask = hw_to_hw1(mask)
@@ -146,11 +136,7 @@ class SegmentationDataSet(BaseDataset):
         return mask
 
     @staticmethod
-    def polygon2mask(
-        mask: np.ndarray,
-        points: np.ndarray,
-        label_idx: Optional[int] = 0
-    ) -> np.ndarray:
+    def polygon2mask(mask: np.ndarray, points: np.ndarray, label_idx: Optional[int] = 0) -> np.ndarray:
         assert 0 <= label_idx <= 255, '255 >= label_idx >= 0'
         if points.dtype != np.int32:
             points = points.astype(np.int32)
@@ -158,10 +144,10 @@ class SegmentationDataSet(BaseDataset):
         return mask
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        sample_idx = self._samples_map[index]
+        sample_idx = self._samples_idx_map[index]
 
         image: Image
-        label: SegLabel
+        label: MaskLabel
         image, label = self._samples[sample_idx]
 
         im = image.data if self._use_cache else self._load_image(image.path)
@@ -173,35 +159,4 @@ class SegmentationDataSet(BaseDataset):
         return im, mask
 
     def __len__(self) -> int:
-        return len(self._samples_map)
-
-
-if __name__ == '__main__':
-    from xtrainer.core.preprocess import SegImageT
-    from torch.utils.data import DataLoader
-    from time import time
-    import cv2
-
-    wh = (224, 224)
-    ds = SegmentationDataSet(
-        root=r'C:\Users\Lee Linfeng\Desktop\temp\20240518-bad-F',
-        wh=wh,
-        cache=True,
-        transform=SegImageT(wh),
-    )
-    # image, mask = ds[0]
-    # mask *= 100
-    # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-    # print(image.shape)
-    # print(mask.shape)
-    # cv2.imwrite('im.jpg', image)
-    # cv2.imwrite('mask.jpg', mask)
-
-    t1 = time()
-    dl = DataLoader(ds, batch_size=8)
-    for imgs, target in dl:
-        print(imgs.shape)
-        print(target.shape)
-
-    t2 = time()
-    print(t2 - t1)
+        return len(self._samples_idx_map)

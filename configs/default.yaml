@@ -1,7 +1,7 @@
 #Default setting--------------------------------------------------------------------------------------------------------
 mode: train           #train or predict
-task: classification #classification segmentation multitask
-#task: segmentation
+#task: classification #classification segmentation multitask
+task: segmentation
 #task: multitask
 project: project/temp
 experiment: 'exp'
@@ -13,8 +13,8 @@ device: 0 #-1=cpu
 epochs: 500
 workers: 0
 not_val: False
-model: shufflenet_v2_x1_0
-#model: segmentation_shufflenetplus_v2_x1_0
+#model: shufflenet_v2_x1_0
+model: segmentation_shufflenetplus_v2_x1_0
 #model: multi_task_shufflenetplus_v2_x1_0
 pretrained: True
 weight: model.pth
@@ -40,8 +40,11 @@ segmentation:
   val: D:\llf\dataset\danyang\training_data\F\train\8\train
   labels:
     - 0_background_ #default
-    - 1a
-    - 2b
+    - 3_pobian
+    - 4_liewen
+    - 5_tiaowen
+    - 6_gongyishang
+    - 7_gongyishang_side
 
 #Hyperparameters--------------------------------------------------------------------------------------------------------
 optimizer: auto
@@ -53,7 +56,7 @@ alpha: auto                       # focal_loss
 gamma: 2                          # focal_loss
 smooth: 1.0                       # seg loss
 loss_sum_weights: [ 1,1 ]         # cls_loss + seg_loss multitask
-seg_loss_sum_weights: [ 1,1,0 ]   # bce + dice + iou only segmentation
+seg_loss_sum_weights: [ 1,0,0 ]   # bce + dice + iou only segmentation
 
 #Predict setting-----------------------------------------------------------------------------------------------------------
 source: D:\llf\dataset\danyang\training_data\F\one

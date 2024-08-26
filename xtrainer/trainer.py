@@ -62,6 +62,21 @@ from xtrainer.utils.torch_utils import (
 )
 
 
+class ClassificationTrainer:
+    def __init__(self):
+        ...
+
+
+class SegmentationTrainer:
+    def __init__(self):
+        ...
+
+
+class MultiTaskTrainer:
+    def __init__(self):
+        ...
+
+
 class Trainer:
     def __init__(self):
 
@@ -260,19 +275,18 @@ class Trainer:
         workers: int = CONFIG('workers')
         use_cache: bool = CONFIG('cache')
         bs: int = CONFIG('segmentation.batch')
-        labels: List[str] = CONFIG('segmentation.labels')
 
         self.seg_train_ds = SegmentationDataSet(
             root=CONFIG('segmentation.train'),
             wh=wh,
-            labels=labels,
+            labels=self.seg_labels,
             transform=SegImageT(wh),
             cache=use_cache
         )
         self.seg_val_ds = SegmentationDataSet(
             root=CONFIG('segmentation.val'),
             wh=wh,
-            labels=labels,
+            labels=self.seg_labels,
             transform=SegValT(wh),
             cache=use_cache
         )
@@ -323,7 +337,6 @@ class Trainer:
             return data
 
     def run(self) -> None:
-        print('-' * 60)
         while self.epoch < CONFIG('epochs'):
             for mode in ['train', 'val']:
                 run_one_epoch = getattr(self, mode)

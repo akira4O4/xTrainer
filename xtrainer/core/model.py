@@ -165,17 +165,3 @@ class Model:
 
         logger.info(f'Loading :{self._weight}.')
         logger.info(f'Loading [{loading_item}/{total_item}] item to model.')
-
-
-if __name__ == '__main__':
-    model = Model(
-        'resnet18',
-        num_classes=2,
-        pretrained=False,
-        device=0
-    )
-    model.init()
-    model.train()
-    print(model.training)
-    model.eval()
-    print(model.training)

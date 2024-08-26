@@ -36,16 +36,26 @@ class Labels:
             raise TypeError("输入必须是整数或字符串")
 
 
-@dataclass
-class Mask:
-    metadata: Optional[dict] = None
-    objects: Optional[list] = None
-    image_path: Optional[str] = ''
-    num_objects: Optional[int] = 0
-    is_background: Optional[int] = False
-    ih: Optional[int] = 0
-    iw: Optional[int] = 0
-    data: Optional[np.ndarray] = None
+# only support labelme format
+class MaskLabel:
+    def __init__(self, metadata: Optional[dict] = None):
+
+        self.metadata: Optional[dict] = None
+        self.objects: Optional[list] = None
+        self.image_path: Optional[str] = ''
+        self.num_objects: Optional[int] = 0
+        self.is_background: Optional[int] = False
+        self.ih: Optional[int] = 0
+        self.iw: Optional[int] = 0
+        self.mask: Optional[np.ndarray] = None
+
+        if metadata is not None:
+            self.metadata = metadata
+            self._decode()
+
+    def set_metadata(self, val) -> None:
+        self.metadata = val
+        self._decode()
 
     def _decode(self) -> None:
         if self.metadata is not None:
@@ -57,10 +67,3 @@ class Mask:
             self.num_objects = len(self.objects)
             self.is_background = self.num_objects == 0
             self.metadata['imageData'] = None
-
-    def load_metadata(self, val) -> None:
-        self.metadata = val
-        self._decode()
-
-    def __post_init__(self) -> None:
-        self._decode()
