@@ -46,7 +46,7 @@ class ClsImageT(BaseT):
             T.RandomResizedCrop(hw),
             T.RandomHorizontalFlip(),
             T.RandomVerticalFlip(),
-            T.RandAugment(interpolation=T.InterpolationMode.BILINEAR),
+            # T.RandAugment(interpolation=T.InterpolationMode.BILINEAR),
             T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.7, hue=0.015)
         ]
         self.ops += self.default_ops

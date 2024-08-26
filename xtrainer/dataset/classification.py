@@ -7,8 +7,9 @@ import numpy as np
 import torch
 from loguru import logger
 from tqdm import tqdm
-
 from torch.utils.data import Sampler
+
+from xtrainer import CONFIG
 from xtrainer.dataset import Image
 from xtrainer.dataset.base import BaseDataset
 from xtrainer.utils.common import get_images
@@ -78,6 +79,7 @@ class ClassificationDataset(BaseDataset):
         self,
         root: str,
         wh: Tuple[int, int],
+        labels: List[str],
         loader_type: Optional[str] = 'opencv',
         img_type: Optional[str] = 'RGB',
         transform: Optional[Callable] = None,
@@ -94,7 +96,8 @@ class ClassificationDataset(BaseDataset):
             target_transform=target_transform,
             cache=cache
         )
-        self.find_labels()
+
+        self._labels = labels
 
         # samples=[(Image,1),(Image,0),...]
         self._samples: List[Tuple[Image, int]] = []
