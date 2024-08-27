@@ -39,38 +39,49 @@ class DataTracker:
         return self.size
 
 
-class TrainTracker:
+class ClsTrainTracker:
     def __init__(self, name: str = 'TrainTracker', topk: int = 2):  # noqa
         self.name = name
         self.top1 = DataTracker(f'Train Top1')
         self.topk = DataTracker(f'Train Top{topk}')  # noqa
-        self.miou = DataTracker(f'Train MIoU')  # noqa
+        self.loss = DataTracker('Classification Loss')
 
     def reset(self) -> None:
         self.top1.reset()
         self.topk.reset()
-        self.miou.reset()
+        self.loss.reset()
 
 
-class ValTracker:
+class ClsValTracker:
     def __init__(self, name: str = 'ValTracker', topk: int = 2):  # noqa
         self.name = name
-        self.top1 = DataTracker(f'Val Top1')
-        self.topk = DataTracker(f'Val Top{topk}')  # noqa
-        self.miou = DataTracker(f'Val MIoU')  # noqa
+        self.top1 = DataTracker(f'Train Top1')
+        self.topk = DataTracker(f'Train Top{topk}')  # noqa
+        self.loss = DataTracker('Classification Loss')
 
     def reset(self) -> None:
         self.top1.reset()
         self.topk.reset()
-        self.miou.reset()
+        self.loss.reset()
 
 
-class LossTracker:
-    def __init__(self, name: str = 'LossTracker'):
+class SegTrainTracker:
+    def __init__(self, name: str = 'Segmentation Train Tracker', topk: int = 2):  # noqa
         self.name = name
-        self.classification = DataTracker('Classification')
-        self.segmentation = DataTracker('Segmentation')
+        self.miou = DataTracker(f'Train MIoU')  # noqa
+        self.loss = DataTracker('Segmentation Loss')
 
     def reset(self) -> None:
-        self.classification.reset()
-        self.segmentation.reset()
+        self.miou.reset()
+        self.loss.reset()
+
+
+class SegValTracker:
+    def __init__(self, name: str = 'Segmentation Val Tracker', topk: int = 2):  # noqa
+        self.name = name
+        self.miou = DataTracker(f'Val MIoU')  # noqa
+        self.loss = DataTracker('Segmentation Loss')
+
+    def reset(self) -> None:
+        self.miou.reset()
+        self.loss.reset()

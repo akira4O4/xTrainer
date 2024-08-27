@@ -4,10 +4,11 @@ import argparse
 from loguru import logger
 from mlflow import set_experiment
 
-from xtrainer import CONFIG, OS, VERSION, CUDA
+from xtrainer import CONFIG, OS, VERSION, CUDA, TORCH_VERSION, TORCHVISION_VERSION
 from xtrainer.trainer import Trainer
 from xtrainer.predict import Predictor
 from xtrainer.utils.common import check_dir, get_time
+from xtrainer.utils.torch_utils import init_seeds, init_backends_cudnn
 
 
 def init_workspace() -> None:
@@ -31,6 +32,9 @@ def init_workspace() -> None:
 
     CONFIG.update({"experiment_path": experiment_path})
     CONFIG.update({"weight_path": weight_path})
+
+    init_seeds(CONFIG('seed'))
+    init_backends_cudnn(CONFIG('deterministic'))
 
 
 def init_mlflow() -> None:
@@ -82,9 +86,13 @@ def check_args() -> None:
 
 
 if __name__ == '__main__':
+    # Show Env Info ----------------------------------------------------------------------------------------------------
     logger.info(f'OS: {OS}')
     logger.info(f'Version: {VERSION}')
+    logger.info(f'PyTorch Version: {TORCH_VERSION}')
+    logger.info(f'TorchVision Version: {TORCHVISION_VERSION}')
 
+    # Argument Parser --------------------------------------------------------------------------------------------------
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--config',
@@ -93,10 +101,10 @@ if __name__ == '__main__':
         help='CONFIG path'
     )
     args = parser.parse_args()
-
     CONFIG.set_path(args.config)
     CONFIG.load()
 
+    # Begin ------------------------------------------------------------------------------------------------------------
     check_args()
 
     if CONFIG('mode').lower() == 'train':
