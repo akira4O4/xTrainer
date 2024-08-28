@@ -17,7 +17,7 @@ from xtrainer.core.preprocess import (
     SegValT
 )
 
-from xtrainer import CONFIG, TASK, TOPK, DEFAULT_OPTIMIZER
+from xtrainer import CONFIG, DEFAULT_OPTIMIZER
 
 from xtrainer.core.model import Model
 from xtrainer.core.optim import (
@@ -34,7 +34,6 @@ from xtrainer.utils.common import (
     round4,
     round8,
     timer,
-    align_size,
     print_of_mt,
     print_of_seg,
     print_of_cls,
@@ -65,7 +64,7 @@ class BaseTrainer:
     def __init__(self):
 
         self.epoch: int = 0
-        self.curr_lr: float = 0.0
+        self.task = Task(CONFIG('task'))
 
         # Instance
         self.model: Model = None  # noqa
@@ -87,9 +86,9 @@ class BaseTrainer:
     def init_model(self) -> None:
         num_classes = 0
         mask_classes = 0
-        if TASK.CLS or TASK.MT:
+        if self.task.CLS or self.task.MT:
             num_classes = len(CONFIG('classification.labels'))
-        if TASK.SEG or TASK.MT:
+        if self.task.SEG or self.task.MT:
             mask_classes = len(CONFIG('segmentation.labels'))
 
         self.model = Model(
@@ -157,8 +156,8 @@ class BaseTrainer:
 class ClassificationTrainer(BaseTrainer):
     def __init__(self):
         super().__init__()
-        self.train_tracker = ClsTrainTracker(topk=np.argmax(TOPK))  # noqa
-        self.val_tracker = ClsValTracker(topk=np.argmax(TOPK))  # noqa
+        self.train_tracker = ClsTrainTracker(topk=np.argmax(CONFIG('topk')))  # noqa
+        self.val_tracker = ClsValTracker(topk=np.argmax(CONFIG('topk')))  # noqa
         self.labels = Labels(CONFIG('classification.labels'))
 
     def init_loss(self) -> None:
@@ -257,7 +256,7 @@ class ClassificationTrainer(BaseTrainer):
             outputs = self.model(images)
             loss = self.loss(outputs, targets)  # noqa
 
-        topk: List[float] = topk_accuracy(outputs, targets, TOPK)
+        topk: List[float] = topk_accuracy(outputs, targets, CONFIG('topk'))
 
         maxk = max(CONFIG("topk"))
         maxk_idx = np.argmax(CONFIG("topk"))
@@ -289,7 +288,7 @@ class ClassificationTrainer(BaseTrainer):
             output = self.model(images)  # [[cls1,cls2],[seg1,seg2,...]]
 
             confusion_matrix += compute_confusion_matrix_classification(output, targets, self.labels.size)
-            topk: List[float] = topk_accuracy(output, targets, TOPK)
+            topk: List[float] = topk_accuracy(output, targets, CONFIG('topk'))
 
             top1_val = topk[0]
             topk_val = topk[maxk_idx]
@@ -469,15 +468,15 @@ class MultiTaskTrainer(BaseTrainer):
         self.model.train()
 
         dataloaders: List[DataLoader] = []
-        if TASK.CLS or TASK.MT:
+        if self.task.CLS or self.task.MT:
             dataloaders.append(self.cls_trainer.train_dl)
-        if TASK.SEG or TASK.MT:
+        if self.task.SEG or self.task.MT:
             dataloaders.append(self.seg_trainer.train_dl)
 
         datas: tuple
         for curr_step, datas in enumerate(zip(*dataloaders)):
 
-            if TASK.MT:
+            if self.task.MT:
                 cls_data, seg_data = datas
             else:
                 cls_data = seg_data = datas[0]
@@ -485,19 +484,19 @@ class MultiTaskTrainer(BaseTrainer):
             cls_loss = 0
             seg_loss = 0
 
-            if TASK.CLS or TASK.MT:
+            if self.task.CLS or self.task.MT:
                 images, targets = cls_data
                 images = self.to_device(images)
                 targets = self.to_device(targets)
                 cls_loss = self.cls_trainer.forward(images, targets)
 
-            if TASK.SEG or TASK.MT:
+            if self.task.SEG or self.task.MT:
                 images, targets = seg_data
                 images = self.to_device(images)
                 targets = self.to_device(targets)
                 seg_loss = self.seg_trainer.forward(images, targets)
 
-            if TASK.MT:
+            if self.task.MT:
                 final_loss = loss_sum([cls_loss, seg_loss], CONFIG('loss_sum_weights'))
             else:
                 final_loss = cls_loss + seg_loss
@@ -510,10 +509,10 @@ class MultiTaskTrainer(BaseTrainer):
 
     def val(self) -> None:
         self.model.eval()
-        if TASK.SEG or TASK.MT:
+        if self.task.SEG or self.task.MT:
             self.seg_trainer.val()
 
-        if TASK.CLS or TASK.MT:
+        if self.task.CLS or self.task.MT:
             self.cls_trainer.val()
 
     def save_model(self) -> None:
@@ -533,22 +532,23 @@ class MultiTaskTrainer(BaseTrainer):
 class Trainer:
     def __init__(self):
 
-        if TASK.CLS:
+        if CONFIG('task').lower() == 'classification':
             self.trainer = ClassificationTrainer()
-        elif TASK.SEG:
+        elif CONFIG('task').lower() == 'segmentation':
             self.trainer = SegmentationTrainer()
-        elif TASK.MT:
+        elif CONFIG('task').lower() == 'multitask':
             self.trainer = MultiTaskTrainer()
 
+        self.trainer.init_model()
         self.trainer.init_loss()
         self.trainer.init_ds_dl()
-        self.trainer.init_model()
         self.trainer.init_optimizer()
         self.trainer.init_lr_scheduler()
 
     def run(self) -> None:
         while self.trainer.epoch < CONFIG('epochs'):
             for mode in ['train', 'val']:
+
                 if mode == 'train':
                     self.trainer.train()
                     self.trainer.epoch += 1
@@ -565,7 +565,7 @@ class Trainer:
                 lr: float = round8(self.trainer.optimizer.lrs[0]) if mode == 'train' else None
 
                 # Display info
-                if TASK.MT:
+                if self.trainer.task.MT:
                     cls_loss: float = round4(self.trainer.cls_trainer.loss.avg) if mode == 'train' else None
                     seg_loss: float = round4(self.trainer.seg_trainer.loss.avg) if mode == 'train' else None
                     top1 = round4(
@@ -578,7 +578,7 @@ class Trainer:
                     print_of_mt(mode, 'MT', self.trainer.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk,
                                 miou)
 
-                elif TASK.CLS:
+                elif self.trainer.task.CLS:
                     cls_loss: float = round4(self.trainer.train_tracker.loss.avg) if mode == 'train' else None
                     top1 = round4(
                         self.trainer.train_tracker.top1.avg if mode == 'train' else self.trainer.val_tracker.top1.avg)
@@ -587,7 +587,7 @@ class Trainer:
 
                     print_of_cls(mode, 'CLS', self.trainer.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
 
-                elif TASK.SEG:
+                elif self.trainer.task.SEG:
                     seg_loss: float = round4(self.trainer.train_tracker.loss.avg) if mode == 'train' else None
                     miou = round4(
                         self.trainer.train_tracker.miou.avg if mode == 'train' else self.trainer.val_tracker.miou.avg)

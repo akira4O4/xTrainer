@@ -1,6 +1,6 @@
 class Task:
     def __init__(self, task: str) -> None:
-        self.TASK: str = task
+        self.task: str = task
         self.CLS: bool = False
         self.SEG: bool = False
         self.MT: bool = False
@@ -13,8 +13,7 @@ class Task:
             self.SEG = True
 
     def __str__(self) -> str:
-        return self.TASK
-
+        return self.task
 
 
 if __name__ == '__main__':

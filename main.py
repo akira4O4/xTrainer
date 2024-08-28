@@ -99,8 +99,8 @@ if __name__ == '__main__':
         default=r'configs\default.yaml',
         help='CONFIG path'
     )
-    args = parser.parse_args()
-    CONFIG.set_path(args.config)
+    # args = parser.parse_args()
+    CONFIG.set_path(parser.parse_args().config)
     CONFIG.load()
 
     # Begin ------------------------------------------------------------------------------------------------------------
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         init_workspace()
         init_mlflow()
         trainer = Trainer()
-        # trainer.run()
+        trainer.run()
 
     elif CONFIG('mode').lower() == 'predict':
         predictor = Predictor()

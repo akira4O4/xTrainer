@@ -13,10 +13,6 @@ except FileNotFoundError:
     VERSION = 'NoFoundVersion'
 
 CONFIG = Config()
-TASK = Task(CONFIG('task'))
-PROJECT = Config('project')
-EXPERIMENT = Config('experiment')
-TOPK = Config('topk')
 
 NoArgs = None
 # DEFAULT_WORKSPACE: str = 'project'
