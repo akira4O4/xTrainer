@@ -101,9 +101,7 @@ class Model:
 
     def init(self) -> None:
         self.build_model()
-
         self.load_weight()
-
         self.to_device()
 
     def build_model(self) -> None:

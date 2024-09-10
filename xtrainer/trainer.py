@@ -64,7 +64,7 @@ class BaseTrainer:
     def __init__(self):
 
         self.epoch: int = 0
-        self.task = Task(CONFIG('task'))
+        self.task = Task(CONFIG['task'])
 
         # Instance
         self.model: Model = None  # noqa
@@ -87,22 +87,22 @@ class BaseTrainer:
         num_classes = 0
         mask_classes = 0
         if self.task.CLS or self.task.MT:
-            num_classes = len(CONFIG('classification.labels'))
+            num_classes = len(CONFIG['classification.labels'])
         if self.task.SEG or self.task.MT:
-            mask_classes = len(CONFIG('segmentation.labels'))
+            mask_classes = len(CONFIG['segmentation.labels'])
 
         self.model = Model(
-            model_name=CONFIG('model'),
+            model_name=CONFIG['model'],
             num_classes=num_classes,
             mask_classes=mask_classes,
-            pretrained=CONFIG("pretrained"),
-            weight=CONFIG('weight'),
-            device=CONFIG('device')
+            pretrained=CONFIG["pretrained"],
+            weight=CONFIG['weight'],
+            device=CONFIG['device']
         )
         self.model.init()
 
     def init_optimizer(self) -> None:
-        name: str = CONFIG("optimizer")
+        name: str = CONFIG["optimizer"]
 
         if name.upper() == 'AUTO':
             name = DEFAULT_OPTIMIZER
@@ -110,27 +110,27 @@ class BaseTrainer:
         args = {
             "params": [{
                 'params': self.model.parameters,
-                'initial_lr': CONFIG('lr0')
+                'initial_lr': CONFIG['lr0']
             }],
-            "lr": CONFIG("lr0"),
+            "lr": CONFIG["lr0"],
         }
 
         if name in ["Adam", "Adamax", "AdamW", "NAdam", "RAdam"]:
             args.update({
-                'betas': (CONFIG('momentum'), 0.999),
+                'betas': (CONFIG['momentum'], 0.999),
                 'weight_decay': 0.0
             })
         elif name == "RMSProp":
             args.update({
-                'momentum': CONFIG('momentum')
+                'momentum': CONFIG['momentum']
             })
         elif name == "SGD":
             args.update({
-                'momentum': CONFIG('momentum'),
+                'momentum': CONFIG['momentum'],
                 'nesterov': True
             })
 
-        if CONFIG("amp"):
+        if CONFIG["amp"]:
             self.optimizer = build_amp_optimizer_wrapper(name, **args)
             logger.info('AMP: Open Automatic Mixed Precision(AMP)')
         else:
@@ -141,9 +141,9 @@ class BaseTrainer:
     def init_lr_scheduler(self) -> None:
         self.lr_scheduler = LRSchedulerWrapper(
             self.optimizer.optimizer,
-            lrf=CONFIG('lrf'),
-            epochs=CONFIG('epochs'),
-            cos_lr=CONFIG('cos_lr')
+            lrf=CONFIG['lrf'],
+            epochs=CONFIG['epochs'],
+            cos_lr=CONFIG['cos_lr']
         )
 
     def to_device(self, data: torch.Tensor) -> torch.Tensor:
@@ -156,32 +156,32 @@ class BaseTrainer:
 class ClassificationTrainer(BaseTrainer):
     def __init__(self):
         super().__init__()
-        self.train_tracker = ClsTrainTracker(topk=np.argmax(CONFIG('topk')))  # noqa
-        self.val_tracker = ClsValTracker(topk=np.argmax(CONFIG('topk')))  # noqa
-        self.labels = Labels(CONFIG('classification.labels'))
+        self.train_tracker = ClsTrainTracker(topk=np.argmax(CONFIG['topk']))  # noqa
+        self.val_tracker = ClsValTracker(topk=np.argmax(CONFIG['topk']))  # noqa
+        self.labels = Labels(CONFIG['classification.labels'])
 
     def init_loss(self) -> None:
 
-        alpha = CONFIG('alpha')
+        alpha = CONFIG['alpha']
         if alpha == 'auto':
             # alpha = [1] * self.model.num_classes
-            alpha = [1] * self.labels.size
+            alpha = [1] * self.labels.nc
 
         alpha = torch.tensor(alpha, dtype=torch.float)
         alpha = self.to_device(alpha)
 
-        self.loss = ClassificationLoss(alpha=alpha, gamma=CONFIG('gamma'))
+        self.loss = ClassificationLoss(alpha=alpha, gamma=CONFIG['gamma'])
         logger.success('Init Classification Loss.')
 
     def init_ds_dl(self) -> None:
-        wh = tuple(CONFIG('wh'))
-        workers: int = CONFIG('workers')
-        use_cache: bool = CONFIG('cache')
-        bs: int = CONFIG('classification.batch')
+        wh = tuple(CONFIG['wh'])
+        workers: int = CONFIG['workers']
+        use_cache: bool = CONFIG['cache']
+        bs: int = CONFIG['classification.batch']
 
         # Build Train Dataset --------------------------------------------------------------------------------------
         self.train_ds = ClassificationDataset(
-            root=CONFIG('classification.train'),
+            root=CONFIG['classification.train'],
             wh=wh,
             labels=self.labels,
             transform=ClsImageT(wh),
@@ -191,7 +191,7 @@ class ClassificationTrainer(BaseTrainer):
         logger.success('Init classification train dataset.')
 
         self.val_ds = ClassificationDataset(
-            root=CONFIG('classification.val'),
+            root=CONFIG['classification.val'],
             wh=wh,
             labels=self.labels,
             transform=ClsValT(wh),
@@ -204,7 +204,7 @@ class ClassificationTrainer(BaseTrainer):
         logger.info(f'Classification Val data size: {self.val_ds.real_data_size}.')
 
         batch_sampler = None
-        if bs < self.labels.size:
+        if bs < self.labels.nc:
             logger.info('Close BalancedBatchSampler.')
         else:
             logger.info('Open BalancedBatchSampler')
@@ -216,11 +216,11 @@ class ClassificationTrainer(BaseTrainer):
         # Build Train DataLoader -----------------------------------------------------------------------------------
         self.train_dl = DataLoader(
             dataset=self.train_ds,
-            batch_size=bs if bs < self.labels.size else 1,
+            batch_size=bs if bs < self.labels.nc else 1,
             num_workers=workers,
             pin_memory=True,
             batch_sampler=batch_sampler,
-            shuffle=True if bs < self.labels.size else False,
+            shuffle=True if bs < self.labels.nc else False,
             drop_last=False,
             sampler=None
         )
@@ -256,10 +256,10 @@ class ClassificationTrainer(BaseTrainer):
             outputs = self.model(images)
             loss = self.loss(outputs, targets)  # noqa
 
-        topk: List[float] = topk_accuracy(outputs, targets, CONFIG('topk'))
+        topk: List[float] = topk_accuracy(outputs, targets, CONFIG['topk'])
 
-        maxk = max(CONFIG("topk"))
-        maxk_idx = np.argmax(CONFIG("topk"))
+        maxk = max(CONFIG["topk"])
+        maxk_idx = np.argmax(CONFIG["topk"])
 
         top1_val = topk[0]
         topk_val = topk[maxk_idx]
@@ -274,9 +274,10 @@ class ClassificationTrainer(BaseTrainer):
         return loss
 
     def val(self) -> None:
+        self.model.eval()
 
-        maxk: int = max(CONFIG("topk"))
-        maxk_idx = np.argmax(CONFIG("topk"))
+        maxk: int = max(CONFIG["topk"])
+        maxk_idx = np.argmax(CONFIG["topk"])
 
         confusion_matrix = 0
 
@@ -287,8 +288,8 @@ class ClassificationTrainer(BaseTrainer):
 
             output = self.model(images)  # [[cls1,cls2],[seg1,seg2,...]]
 
-            confusion_matrix += compute_confusion_matrix_classification(output, targets, self.labels.size)
-            topk: List[float] = topk_accuracy(output, targets, CONFIG('topk'))
+            confusion_matrix += compute_confusion_matrix_classification(output, targets, self.labels.nc)
+            topk: List[float] = topk_accuracy(output, targets, CONFIG['topk'])
 
             top1_val = topk[0]
             topk_val = topk[maxk_idx]
@@ -299,7 +300,7 @@ class ClassificationTrainer(BaseTrainer):
         draw_confusion_matrix(
             confusion_matrix,
             self.labels.labels,
-            os.path.join(CONFIG('experiment_path'), 'cls_confusion_matrix.png')
+            os.path.join(CONFIG['experiment_path'], 'cls_confusion_matrix.png')
         )
         total_top1: float = self.val_tracker.top1.avg  # i.e.60%
         total_topk: float = self.val_tracker.topk.avg  # i.e.80%
@@ -312,11 +313,11 @@ class ClassificationTrainer(BaseTrainer):
             'epoch': self.epoch,
             'state_dict': self.model.state_dict,
             'model_name': self.model.model_name,
-            'num_classes': self.labels.size,
+            'num_classes': self.labels.nc,
             'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict())),
             'lr': self.optimizer.lrs[0]
         }
-        save_path = os.path.join(CONFIG('weight_path'), f'epoch{self.epoch}.pth')
+        save_path = os.path.join(CONFIG['weight_path'], f'epoch{self.epoch}.pth')
         torch.save(save_dict, save_path)
 
 
@@ -325,16 +326,16 @@ class SegmentationTrainer(BaseTrainer):
         super().__init__()
         self.train_tracker = SegTrainTracker()
         self.val_tracker = SegValTracker()
-        self.labels = Labels(CONFIG('segmentation.labels'))
+        self.labels = Labels(CONFIG['segmentation.labels'])
 
     def init_ds_dl(self) -> None:
-        wh = tuple(CONFIG('wh'))
-        workers: int = CONFIG('workers')
-        use_cache: bool = CONFIG('cache')
-        bs: int = CONFIG('segmentation.batch')
+        wh = tuple(CONFIG['wh'])
+        workers: int = CONFIG['workers']
+        use_cache: bool = CONFIG['cache']
+        bs: int = CONFIG['segmentation.batch']
 
         self.train_ds = SegmentationDataSet(
-            root=CONFIG('segmentation.train'),
+            root=CONFIG['segmentation.train'],
             wh=wh,
             labels=self.labels,
             transform=SegImageT(wh),
@@ -343,7 +344,7 @@ class SegmentationTrainer(BaseTrainer):
         logger.success('Init segmentation train dataset.')
 
         self.val_ds = SegmentationDataSet(
-            root=CONFIG('segmentation.val'),
+            root=CONFIG['segmentation.val'],
             wh=wh,
             labels=self.labels,
             transform=SegValT(wh),
@@ -375,7 +376,7 @@ class SegmentationTrainer(BaseTrainer):
         logger.info(f'Segmentation Val data size: {self.val_ds.real_data_size}.')
 
     def init_loss(self) -> None:
-        self.loss = SegmentationLoss(CONFIG('seg_loss_sum_weights'))
+        self.loss = SegmentationLoss(CONFIG['seg_loss_sum_weights'])
         logger.success('Init segmentation loss.')
 
     def train(self) -> None:
@@ -403,7 +404,7 @@ class SegmentationTrainer(BaseTrainer):
 
         loss = loss1 + loss2 + loss3 + loss4
 
-        miou: float = compute_iou(outputs[0], targets, self.labels.size)
+        miou: float = compute_iou(outputs[0], targets, self.labels.nc)
 
         self.train_tracker.miou.add(miou)
         self.train_tracker.loss.add(loss.cpu().detach())  # noqa
@@ -412,8 +413,9 @@ class SegmentationTrainer(BaseTrainer):
         return loss
 
     def val(self) -> None:
-        confusion_matrix = 0
+        self.model.eval()
 
+        confusion_matrix = 0
         for data in self.val_dl:
             images, targets = data
             images = self.to_device(images)
@@ -421,15 +423,15 @@ class SegmentationTrainer(BaseTrainer):
 
             output = self.model(images)
 
-            miou: float = compute_iou(output[0], targets, self.labels.size)
+            miou: float = compute_iou(output[0], targets, self.labels.nc)
             self.val_tracker.miou.add(miou)
 
-            confusion_matrix += compute_confusion_matrix_segmentation(output[0], targets, self.labels.size)
+            confusion_matrix += compute_confusion_matrix_segmentation(output[0], targets, self.labels.nc)
 
         draw_confusion_matrix(
             confusion_matrix,
             self.labels.labels,
-            os.path.join(CONFIG('experiment_path'), 'seg_confusion_matrix.png')
+            os.path.join(CONFIG['experiment_path'], 'seg_confusion_matrix.png')
         )
         total_miou: float = self.val_tracker.miou.avg
         log_metric('Val Epoch MIoU', total_miou)
@@ -440,11 +442,11 @@ class SegmentationTrainer(BaseTrainer):
             'epoch': self.epoch,
             'state_dict': self.model.state_dict,
             'model_name': self.model.model_name,
-            'mask_classes': self.labels.size,
+            'mask_classes': self.labels.nc,
             'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict())),
             'lr': self.optimizer.lrs[0]
         }
-        save_path = os.path.join(CONFIG('weight_path'), f'epoch{self.epoch}.pth')
+        save_path = os.path.join(CONFIG['weight_path'], f'epoch{self.epoch}.pth')
         torch.save(save_dict, save_path)
 
 
@@ -497,7 +499,7 @@ class MultiTaskTrainer(BaseTrainer):
                 seg_loss = self.seg_trainer.forward(images, targets)
 
             if self.task.MT:
-                final_loss = loss_sum([cls_loss, seg_loss], CONFIG('loss_sum_weights'))
+                final_loss = loss_sum([cls_loss, seg_loss], CONFIG['loss_sum_weights'])
             else:
                 final_loss = cls_loss + seg_loss
 
@@ -520,23 +522,23 @@ class MultiTaskTrainer(BaseTrainer):
             'epoch': self.epoch,
             'state_dict': self.model.state_dict,
             'model_name': self.model.model_name,
-            'num_classes': self.cls_trainer.labels.size,
-            'mask_classes': self.seg_trainer.labels.size,
+            'num_classes': self.cls_trainer.labels.nc,
+            'mask_classes': self.seg_trainer.labels.nc,
             'optimizer': convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict())),
             'lr': self.optimizer.lrs[0]
         }
-        save_path = os.path.join(CONFIG('weight_path'), f'epoch{self.epoch}.pth')
+        save_path = os.path.join(CONFIG['weight_path'], f'epoch{self.epoch}.pth')
         torch.save(save_dict, save_path)
 
 
 class Trainer:
     def __init__(self):
 
-        if CONFIG('task').lower() == 'classification':
+        if CONFIG['task'].lower() == 'classification':
             self.trainer = ClassificationTrainer()
-        elif CONFIG('task').lower() == 'segmentation':
+        elif CONFIG['task'].lower() == 'segmentation':
             self.trainer = SegmentationTrainer()
-        elif CONFIG('task').lower() == 'multitask':
+        elif CONFIG['task'].lower() == 'multitask':
             self.trainer = MultiTaskTrainer()
 
         self.trainer.init_model()
@@ -546,19 +548,19 @@ class Trainer:
         self.trainer.init_lr_scheduler()
 
     def run(self) -> None:
-        while self.trainer.epoch < CONFIG('epochs'):
+        while self.trainer.epoch < CONFIG['epochs']:
             for mode in ['train', 'val']:
 
                 if mode == 'train':
                     self.trainer.train()
                     self.trainer.epoch += 1
 
-                    if self.trainer.epoch % CONFIG('save_period') == 0:
+                    if self.trainer.epoch % CONFIG['save_period'] == 0:
                         self.trainer.save_model()
                     log_metric('Epoch', self.trainer.epoch)
 
                 else:
-                    if CONFIG('not_val') is True:
+                    if CONFIG['not_val'] is True:
                         continue
                     self.trainer.val()
 
@@ -575,7 +577,7 @@ class Trainer:
                     miou = round4(
                         self.trainer.seg_trainer.train_tracker.miou.avg if mode == 'train' else self.trainer.val_tracker.miou.avg)
 
-                    print_of_mt(mode, 'MT', self.trainer.epoch, CONFIG('epochs'), cls_loss, seg_loss, lr, top1, topk,
+                    print_of_mt(mode, 'MT', self.trainer.epoch, CONFIG['epochs'], cls_loss, seg_loss, lr, top1, topk,
                                 miou)
 
                 elif self.trainer.task.CLS:
@@ -585,14 +587,14 @@ class Trainer:
                     topk = round4(
                         self.trainer.train_tracker.topk.avg if mode == 'train' else self.trainer.val_tracker.topk.avg)
 
-                    print_of_cls(mode, 'CLS', self.trainer.epoch, CONFIG('epochs'), cls_loss, lr, top1, topk, )
+                    print_of_cls(mode, 'CLS', self.trainer.epoch, CONFIG['epochs'], cls_loss, lr, top1, topk, )
 
                 elif self.trainer.task.SEG:
                     seg_loss: float = round4(self.trainer.train_tracker.loss.avg) if mode == 'train' else None
                     miou = round4(
                         self.trainer.train_tracker.miou.avg if mode == 'train' else self.trainer.val_tracker.miou.avg)
 
-                    print_of_seg(mode, 'SEG', self.trainer.epoch, CONFIG('epochs'), seg_loss, lr, miou)
+                    print_of_seg(mode, 'SEG', self.trainer.epoch, CONFIG['epochs'], seg_loss, lr, miou)
 
                 self.trainer.train_tracker.reset()
                 self.trainer.val_tracker.reset()

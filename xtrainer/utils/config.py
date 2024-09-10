@@ -5,14 +5,10 @@ from xtrainer.utils.common import load_yaml, load_json
 
 class Config:
     def __init__(self, path: Optional[str] = None) -> None:
-        self._path: str = ''
+        self._path: str = path
         self._metadata: Dict[str, Any] = {}
 
-        if path and os.path.exists(path):
-            self._path = path
-            self.load()
-
-    def __call__(self, key: str) -> Any:
+    def __getitem__(self, key: str):
         keys = key.split('.')  # data(a.b.c)=>data[a][b][c]
         value = self._metadata
         try:
@@ -25,12 +21,6 @@ class Config:
     @property
     def metadata(self) -> Dict[str, Any]:
         return self._metadata
-
-    def set_metadata(self, val: Dict[str, Any]) -> None:
-        if isinstance(val, dict):
-            self._metadata = val
-        else:
-            raise ValueError("Metadata must be a dictionary.")
 
     def set_path(self, path: str) -> None:
         if os.path.exists(path):

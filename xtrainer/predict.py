@@ -13,6 +13,7 @@ from xtrainer.core.model import Model
 from xtrainer import CONFIG, COLOR_LIST
 from xtrainer.core.preprocess import InferT
 from xtrainer.utils.torch_utils import ToDevice
+from xtrainer.utils.labels import Labels
 from xtrainer.utils.common import (
     error_exit,
     round8,
@@ -20,7 +21,6 @@ from xtrainer.utils.common import (
     get_time,
     Colors,
     safe_imread,
-    load_yaml,
     check_dir,
     save_json
 )
@@ -28,7 +28,7 @@ from xtrainer.utils.common import (
 
 class Predictor:
     def __init__(self):
-        self.task = Task(CONFIG('task'))
+        self.task = Task(CONFIG['task'])
         logger.info(f"Task: {Colors.BLUE}{self.task}{Colors.ENDC}")
 
         # Init Model --------------------------------------------------------------------------------------------------
@@ -36,12 +36,12 @@ class Predictor:
         self.init_model()
 
         # Init Model --------------------------------------------------------------------------------------------------
-        self.transform = InferT(tuple(CONFIG('wh')))
-        self.to_device = ToDevice(CONFIG('device'))
+        self.transform = InferT(tuple(CONFIG['wh']))
+        self.to_device = ToDevice(CONFIG['device'])
 
         # Init label --------------------------------------------------------------------------------------------------
-        self.cls_label: List[str] = []
-        self.seg_label: List[str] = []
+        self.cls_label: Labels = None  # noqa
+        self.seg_label: Labels = None  # noqa
         self.load_label()
 
         # Init output dir ----------------------------------------------------------------------------------------------
@@ -53,11 +53,11 @@ class Predictor:
 
     def init_output_dir(self) -> None:
         if self.task.CLS or self.task.MT:
-            self.cls_save = os.path.join(CONFIG('project'), 'runs', f'classification.{get_time()}')
+            self.cls_save = os.path.join(CONFIG['project'], 'runs', f'classification.{get_time()}')
             check_dir(self.cls_save)
 
         if self.task.SEG or self.task.MT:
-            self.seg_save = os.path.join(CONFIG('project'), 'runs', f'segmentation.{get_time()}')
+            self.seg_save = os.path.join(CONFIG['project'], 'runs', f'segmentation.{get_time()}')
             check_dir(self.seg_save)
 
             self.seg_image_output = os.path.join(self.seg_save, 'images')
@@ -68,14 +68,12 @@ class Predictor:
 
     def load_label(self) -> None:
         if self.task.CLS or self.task.MT:
-            self.cls_label = load_yaml(CONFIG('cls_label'))
-            self.cls_label.sort()
+            self.cls_label = Labels(CONFIG['classification.labels'])
         if self.task.SEG or self.task.MT:
-            self.seg_label = load_yaml(CONFIG('seg_label'))
-            self.seg_label.sort()
+            self.cls_label = Labels(CONFIG['segmentation.labels'])
 
     def run(self) -> None:
-        images: List[str] = get_images(CONFIG('source'))
+        images: List[str] = get_images(CONFIG['source'])
 
         for image in tqdm(images, desc='Predict: '):
 
@@ -130,7 +128,7 @@ class Predictor:
 
         for idx in sort_idx:
             score = float(output[idx])
-            thr = CONFIG('cls_thr')[idx]
+            thr = CONFIG['cls_thr'][idx]
             if score >= thr:
                 label: str = self.cls_label[idx]
                 save_path = os.path.join(self.cls_save, label)
@@ -165,10 +163,10 @@ class Predictor:
 
         no_result = True
         record = {'image': image}
-        nc = CONFIG('segmentation.classes') + 1  # +1 = +background
+        nc = CONFIG['segmentation.classes'] + 1  # +1 = +background
 
         for label_idx in range(1, nc):  # ignore background pixel
-            thr = CONFIG('seg_thr')[label_idx - 1]
+            thr = CONFIG['seg_thr'][label_idx - 1]
             label = self.seg_label[label_idx - 1]
 
             color = tuple(map(int, COLOR_LIST[label_idx]))
@@ -184,7 +182,7 @@ class Predictor:
             if num_of_pixel == 0:  # no mask in this label
                 continue
 
-            if CONFIG('sum_method'):
+            if CONFIG['sum_method']:
                 if num_of_pixel >= thr:
                     draw_mask[index[0], index[1], :] = color
                     no_result = False
@@ -224,20 +222,20 @@ class Predictor:
         self.segmentation(seg_output, image)
 
     def init_model(self) -> None:
-        num_classes: int = CONFIG('classification.classes')
-        mask_classes: int = CONFIG('segmentation.classes') + 1
+        num_classes: int = CONFIG['classification.classes']
+        mask_classes: int = CONFIG['segmentation.classes'] + 1
 
         if num_classes == mask_classes == 0:
             logger.error("num_classes == mask_classes == 0")
             error_exit()
 
         self.model = Model(
-            CONFIG('model'),
+            CONFIG['model'],
             num_classes,
             mask_classes,
-            CONFIG("pretrained"),
-            CONFIG('test_weight'),
-            CONFIG('device')
+            CONFIG["pretrained"],
+            CONFIG['test_weight'],
+            CONFIG['device']
         )
         self.model.init()
         self.model.eval()

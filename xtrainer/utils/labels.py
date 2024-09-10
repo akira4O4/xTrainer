@@ -7,18 +7,18 @@ from dataclasses import dataclass
 class Labels:
     def __init__(self, labels: List[str]):
         self._data: List[str] = labels
-        self._size: int = len(labels)
+        self._nc: int = len(labels)
 
     @property
     def labels(self) -> List[str]:
         return self._data
 
     @property
-    def size(self) -> int:
-        return self._size
+    def nc(self) -> int:
+        return self._nc
 
     def idx2str(self, idx: int) -> str:
-        if idx < 0 or idx >= self._size:
+        if idx < 0 or idx >= self._nc:
             raise IndexError("索引超出范围")
         return self._data[idx]
 

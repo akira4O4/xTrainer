@@ -14,10 +14,3 @@ class Task:
 
     def __str__(self) -> str:
         return self.task
-
-
-if __name__ == '__main__':
-    task = Task("classification")
-    print(task.CLS)
-    print(task.SEG)
-    print(task.MT)
