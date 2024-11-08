@@ -3,13 +3,27 @@ import random
 import cv2
 import torch
 import numpy as np
+from PIL import Image
+
+
+def pil2np(img: Image.Image) -> np.ndarray:
+    if isinstance(img, np.ndarray):
+        return img
+    return np.asarray(img)
+
+
+def np2pil(img: np.ndarray) -> Image.Image:
+    if isinstance(img, Image.Image):
+        return img
+    img = np.ascontiguousarray(img)  # contiguous
+    return Image.fromarray(img)
 
 
 def random_hsv(
-    image: np.ndarray,
-    h_gain: Optional[float] = 0.5,
-    s_gain: Optional[float] = 0.5,
-    v_gain: Optional[float] = 0.5
+        image: np.ndarray,
+        h_gain: Optional[float] = 0.5,
+        s_gain: Optional[float] = 0.5,
+        v_gain: Optional[float] = 0.5
 ) -> np.ndarray:
     r = np.random.uniform(-1, 1, 3) * [h_gain, s_gain, v_gain] + 1  # random gains
     hue, sat, val = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2HSV))
@@ -27,10 +41,10 @@ def random_hsv(
 
 
 def random_flip(
-    image: np.ndarray,
-    flip_thr: Optional[float] = 0.5,
-    direction: Optional[str] = "horizontal",
-    random_p: Optional[float] = None,
+        image: np.ndarray,
+        flip_thr: Optional[float] = 0.5,
+        direction: Optional[str] = "horizontal",
+        random_p: Optional[float] = None,
 ) -> np.ndarray:
     assert direction in {"horizontal", "vertical"}, f"Support direction `horizontal` or `vertical`, got {direction}"
     assert 0 <= flip_thr <= 1.0
@@ -47,9 +61,9 @@ def random_flip(
 
 
 def resize(
-    image: np.ndarray,
-    wh: Tuple[int, int],
-    only_scaledown: Optional[bool] = False
+        image: np.ndarray,
+        wh: Tuple[int, int],
+        only_scaledown: Optional[bool] = False
 ) -> np.ndarray:
     ih, iw = image.shape[:2]
     new_w, new_h = wh[0], wh[1]
@@ -65,10 +79,10 @@ def resize(
 
 
 def letterbox(
-    image: np.ndarray,
-    wh: Tuple[int, int],
-    only_scaledown: Optional[bool] = False,
-    pad_value: Tuple[int, int, int] = (114, 114, 114)
+        image: np.ndarray,
+        wh: Tuple[int, int],
+        only_scaledown: Optional[bool] = False,
+        pad_value: Tuple[int, int, int] = (114, 114, 114)
 ) -> np.ndarray:
     assert isinstance(image, np.ndarray), 'input image.type must be np.ndarray.'
 
@@ -110,11 +124,23 @@ def letterbox(
 
 
 def to_tensor(
-    data: np.ndarray,
-    half: Optional[bool] = False
+        data: np.ndarray,
+        half: Optional[bool] = False
 ) -> torch.Tensor:
     data = np.ascontiguousarray(data)
     data = torch.from_numpy(data)  # to torch
     data = data.half() if half else data.float()
     data /= 255.0  # 0-255 to 0.0-1.0
     return data
+
+
+def chw2hwc(image: np.ndarray) -> np.ndarray:
+    assert isinstance(image, np.ndarray), f'Input must be a numpy array, but got {type(image)}'
+    assert len(image.shape) == 3, f'Input shape must be (h, w, c), but got {image.shape}'
+    return image.transpose(1, 2, 0)
+
+
+def hwc2chw(image: np.ndarray) -> np.ndarray:
+    assert isinstance(image, np.ndarray), f'Input must be a numpy array, but got {type(image)}'
+    assert len(image.shape) == 3, f'Input shape must be (h, w, c), but got {image.shape}'
+    return image.transpose(2, 0, 1)

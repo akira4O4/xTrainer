@@ -1,37 +1,24 @@
-from typing import Optional, List, Tuple, Union, overload
+from typing import Optional, List, Tuple
 import random
-import cv2
 import torch
 import numpy as np
-from PIL import Image
-
 from torchvision.transforms import functional as F
 from imgaug import augmenters as iaa
-from xtrainer.utils.common import np2pil, hwc2chw
-from .functional import (
+from functional import (
     random_hsv,
     random_flip,
     resize,
     letterbox,
+    hwc2chw
 )
-
-
-class NP2PIL:
-
-    def __call__(self, data):
-        if isinstance(data, np.ndarray):
-            return np2pil(data)
-        elif isinstance(data, tuple):
-            image, mask = data
-            return np2pil(image), np2pil(mask)
 
 
 class RandomHSV:
     def __init__(
-        self,
-        h_gain: Optional[float] = 0.5,
-        s_gain: Optional[float] = 0.5,
-        v_gain: Optional[float] = 0.5
+            self,
+            h_gain: Optional[float] = 0.5,
+            s_gain: Optional[float] = 0.5,
+            v_gain: Optional[float] = 0.5
     ) -> None:
         assert h_gain or s_gain or v_gain
         self.h_gain = h_gain
@@ -49,9 +36,9 @@ class RandomHSV:
 
 class RandomFlip:
     def __init__(
-        self,
-        flip_p: Optional[float] = 0.5,
-        direction: Optional[str] = "horizontal"
+            self,
+            flip_p: Optional[float] = 0.5,
+            direction: Optional[str] = "horizontal"
     ) -> None:
         self.flip_p = flip_p
         self.direction = direction
@@ -70,7 +57,6 @@ class Resize:
         self.only_scaledown = only_scaledown
 
     def _impl(self, image: np.ndarray) -> np.ndarray:
-
         ih, iw = image.shape[:2]
 
         if (iw, ih) == self.wh:
@@ -79,19 +65,13 @@ class Resize:
         image = resize(image, self.wh, self.only_scaledown)
         return image
 
-    def __call__(self, data):
-        if isinstance(data, np.ndarray):
-            assert data is not None, 'image is None.'
+    def __call__(self, data: Tuple[np.ndarray, np.ndarray]):
+        image, mask = data
+        assert image is not None, 'image is None.'
+        assert mask is not None, 'mask is None'
 
-            return self._impl(data)
-
-        elif isinstance(data, tuple):
-            image, mask = data
-            assert image is not None, 'image is None.'
-            assert mask is not None, 'mask is None'
-
-            new_image = self._impl(image)
-            return new_image, mask
+        new_image = self._impl(image)
+        return new_image, mask
 
 
 class LetterBox:
@@ -171,12 +151,12 @@ class ToTensor:
 
 class Normalize:
     def __init__(
-        self,
-        mean: Optional[List[float]] = None,
-        std: Optional[List[float]] = None
+            self,
+            mean: Optional[List[float]] = None,
+            std: Optional[List[float]] = None
     ):
-        self.mean = [0.485, 0.456, 0.406] if mean is None else mean
-        self.std = [0.229, 0.224, 0.225] if std is None else std
+        self.mean = mean
+        self.std = std
 
     def __call__(self, data: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         image, mask = data

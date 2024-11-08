@@ -8,7 +8,7 @@ from typing import Optional, List, Tuple, Union
 import cv2
 import numpy as np
 from PIL import Image
-from colors import Colors
+from .colors import Colors
 
 
 def round4(data: float) -> float:
